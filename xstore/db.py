@@ -10,7 +10,7 @@ class DB:
     def init(self):
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS collections (
-                name STRING NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL PRIMARY KEY,
                 serialized_config BLOB NOT NULL
             );
         """)
@@ -18,7 +18,7 @@ class DB:
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS entries (
                 collection STRING NOT NULL,
-                config STRING NOT NULL,
+                key TEXT NOT NULL,
                 value BLOB NOT NULL,
                 created TEXT NOT NULL,
 
@@ -32,19 +32,19 @@ class DB:
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS deps (
                 collection1 STRING NOT NULL,
-                config1 STRING NOT NULL,
+                key1 STRING NOT NULL,
                 collection2 STRING NOT NULL,
-                config2 STRING NOT NULL,
+                key2 STRING NOT NULL,
 
-                UNIQUE(collection1, config1, collection2, config2),
+                UNIQUE(collection1, key1, collection2, key2),
 
                 CONSTRAINT entry1_ref
-                    FOREIGN KEY (collection1, config1)
-                    REFERENCES entries(collection, config)
+                    FOREIGN KEY (collection1, key1)
+                    REFERENCES entries(collection, key)
                     ON DELETE CASCADE,
                 CONSTRAINT entry2_ref
-                    FOREIGN KEY (collection2, config2)
-                    REFERENCES entries(collection, config)
+                    FOREIGN KEY (collection2, key2)
+                    REFERENCES entries(collection, key)
                     ON DELETE CASCADE
             );
         """)
