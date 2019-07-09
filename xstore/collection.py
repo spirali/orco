@@ -18,32 +18,49 @@ class CollectionConfig:
 
 
 def entry_builder(collection, config):
-    value = collection.collection_config.build_fn(config)
+    value = collection.build_fn(config)
 
     entry = Entry(collection, config, value, datetime.now())
-    # TODO: Save into DB!!
+    collection.runtime.db.create_entry(entry)
     return entry
 
 
 class Collection:
 
-    def __init__(self, runtime, collection_config: CollectionConfig):
+    def __init__(self, runtime, name: str, build_fn, dep_fn):
         self.runtime = runtime
-        self.collection_config = collection_config
+        self.name = name
+        self.dep_fn = dep_fn
+        self.build_fn = build_fn
 
     def ref(self, config):
         assert isinstance(config, Obj)
         return Ref(self, config)
 
-    def compute(self, configs):
-        if isinstance(configs, Obj):
-            configs = (configs,)
+    def compute_one(self, config):
+        return self.compute([config])[0]
 
-        build_fn = self.collection_config.build_fn
+    def compute(self, configs):
+        #if isinstance(configs, Obj):
+        #    configs = (configs,)
 
         tasks = []
+        result = []
+        indices = []
         for config in configs:
-            # TODO: Check if not in DB!!
-            tasks.append(Task(entry_builder, (self, config), ()))
+            entry = self.runtime.db.get_entry_by_config(self, config)
+            if entry is not None:
+                result.append(entry)
+            else:
+                tasks.append(Task(entry_builder, (self, config), ()))
+                indices.append(len(result))
+                result.append(None)
 
-        return self.runtime.executor.run(tasks)
+        if tasks:
+            output = self.runtime.executor.run(tasks)
+            for i, o in zip(indices, output):
+                result[i] = o
+        return result
+
+    def make_key(self, config):
+        return str(config)  # TODO: Improve this

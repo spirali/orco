@@ -14,8 +14,6 @@ class Runtime:
             executor = LocalExecutor()
         self.executor = executor
 
-    def new_collection(self, name, build_fn=None, dep_fn=None):
-        cc = CollectionConfig(name, build_fn, dep_fn)
-        serialized_cc = cloudpickle.dumps(cc)
-        self.db.new_collection(name, serialized_cc)
-        return Collection(self, cc)
+    def collection(self, name, build_fn=None, dep_fn=None):
+        self.db.ensure_collection(name)
+        return Collection(self, name, build_fn=build_fn, dep_fn=dep_fn)
