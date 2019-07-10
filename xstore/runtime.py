@@ -1,5 +1,5 @@
 from .db import DB
-from .collection import CollectionConfig, Collection
+from .collection import Collection
 from .executor import Executor, LocalExecutor
 
 import cloudpickle

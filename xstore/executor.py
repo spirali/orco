@@ -1,14 +1,8 @@
+from typing import Union, Iterable
 
-
-class Task:
-
-    def __init__(self, compute_fn, args, deps: ["Task"]):
-        self.compute_fn = compute_fn
-        self.args = args
-        self.deps = deps
-
-    def run(self):
-        return self.compute_fn(*self.args)
+from .collection import Ref, Collection, Entry
+from .task import Task
+from datetime import datetime
 
 
 class Executor:
@@ -19,6 +13,35 @@ class Executor:
 
 class LocalExecutor(Executor):
 
+    def run_task(self, task, input_entries):
+        ref = task.ref
+        if task.is_computed:
+            entry = ref.collection.get_entry(ref.config)
+            assert entry is not None
+            return entry
+
+        collection = ref.collection
+        if collection.dep_fn is None:
+            value = collection.build_fn(ref.config)
+        else:
+            value = collection.build_fn(ref.config, input_entries)
+        entry = Entry(collection, ref.config, value, datetime.now())
+        collection.runtime.db.create_entry(entry)
+        return entry
+
     def run(self, tasks: [Task]):
-        # TODO: sort by deps
-        return [task.run() for task in tasks]
+
+        def run_helper(task):
+            entry = cache.get(task)
+            if entry is not None:
+                return entry
+            if task.inputs:
+                inputs = [run_helper(task) for task in task.inputs]
+            else:
+                inputs = None
+            entry = self.run_task(task, inputs)
+            cache[task] = entry
+            return entry
+
+        cache = {}
+        return [run_helper(task) for task in tasks]

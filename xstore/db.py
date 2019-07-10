@@ -78,6 +78,12 @@ class DB:
             return None
         return Entry(collection, config, pickle.loads(result[0]), result[1])
 
+    def has_entry_by_key(self, collection, key):
+        c = self.conn.cursor()
+        c.execute("SELECT COUNT(*) FROM entries WHERE collection = ? AND key = ?",
+                  [collection.name, key])
+        return bool(c.fetchone()[0])
+
     def get_entry_by_key(self, collection, key):
         c = self.conn.cursor()
         c.execute("SELECT config, value, created FROM entries WHERE collection = ? AND key = ?",
@@ -87,3 +93,10 @@ class DB:
             return None
         config, value, created = result
         return Entry(collection, pickle.loads(config), pickle.loads(value), created)
+
+    def remove_entry_by_key(self, collection, key):
+        self.conn.execute("DELETE FROM entries WHERE collection = ? AND key = ?",
+            [collection.name, key])
+
+    def remove_entries(self, collection_key_pairs):
+        self.conn.executemany("DELETE FROM entries WHERE collection = ? AND key = ?", collection_key_pairs)
