@@ -1,5 +1,6 @@
 
 from collections import namedtuple
+from datetime import datetime
 
 from .obj import Obj
 from .entry import Entry
@@ -90,6 +91,10 @@ class Collection:
         tasks = {}
         requested_tasks = [make_task(self.ref(config)) for config in configs]
         return self.runtime.executor.run(requested_tasks)
+
+    def insert(self, config, value):
+        entry = Entry(self, config, value, datetime.now())
+        self.runtime.db.create_entry(entry)
 
     def make_key(self, config):
         return default_make_key(config)
