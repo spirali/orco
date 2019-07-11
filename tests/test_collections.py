@@ -1,5 +1,5 @@
 
-from xstore import Runtime, Obj
+from orco import Runtime, Obj
 
 def adder(config):
     return config["a"] + config["b"]

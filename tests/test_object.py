@@ -1,4 +1,4 @@
-from xstore import Obj
+from orco import Obj
 
 import pytest
 
