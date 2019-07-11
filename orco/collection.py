@@ -7,6 +7,37 @@ from .task import Task
 from .ref import Ref
 
 
+def _default_make_key_helper(obj, stream):
+    if isinstance(obj, str) or isinstance(obj, int) or isinstance(obj, float):
+        stream.append(repr(obj))
+    elif isinstance(obj, list) or isinstance(obj, tuple):
+        stream.append("[")
+        for value in obj:
+            _default_make_key_helper(value, stream)
+            stream.append(",")
+        stream.append("]")
+    elif isinstance(obj, dict):
+        stream.append("{")
+        for key, value in sorted(obj.items()):
+            if not isinstance(key, str):
+                raise Exception("Invalid key in config: '{}', type: {}".format(repr(key), type(key)))
+            if key.startswith("_"):
+                continue
+            stream.append(repr(key))
+            stream.append(":")
+            _default_make_key_helper(value, stream)
+            stream.append(",")
+        stream.append("}")
+    else:
+        raise Exception("Invalid item in config: '{}', type: {}".format(repr(obj), type(obj)))
+
+
+def default_make_key(config):
+    stream = []
+    _default_make_key_helper(config, stream)
+    return "".join(stream)
+
+
 class Collection:
 
     def __init__(self, runtime, name: str, build_fn, dep_fn):
@@ -61,4 +92,4 @@ class Collection:
         return self.runtime.executor.run(requested_tasks)
 
     def make_key(self, config):
-        return str(config)  # TODO: Improve this
+        return default_make_key(config)
