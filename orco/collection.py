@@ -59,6 +59,9 @@ class Collection:
     def has_entry(self, config):
         return self.runtime.db.has_entry_by_key(self, self.make_key(config))
 
+    def get_entry_by_status(self, config):
+        return self.runtime.db.get_entry_state(self, self.make_key(config))
+
     def remove(self, config):
         return self.runtime.db.remove_entry_by_key(self, self.make_key(config))
 
@@ -67,30 +70,7 @@ class Collection:
             ((self.name, self.make_key(config)) for config in configs))
 
     def compute_many(self, configs):
-        #if isinstance(configs, Obj):
-        #    configs = (configs,)
-
-        def make_task(ref):
-            ref_key = ref.ref_key()
-            task = tasks.get(ref_key)
-            if task is not None:
-                return task
-            collection = ref.collection
-            is_computed = collection.has_entry(ref.config)
-            if not is_computed and self.dep_fn:
-                deps = self.dep_fn(ref.config)
-                for r in deps:
-                    assert isinstance(r, Ref)
-                inputs = [make_task(r) for r in self.dep_fn(ref.config)]
-            else:
-                inputs = None
-            task = Task(ref, inputs, is_computed)
-            tasks[ref_key] = task
-            return task
-
-        tasks = {}
-        requested_tasks = [make_task(self.ref(config)) for config in configs]
-        return self.runtime.executor.run(requested_tasks)
+        return self.runtime.compute_refs([self.ref(config) for config in configs])
 
     def insert(self, config, value):
         entry = Entry(self, config, value, datetime.now())

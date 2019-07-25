@@ -1,4 +1,4 @@
-from orco import Runtime
+from orco import Runtime, LocalExecutor
 from multiprocessing import Process
 from contextlib import contextmanager
 
@@ -39,5 +39,15 @@ def test_rest_collections():
                 del item["key"]
                 assert item.get("size")
                 del item["size"]
-        print(r.get_json())
-        assert rr == [{'config': 'e2'}, {'config': {'x': 1, 'y': [1, 2, 3]}}]
+        assert len(rr) == 2
+        assert rr[0]["config"] == "e2"
+        assert rr[1]["config"] == {'x': 1, 'y': [1, 2, 3]}
+
+
+def test_rest_executors(env):
+    rt = env.runtime_in_memory()
+    rt.register_executor(LocalExecutor())
+    with rt.serve(testing=True).test_client() as client:
+        r = client.get("executors").get_json()
+        assert len(r) == 1
+        assert r[0]["status"] == "running"

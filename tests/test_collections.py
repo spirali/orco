@@ -1,24 +1,28 @@
 
-from orco import Runtime, Obj
+from orco import Runtime, Obj, LocalExecutor
+import pytest
 
 def adder(config):
     return config["a"] + config["b"]
 
 
-def test_reopen_collection():
-    runtime = Runtime(":memory:")
-    runtime.collection("col1", adder)
-    runtime.collection("col1", adder)
+def test_reopen_collection(env):
+    runtime = env.runtime_in_memory()
+    runtime.register_collection("col1", adder)
+
+    with pytest.raises(Exception):
+        runtime.register_collection("col1", adder)
 
 
-def test_collection_compute():
-    runtime = Runtime(":memory:")
+def test_collection_compute(env):
+    runtime = env.runtime_in_memory()
+    runtime.register_executor(LocalExecutor())
     counter = [0]
     def adder(config):
         counter[0] += 1
         return config["a"] + config["b"]
 
-    collection = runtime.collection("col1", adder)
+    collection = runtime.register_collection("col1", adder)
 
     entry = collection.compute({"a": 10, "b": 30})
     assert entry.config["a"] == 10
@@ -35,8 +39,9 @@ def test_collection_compute():
     assert counter[0] == 1
 
 
-def test_collection_deps():
-    runtime = Runtime(":memory:")
+def test_collection_deps(env):
+    runtime = env.runtime_in_memory()
+    runtime.register_executor(LocalExecutor())
     counter = [0, 0]
 
     def builder1(config):
@@ -50,8 +55,8 @@ def test_collection_deps():
     def make_deps(config):
         return [col1.ref(x) for x in range(config)]
 
-    col1 = runtime.collection("col1", builder1)
-    col2 = runtime.collection("col2", builder2, make_deps)
+    col1 = runtime.register_collection("col1", builder1)
+    col2 = runtime.register_collection("col2", builder2, make_deps)
 
     e = col2.compute(5)
 

@@ -57,12 +57,14 @@ class Collections extends React.Component<Props, State> {
         },
         {
             Header: "Entries",
-            accessor: "count"
+            accessor: "count",
+            maxWidth: 100,
         },
         {
             id: "Size",
             Header: "Size",
-            accessor: this._formatSize
+            accessor: this._formatSize,
+            maxWidth: 200
         }
         ];
 

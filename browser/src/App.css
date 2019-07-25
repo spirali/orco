@@ -1,3 +1,15 @@
 .App {
   text-align: center;
 }
+
+.executor-status-running {
+  color: green;
+}
+
+.executor-status-stopped {
+  color: gray;
+}
+
+.executor-status-lost {
+  color: red;
+}

@@ -27,6 +27,14 @@ class Entries(Resource):
 api.add_resource(Entries, '/entries/<string:collection_name>')
 
 
+class Executors(Resource):
+
+    def get(self):
+        return current_app.runtime.executor_summaries()
+
+
+api.add_resource(Executors, '/executors')
+
 
 def init_service(runtime):
     app.runtime = runtime
