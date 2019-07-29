@@ -59,7 +59,7 @@ class Collection:
     def has_entry(self, config):
         return self.runtime.db.has_entry_by_key(self, self.make_key(config))
 
-    def get_entry_by_status(self, config):
+    def get_entry_state(self, config):
         return self.runtime.db.get_entry_state(self, self.make_key(config))
 
     def remove(self, config):

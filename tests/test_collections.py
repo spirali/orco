@@ -90,3 +90,87 @@ def test_collection_deps(env):
     e = col2.compute(6)
     assert counter == [8, 4]
     assert e.value == 150
+
+
+def test_collection_stored_deps(env):
+    runtime = env.runtime_in_memory()
+    runtime.register_executor(LocalExecutor())
+
+    col1 = runtime.register_collection("col1", lambda c: c * 10)
+    col2 = runtime.register_collection("col2",
+                                       (lambda c, d: sum(x.value for x in d)),
+                                       lambda c: [col1.ref(i) for i in range(c["start"], c["end"], c["step"])])
+    col3 = runtime.register_collection("col3",
+                                       (lambda c, d: sum(x.value for x in d)),
+                                       lambda c: [col2.ref({"start": 0, "end": c, "step": 2}), col2.ref({"start": 0, "end": c, "step": 3})])
+    assert col3.compute(10).value == 380
+
+
+    cc2_2 = {"end": 10, "start": 0, "step": 2}
+    cc2_3 = {"end": 10, "start": 0, "step": 3}
+    c2_2 = col2.make_key(cc2_2)
+    c2_3 = col2.make_key(cc2_3)
+
+    assert col3.get_entry_state(10) == "finished"
+    assert col2.get_entry_state(cc2_2) == "finished"
+    assert col2.get_entry_state(cc2_3) == "finished"
+    assert col1.get_entry_state(0) == "finished"
+    assert col1.get_entry_state(2) == "finished"
+
+
+    assert set(runtime.db.get_recursive_consumers(col1, "2")) == {
+        ("col1", "2"), ('col2', "{'end':10,'start':0,'step':2,}"), ('col3', "10")
+    }
+
+    assert set(runtime.db.get_recursive_consumers(col1, "6")) == {
+        ("col1", "6"), ('col2', c2_2), ("col2", c2_3),  ('col3', "10")
+    }
+
+    assert set(runtime.db.get_recursive_consumers(col1, "9")) == {
+            ("col1", "9"), ("col2", c2_3),  ('col3', "10")
+    }
+
+    assert set(runtime.db.get_recursive_consumers(col2, c2_3)) == {
+        ("col2", c2_3),  ('col3', "10")
+    }
+
+    assert set(runtime.db.get_recursive_consumers(col3, col3.make_key(10))) == {
+        ('col3', '10')
+    }
+
+    col1.remove(6)
+    assert col3.get_entry_state(10) is  None
+    assert col2.get_entry_state(cc2_2) is None
+    assert col2.get_entry_state(cc2_3) is None
+    assert col1.get_entry_state(0) == "finished"
+    assert col1.get_entry_state(6) is None
+    assert col1.get_entry_state(2) == "finished"
+
+    col1.remove(0)
+    assert col3.get_entry_state(10) is  None
+    assert col2.get_entry_state(cc2_2) is None
+    assert col2.get_entry_state(cc2_3) is None
+    assert col1.get_entry_state(0) is None
+    assert col1.get_entry_state(6) is None
+    assert col1.get_entry_state(2) == "finished"
+
+    assert col3.compute(10).value == 380
+
+    assert col3.get_entry_state(10) == "finished"
+    assert col2.get_entry_state(cc2_2) == "finished"
+    assert col2.get_entry_state(cc2_3) == "finished"
+    assert col1.get_entry_state(0) == "finished"
+    assert col1.get_entry_state(2) == "finished"
+
+    col1.remove(2)
+
+    assert col3.get_entry_state(10) is  None
+    assert col2.get_entry_state(cc2_2) is None
+    assert col2.get_entry_state(cc2_3) == "finished"
+    assert col1.get_entry_state(0) == "finished"
+    assert col1.get_entry_state(6) == "finished"
+    assert col1.get_entry_state(2) is None
+
+    col1.compute(2)
+
+    #runtime.serve()

@@ -52,7 +52,7 @@ class Collection extends React.Component<Props, State> {
 
     _cellValueRepr = (cellInfo: CellInfo) => {
         const v = cellInfo.value;
-        if (v) {
+        if (v !== undefined && v !== null) {
             return <span>{v}</span>
         } else {
             return <FaHourglassEnd/>

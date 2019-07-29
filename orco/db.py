@@ -11,6 +11,13 @@ class DB:
 
     DEAD_EXECUTOR_QUERY = "((STRFTIME('%s', heartbeat) + heartbeat_interval * 2) - STRFTIME('%s', 'now') < 0)"
     LIVE_EXECUTOR_QUERY = "((STRFTIME('%s', heartbeat) + heartbeat_interval * 2) - STRFTIME('%s', 'now') >= 0)"
+    RECURSIVE_CONSUMERS = """
+            WITH RECURSIVE
+            selected(collection, key) AS (
+                VALUES(?, ?)
+                UNION
+                SELECT collection_t,  cast(key_t as TEXT) FROM selected, deps WHERE selected.collection == deps.collection_s AND selected.key == deps.key_s
+            )"""
 
     def __init__(self, path):
         self.executor = ThreadPoolExecutor(max_workers=1)
@@ -19,6 +26,9 @@ class DB:
 
     def init(self, path):
         self.conn = sqlite3.connect(path)
+        self.conn.execute("""
+            PRAGMA foreign_keys = ON
+        """)
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS collections (
                 name TEXT NOT NULL PRIMARY KEY
@@ -56,7 +66,7 @@ class DB:
                     ON DELETE CASCADE
                 CONSTRAINT executor_ref
                     FOREIGN KEY (executor)
-                    REFERENCES executors(uuid)
+                    REFERENCES executors(id)
                     ON DELETE CASCADE
             );
         """)
@@ -117,6 +127,18 @@ class DB:
         if self.executor.submit(_helper).result() != 1:
             raise Exception("Setting value to unannouced config: {}/{}".format(entry.collection.name, entry.config))
 
+    def get_recursive_consumers(self, collection, key):
+        #WHERE EXISTS(SELECT null FROM selected AS s WHERE deps.collection_s == selected.collection AND deps.key_s == selected.key
+        query = """
+            {}
+            SELECT collection, key FROM selected
+        """.format(self.RECURSIVE_CONSUMERS)
+        def _helper():
+            c = self.conn.cursor()
+            rs = c.execute(query, [collection.name, key])
+            return [(r[0], r[1]) for r in rs]
+        return self.executor.submit(_helper).result()
+
     def get_entry_by_config(self, collection, config):
         key = collection.make_key(config)
 
@@ -168,14 +190,16 @@ class DB:
 
     def remove_entry_by_key(self, collection, key):
         def _helper():
-            self.conn.execute("DELETE FROM entries WHERE collection = ? AND key = ?",
+            self.conn.execute("{} DELETE FROM entries WHERE rowid IN (SELECT entries.rowid FROM selected LEFT JOIN entries ON entries.collection == selected.collection AND entries.key == selected.key)".format(self.RECURSIVE_CONSUMERS),
                 [collection.name, key])
         self.executor.submit(_helper).result()
 
+    """
     def remove_entries(self, collection_key_pairs):
         def _helper():
             self.conn.executemany("DELETE FROM entries WHERE collection = ? AND key = ?", collection_key_pairs)
         self.executor.submit(_helper).result()
+    """
 
     def collection_summaries(self):
         def _helper():
@@ -212,14 +236,13 @@ class DB:
                       r.collection.make_key(r.config),
                       pickle.dumps(r.config),
                       executor_id] for r in refs])
-                """
                 c.executemany("INSERT INTO deps VALUES (?, ?, ?, ?)", [
                     [r1.collection.name,
                      r1.collection.make_key(r1.config),
                      r2.collection.name,
                      r2.collection.make_key(r2.config)
                     ] for r1, r2 in deps
-                ])"""
+                ])
                 self.conn.commit()
                 return True
             except sqlite3.IntegrityError as e:
