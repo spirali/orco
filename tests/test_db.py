@@ -14,16 +14,16 @@ def test_db_announce(env):
     r.register_executor(e2)
 
     c = r.register_collection("col1")
-    assert r.db.announce_entries(e1.id, [c.ref("test1"), c.ref("test2")])
-    assert not r.db.announce_entries(e2.id, [c.ref("test2"), c.ref("test3")])
-    assert not r.db.announce_entries(e1.id, [c.ref("test2"), c.ref("test3")])
-    assert r.db.announce_entries(e2.id, [c.ref("test3")])
+    assert r.db.announce_entries(e1.id, [c.ref("test1"), c.ref("test2")], [])
+    assert not r.db.announce_entries(e2.id, [c.ref("test2"), c.ref("test3")], [])
+    assert not r.db.announce_entries(e1.id, [c.ref("test2"), c.ref("test3")], [])
+    assert r.db.announce_entries(e2.id, [c.ref("test3")], [])
     assert r.db.get_entry_state(c, c.make_key("test1")) == "announced"
     time.sleep(3)
     assert r.db.get_entry_state(c, c.make_key("test1")) is None
-    assert not r.db.announce_entries(e2.id, [c.ref("test2"), c.ref("test3")])
-    assert r.db.announce_entries(e2.id, [c.ref("test2")])
-    assert not r.db.announce_entries(e2.id, [c.ref("test2")])
+    assert not r.db.announce_entries(e2.id, [c.ref("test2"), c.ref("test3")], [])
+    assert r.db.announce_entries(e2.id, [c.ref("test2")], [])
+    assert not r.db.announce_entries(e2.id, [c.ref("test2")], [])
 
 
 def test_db_set_value(env):
@@ -34,7 +34,7 @@ def test_db_set_value(env):
     c = r.register_collection("col1")
     assert r.db.get_entry_state(c, c.make_key("cfg1")) is None
 
-    r.db.announce_entries(e1.id, [c.ref("cfg1")])
+    r.db.announce_entries(e1.id, [c.ref("cfg1")], [])
     assert r.db.get_entry_state(c, c.make_key("cfg1")) == "announced"
 
     entry = Entry(c, "cfg1", "value1", datetime.now())
@@ -47,7 +47,7 @@ def test_db_set_value(env):
     entry2 = Entry(c, "cfg2", "value2", datetime.now())
     with pytest.raises(Exception):
         r.db.set_entry_value(e1.id, entry2)
-    r.db.announce_entries(e1.id, [c.ref("cfg2")])
+    r.db.announce_entries(e1.id, [c.ref("cfg2")], [])
     r.db.set_entry_value(e1.id, entry2)
 
     with pytest.raises(Exception):

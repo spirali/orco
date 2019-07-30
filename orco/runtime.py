@@ -124,7 +124,6 @@ class Runtime:
         logger.debug("Announcing refs %s at worker %s", need_to_compute_refs, executor.id)
         if not self.db.announce_entries(executor.id, need_to_compute_refs, global_deps):
             raise Exception("Was not able to announce task into DB")
-
         return executor.run(tasks, requested_tasks)
 
     def main(self):

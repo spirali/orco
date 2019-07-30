@@ -22,7 +22,7 @@ def test_executor(env):
     executor3 = LocalExecutor(heartbeat_interval=1)
     runtime.register_executor(executor3)
     c = runtime.register_collection("abc")
-    runtime.db.announce_entries(executor3.id, [c.ref("x")])
+    runtime.db.announce_entries(executor3.id, [c.ref("x")], [])
     assert runtime.db.get_entry_state(c, c.make_key("x")) == "announced"
     executor3.stop()
     assert runtime.db.get_entry_state(c, c.make_key("x")) is None

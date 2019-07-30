@@ -11,6 +11,8 @@ class Ref:
     def ref_key(self):
         return (self.collection.name, self.collection.make_key(self.config))
 
+    def __repr__(self):
+        return "<{}/{}>".format(self.collection.name, repr(self.config))
     """
     def __eq__(self, other):
         if not isinstance(other, Ref) or self.collection != other.collection:

@@ -213,16 +213,17 @@ class DB:
                       r.collection.make_key(r.config),
                       pickle.dumps(r.config),
                       executor_id] for r in refs])
+                """
                 c.executemany("INSERT INTO deps VALUES (?, ?, ?, ?)", [
                     [r1.collection.name,
                      r1.collection.make_key(r1.config),
                      r2.collection.name,
                      r2.collection.make_key(r2.config)
                     ] for r1, r2 in deps
-                ])
+                ])"""
                 self.conn.commit()
                 return True
-            except sqlite3.IntegrityError:
+            except sqlite3.IntegrityError as e:
                 self.conn.rollback()
                 return False
         return self.executor.submit(_helper).result()
