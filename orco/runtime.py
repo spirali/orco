@@ -4,9 +4,9 @@ from .executor import Executor, LocalExecutor, Task
 
 
 import cloudpickle
-import argparse
 import threading
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +80,6 @@ class Runtime:
         else:
             app.run(port=port, debug=debug, use_reloader=False)
 
-    def _command_serve(self, args):
-        self.serve()
-
     def compute_refs(self, refs):
         tasks = {}
         global_deps = []
@@ -120,15 +117,3 @@ class Runtime:
         if not self.db.announce_entries(executor.id, need_to_compute_refs, global_deps):
             raise Exception("Was not able to announce task into DB")
         return executor.run(tasks, requested_tasks)
-
-
-    def _parse_args(self):
-        parser = argparse.ArgumentParser("orco")
-        sp = parser.add_subparsers(title="command")
-        p = sp.add_parser("serve")
-        p.set_default(func=self._command_serve)
-        return parser.parse_args()
-
-
-    def main(self):
-        self._parse_args()
