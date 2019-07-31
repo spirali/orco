@@ -109,8 +109,10 @@ class Runtime:
                     assert isinstance(r, Ref)
                     global_deps.append((r, ref))
                 inputs = [make_task(r) for r in deps]
-            else:
+            elif state:
                 inputs = None
+            if state is None and collection.build_fn is None:
+                raise Exception("Computation depends on missing configuration '{}' in a fixed collection".format(ref))
             task = Task(ref, inputs, state is not None)
             tasks[ref_key] = task
             return task

@@ -21,4 +21,4 @@ class Entry:
         return bool(self.created)
 
     def __repr__(self):
-        return "{}: {}".format(self.config, self.value_repr)
+        return "<{}: {}>".format(self.config, self.value_repr)

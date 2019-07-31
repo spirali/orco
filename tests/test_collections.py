@@ -15,6 +15,23 @@ def test_reopen_collection(env):
     with pytest.raises(Exception):
         runtime.register_collection("col1", adder)
 
+def test_fixed_collection(env):
+    runtime = env.runtime_in_memory()
+    runtime.register_executor(LocalExecutor())
+
+    fix1 = runtime.register_collection("fix1")
+    col2 = runtime.register_collection("col2", lambda c, d: d[0].value * 10, lambda c: [fix1.ref(c)])
+
+    fix1.insert("a", 11)
+
+    assert col2.compute("a").value == 110
+    assert fix1.compute("a").value == 11
+
+    with pytest.raises(Exception, match=".* fixed collection.*"):
+        assert col2.compute("b")
+    with pytest.raises(Exception, match=".* fixed collection.*"):
+        assert fix1.compute("a")
+
 
 def test_collection_compute(env):
     runtime = env.runtime_in_memory()
