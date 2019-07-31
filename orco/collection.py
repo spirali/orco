@@ -66,8 +66,11 @@ class Collection:
         return self.runtime.db.remove_entry_by_key(self, self.make_key(config))
 
     def remove_many(self, configs):
-        return self.runtime.db.remove_entries(
-            ((self.name, self.make_key(config)) for config in configs))
+        # TODO: Do in one step in DB
+        for config in configs:
+            self.remove(config)
+        #return self.runtime.db.remove_entries(
+        #    ((self.name, self.make_key(config)) for config in configs))
 
     def compute_many(self, configs):
         return self.runtime.compute_refs([self.ref(config) for config in configs])

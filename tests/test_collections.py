@@ -30,7 +30,7 @@ def test_fixed_collection(env):
     with pytest.raises(Exception, match=".* fixed collection.*"):
         assert col2.compute("b")
     with pytest.raises(Exception, match=".* fixed collection.*"):
-        assert fix1.compute("a")
+        assert fix1.compute("b")
 
 
 def test_collection_compute(env):
@@ -101,11 +101,11 @@ def test_collection_deps(env):
     col2.remove(6)
 
     e = col2.compute(5)
-    assert counter == [8, 3]
+    assert counter == [8, 4]
     assert e.value == 100
 
     e = col2.compute(6)
-    assert counter == [8, 4]
+    assert counter == [8, 5]
     assert e.value == 150
 
 
