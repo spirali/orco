@@ -63,7 +63,7 @@ class Runtime:
         return self.db.collection_summaries()
 
     def entry_summaries(self, collection_name):
-        return self.db.entry_summaries(self.collections[collection_name])
+        return self.db.entry_summaries(collection_name)
 
     def executor_summaries(self):
         return self.db.executor_summaries()
@@ -90,7 +90,7 @@ class Runtime:
             if task is not None:
                 return task
             collection = ref.collection
-            state = self.db.get_entry_state(collection, ref_key[1])
+            state = self.db.get_entry_state(collection.name, ref_key[1])
             if state == "announced":
                 raise Exception("Computation needs announced but not finished entries, it is not supported now: {}".format(ref))
             if state is None and collection.dep_fn:

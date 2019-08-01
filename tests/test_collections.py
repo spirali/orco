@@ -135,23 +135,23 @@ def test_collection_stored_deps(env):
     assert col1.get_entry_state(2) == "finished"
 
 
-    assert set(runtime.db.get_recursive_consumers(col1, "2")) == {
+    assert set(runtime.db.get_recursive_consumers(col1.name, "2")) == {
         ("col1", "2"), ('col2', "{'end':10,'start':0,'step':2,}"), ('col3', "10")
     }
 
-    assert set(runtime.db.get_recursive_consumers(col1, "6")) == {
+    assert set(runtime.db.get_recursive_consumers(col1.name, "6")) == {
         ("col1", "6"), ('col2', c2_2), ("col2", c2_3),  ('col3', "10")
     }
 
-    assert set(runtime.db.get_recursive_consumers(col1, "9")) == {
+    assert set(runtime.db.get_recursive_consumers(col1.name, "9")) == {
             ("col1", "9"), ("col2", c2_3),  ('col3', "10")
     }
 
-    assert set(runtime.db.get_recursive_consumers(col2, c2_3)) == {
+    assert set(runtime.db.get_recursive_consumers(col2.name, c2_3)) == {
         ("col2", c2_3),  ('col3', "10")
     }
 
-    assert set(runtime.db.get_recursive_consumers(col3, col3.make_key(10))) == {
+    assert set(runtime.db.get_recursive_consumers(col3.name, col3.make_key(10))) == {
         ('col3', '10')
     }
 

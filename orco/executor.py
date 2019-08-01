@@ -92,7 +92,7 @@ class LocalExecutor(Executor):
         ref = task.ref
         collection = ref.collection
         entry = Entry(ref.config, result, datetime.now())
-        collection.runtime.db.set_entry_value(self.id, collection, entry)
+        collection.runtime.db.set_entry_value(self.id, collection.name, collection.make_key(entry.config), entry)
         self.stats["n_completed"] += 1
         collection.runtime.db.update_stats(self.id, self.stats)
         return entry

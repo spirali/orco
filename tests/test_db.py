@@ -18,9 +18,9 @@ def test_db_announce(env):
     assert not r.db.announce_entries(e2.id, [c.ref("test2"), c.ref("test3")], [])
     assert not r.db.announce_entries(e1.id, [c.ref("test2"), c.ref("test3")], [])
     assert r.db.announce_entries(e2.id, [c.ref("test3")], [])
-    assert r.db.get_entry_state(c, c.make_key("test1")) == "announced"
+    assert r.db.get_entry_state(c.name, c.make_key("test1")) == "announced"
     time.sleep(3)
-    assert r.db.get_entry_state(c, c.make_key("test1")) is None
+    assert r.db.get_entry_state(c.name, c.make_key("test1")) is None
     assert not r.db.announce_entries(e2.id, [c.ref("test2"), c.ref("test3")], [])
     assert r.db.announce_entries(e2.id, [c.ref("test2")], [])
     assert not r.db.announce_entries(e2.id, [c.ref("test2")], [])
@@ -32,26 +32,26 @@ def test_db_set_value(env):
     r.register_executor(e1)
 
     c = r.register_collection("col1")
-    assert r.db.get_entry_state(c, c.make_key("cfg1")) is None
+    assert r.db.get_entry_state(c.name, c.make_key("cfg1")) is None
 
     r.db.announce_entries(e1.id, [c.ref("cfg1")], [])
-    assert r.db.get_entry_state(c, c.make_key("cfg1")) == "announced"
+    assert r.db.get_entry_state(c.name, c.make_key("cfg1")) == "announced"
 
     entry = Entry("cfg1", "value1", datetime.now())
-    r.db.set_entry_value(e1.id, c, entry)
-    assert r.db.get_entry_state(c, c.make_key("cfg1")) == "finished"
+    r.db.set_entry_value(e1.id, c.name, c.make_key(entry.config), entry)
+    assert r.db.get_entry_state(c.name, c.make_key("cfg1")) == "finished"
 
     with pytest.raises(Exception):
-        r.db.set_entry_value(e1.id, c, entry)
+        r.db.set_entry_value(e1.id, c.name, c.make_key(entry.config), entry)
 
     entry2 = Entry("cfg2", "value2", datetime.now())
     with pytest.raises(Exception):
-        r.db.set_entry_value(e1.id, c, entry2)
+        r.db.set_entry_value(e1.id, c.name, c.make_key(entry2.config), entry2)
     r.db.announce_entries(e1.id, [c.ref("cfg2")], [])
-    r.db.set_entry_value(e1.id, c, entry2)
+    r.db.set_entry_value(e1.id, c.name, c.make_key(entry2.config), entry2)
 
     with pytest.raises(Exception):
-        r.db.create_entry(c, entry2)
+        r.db.create_entry(c.name, c.make_key(entry2.config), entry2)
 
     entry3 = Entry("cfg3", "value3", datetime.now())
-    r.db.create_entry(c, entry3)
+    r.db.create_entry(c.name, c.make_key(entry3.config), entry3)

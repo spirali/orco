@@ -25,9 +25,9 @@ def test_executor(env, n_processes):
     runtime.register_executor(executor3)
     c = runtime.register_collection("abc")
     runtime.db.announce_entries(executor3.id, [c.ref("x")], [])
-    assert runtime.db.get_entry_state(c, c.make_key("x")) == "announced"
+    assert runtime.db.get_entry_state(c.name, c.make_key("x")) == "announced"
     executor3.stop()
-    assert runtime.db.get_entry_state(c, c.make_key("x")) is None
+    assert runtime.db.get_entry_state(c.name, c.make_key("x")) is None
 
     r = to_dict(runtime.executor_summaries())
     assert len(r) == 3

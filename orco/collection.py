@@ -54,16 +54,18 @@ class Collection:
         return self.compute_many([config])[0]
 
     def get_entry(self, config):
-        return self.runtime.db.get_entry_by_config(self, config)
+        entry = self.runtime.db.get_entry_no_config(self.name, self.make_key(config))
+        entry.config = config
+        return entry
 
     def has_entry(self, config):
-        return self.runtime.db.has_entry_by_key(self, self.make_key(config))
+        return self.runtime.db.has_entry_by_key(self.name, self.make_key(config))
 
     def get_entry_state(self, config):
-        return self.runtime.db.get_entry_state(self, self.make_key(config))
+        return self.runtime.db.get_entry_state(self.name, self.make_key(config))
 
     def remove(self, config):
-        return self.runtime.db.remove_entry_by_key(self, self.make_key(config))
+        return self.runtime.db.remove_entry_by_key(self.name, self.make_key(config))
 
     def remove_many(self, configs):
         # TODO: Do in one step in DB
@@ -77,7 +79,7 @@ class Collection:
 
     def insert(self, config, value):
         entry = Entry(config, value, datetime.now())
-        self.runtime.db.create_entry(self, entry)
+        self.runtime.db.create_entry(self.name, self.make_key(config), entry)
 
     def make_key(self, config):
         return default_make_key(config)

@@ -98,36 +98,36 @@ class DB:
             self.conn.commit()
         self.executor.submit(_helper).result()
 
-    def create_entry(self, collection, entry):
+    def create_entry(self, collection_name, key, entry):
         def _helper():
             c = self.conn.cursor()
             c.execute("INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?, null)",
-                    [collection.name,
-                    collection.make_key(entry.config),
-                    pickle.dumps(entry.config),
-                    pickle.dumps(entry.value),
-                    entry.value_repr,
-                    entry.created])
+                    [collection_name,
+                     key,
+                     pickle.dumps(entry.config),
+                     pickle.dumps(entry.value),
+                     entry.value_repr,
+                     entry.created])
             self.conn.commit()
         self.executor.submit(_helper).result()
 
-    def set_entry_value(self, executor_id, collection, entry):
+    def set_entry_value(self, executor_id, collection_name, key, entry):
         def _helper():
             c = self.conn.cursor()
             c.execute("UPDATE entries SET value = ?, value_repr = ?, created = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null",
                     [pickle.dumps(entry.value),
                      entry.value_repr,
                      entry.created,
-                     collection.name,
-                     collection.make_key(entry.config),
+                     collection_name,
+                     key,
                      executor_id
                     ])
             self.conn.commit()
             return c.rowcount
         if self.executor.submit(_helper).result() != 1:
-            raise Exception("Setting value to unannouced config: {}/{}".format(entry.collection.name, entry.config))
+            raise Exception("Setting value to unannouced config: {}/{}".format(collection_name, entry.config))
 
-    def get_recursive_consumers(self, collection, key):
+    def get_recursive_consumers(self, collection_name, key):
         #WHERE EXISTS(SELECT null FROM selected AS s WHERE deps.collection_s == selected.collection AND deps.key_s == selected.key
         query = """
             {}
@@ -135,36 +135,23 @@ class DB:
         """.format(self.RECURSIVE_CONSUMERS)
         def _helper():
             c = self.conn.cursor()
-            rs = c.execute(query, [collection.name, key])
+            rs = c.execute(query, [collection_name, key])
             return [(r[0], r[1]) for r in rs]
         return self.executor.submit(_helper).result()
 
-    def get_entry_by_config(self, collection, config):
-        key = collection.make_key(config)
-
-        def _helper():
-            c = self.conn.cursor()
-            c.execute("SELECT value, created FROM entries WHERE collection = ? AND key = ? AND (value is not null OR executor is null OR executor in (SELECT id FROM executors WHERE {}))".format(self.LIVE_EXECUTOR_QUERY),
-                    [collection.name, key])
-            return c.fetchone()
-        result = self.executor.submit(_helper).result()
-        if result is None:
-            return None
-        return Entry(config, pickle.loads(result[0]) if result[0] is not None else None, result[1])
-
-    def has_entry_by_key(self, collection, key):
+    def has_entry_by_key(self, collection_name, key):
         def _helper():
             c = self.conn.cursor()
             c.execute("SELECT COUNT(*) FROM entries WHERE collection = ? AND key = ? AND value is not null",
-                      [collection.name, key])
+                      [collection_name, key])
             return bool(c.fetchone()[0])
         return self.executor.submit(_helper).result()
 
-    def get_entry_state(self, collection, key):
+    def get_entry_state(self, collection_name, key):
         def _helper():
             c = self.conn.cursor()
             c.execute("SELECT value is not null FROM entries WHERE collection = ? AND key = ? AND (value is not null OR executor is null OR executor in (SELECT id FROM executors WHERE {}))".format(self.LIVE_EXECUTOR_QUERY),
-                      [collection.name, key])
+                      [collection_name, key])
             v = c.fetchone()
             if v is None:
                 return None
@@ -174,24 +161,33 @@ class DB:
                 return "announced"
         return self.executor.submit(_helper).result()
 
-    """
-    def get_entry_by_key(self, collection, key):
+    def get_entry_no_config(self, collection_name, key):
+        def _helper():
+            c = self.conn.cursor()
+            c.execute("SELECT value, created FROM entries WHERE collection = ? AND key = ? AND (value is not null OR executor is null OR executor in (SELECT id FROM executors WHERE {}))".format(self.LIVE_EXECUTOR_QUERY),
+                    [collection_name, key])
+            return c.fetchone()
+        result = self.executor.submit(_helper).result()
+        if result is None:
+            return None
+        return Entry(None, pickle.loads(result[0]) if result[0] is not None else None, result[1])
+
+    def get_entry(self, collection_name, key):
         def _helper():
             c = self.conn.cursor()
             c.execute("SELECT config, value, created FROM entries WHERE collection = ? AND key = ?",
-                    [collection.name, key])
+                    [collection_name, key])
             return c.fetchone()
         result = self.executor.submit(_helper).result()
         if result is None:
             return None
         config, value, created = result
-        return Entry(collection, pickle.loads(config), pickle.loads(value), created)
-    """
+        return Entry(pickle.loads(config), pickle.loads(value) if value is not None else None, created)
 
-    def remove_entry_by_key(self, collection, key):
+    def remove_entry_by_key(self, collection_name, key):
         def _helper():
             self.conn.execute("{} DELETE FROM entries WHERE rowid IN (SELECT entries.rowid FROM selected LEFT JOIN entries ON entries.collection == selected.collection AND entries.key == selected.key)".format(self.RECURSIVE_CONSUMERS),
-                [collection.name, key])
+                [collection_name, key])
         self.executor.submit(_helper).result()
 
     """
@@ -250,10 +246,10 @@ class DB:
                 return False
         return self.executor.submit(_helper).result()
 
-    def entry_summaries(self, collection):
+    def entry_summaries(self, collection_name):
         def _helper():
             c = self.conn.cursor()
-            r = c.execute("SELECT key, config, length(value), value_repr, created FROM entries WHERE collection = ?", [collection.name])
+            r = c.execute("SELECT key, config, length(value), value_repr, created FROM entries WHERE collection = ?", [collection_name])
             return [
                 {"key": key, "config": pickle.loads(config), "size": value_size + len(config) if value_size else len(config), "value_repr": value_repr, "created": created}
                 for key, config, value_size, value_repr, created in r.fetchall()
