@@ -19,84 +19,96 @@ class DB:
                 SELECT collection_t,  cast(key_t as TEXT) FROM selected, deps WHERE selected.collection == deps.collection_s AND selected.key == deps.key_s
             )"""
 
-    def __init__(self, path):
-        self.executor = ThreadPoolExecutor(max_workers=1)
-        self.executor.submit(self.init, path).result()
-        assert self.conn is not None
+    def __init__(self, path, threading=True):
+        def _helper():
+            self.conn = sqlite3.connect(path)
+            self.conn.execute("""
+                PRAGMA foreign_keys = ON
+            """)
+        if threading:
+            self._thread = ThreadPoolExecutor(max_workers=1)
+        else:
+            self._thread = None
+        self._run(_helper)
 
-    def init(self, path):
-        self.conn = sqlite3.connect(path)
-        self.conn.execute("""
-            PRAGMA foreign_keys = ON
-        """)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS collections (
-                name TEXT NOT NULL PRIMARY KEY
-            );
-        """)
+    def _run(self, fn):
+        thread = self._thread
+        if thread:
+            return thread.submit(fn).result()
+        else:
+            return fn()
 
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS executors (
-                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                created TEXT NOT NULL,
-                heartbeat TEXT NOT NULL,
-                heartbeat_interval FLOAT NOT NULL,
-                stats TEXT,
-                type STRING NOT NULL,
-                version STRING NOT NULL,
-                resources STRING NOT NULL
-            );
-        """)
+    def init(self):
+        def _helper():
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS collections (
+                    name TEXT NOT NULL PRIMARY KEY
+                );
+            """)
 
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS entries (
-                collection STRING NOT NULL,
-                key TEXT NOT NULL,
-                config BLOB NOT NULL,
-                value BLOB,
-                value_repr STRING,
-                created TEXT,
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS executors (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    created TEXT NOT NULL,
+                    heartbeat TEXT NOT NULL,
+                    heartbeat_interval FLOAT NOT NULL,
+                    stats TEXT,
+                    type STRING NOT NULL,
+                    version STRING NOT NULL,
+                    resources STRING NOT NULL
+                );
+            """)
 
-                executor INTEGER,
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS entries (
+                    collection STRING NOT NULL,
+                    key TEXT NOT NULL,
+                    config BLOB NOT NULL,
+                    value BLOB,
+                    value_repr STRING,
+                    created TEXT,
 
-                PRIMARY KEY (collection, key)
-                CONSTRAINT collection_ref
-                    FOREIGN KEY (collection)
-                    REFERENCES collections(name)
-                    ON DELETE CASCADE
-                CONSTRAINT executor_ref
-                    FOREIGN KEY (executor)
-                    REFERENCES executors(id)
-                    ON DELETE CASCADE
-            );
-        """)
+                    executor INTEGER,
 
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS deps (
-                collection_s STRING NOT NULL,
-                key_s STRING NOT NULL,
-                collection_t STRING NOT NULL,
-                key_t STRING NOT NULL,
+                    PRIMARY KEY (collection, key)
+                    CONSTRAINT collection_ref
+                        FOREIGN KEY (collection)
+                        REFERENCES collections(name)
+                        ON DELETE CASCADE
+                    CONSTRAINT executor_ref
+                        FOREIGN KEY (executor)
+                        REFERENCES executors(id)
+                        ON DELETE CASCADE
+                );
+            """)
 
-                UNIQUE(collection_s, key_s, collection_t, key_t),
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS deps (
+                    collection_s STRING NOT NULL,
+                    key_s STRING NOT NULL,
+                    collection_t STRING NOT NULL,
+                    key_t STRING NOT NULL,
 
-                CONSTRAINT entry_s_ref
-                    FOREIGN KEY (collection_s, key_s)
-                    REFERENCES entries(collection, key)
-                    ON DELETE CASCADE,
-                CONSTRAINT entry_t_ref
-                    FOREIGN KEY (collection_t, key_t)
-                    REFERENCES entries(collection, key)
-                    ON DELETE CASCADE
-            );
-        """)
+                    UNIQUE(collection_s, key_s, collection_t, key_t),
+
+                    CONSTRAINT entry_s_ref
+                        FOREIGN KEY (collection_s, key_s)
+                        REFERENCES entries(collection, key)
+                        ON DELETE CASCADE,
+                    CONSTRAINT entry_t_ref
+                        FOREIGN KEY (collection_t, key_t)
+                        REFERENCES entries(collection, key)
+                        ON DELETE CASCADE
+                );
+            """)
+        self._run(_helper)
 
     def ensure_collection(self, name):
         def _helper():
             c = self.conn.cursor()
             c.execute("INSERT OR IGNORE INTO collections VALUES (?)", [name])
             self.conn.commit()
-        self.executor.submit(_helper).result()
+        self._run(_helper)
 
     def create_entry(self, collection_name, key, entry):
         def _helper():
@@ -109,7 +121,7 @@ class DB:
                      entry.value_repr,
                      entry.created])
             self.conn.commit()
-        self.executor.submit(_helper).result()
+        self._run(_helper)
 
     def set_entry_value(self, executor_id, collection_name, key, entry):
         def _helper():
@@ -124,7 +136,7 @@ class DB:
                     ])
             self.conn.commit()
             return c.rowcount
-        if self.executor.submit(_helper).result() != 1:
+        if self._run(_helper) != 1:
             raise Exception("Setting value to unannouced config: {}/{}".format(collection_name, entry.config))
 
     def get_recursive_consumers(self, collection_name, key):
@@ -137,7 +149,7 @@ class DB:
             c = self.conn.cursor()
             rs = c.execute(query, [collection_name, key])
             return [(r[0], r[1]) for r in rs]
-        return self.executor.submit(_helper).result()
+        return self._run(_helper)
 
     def has_entry_by_key(self, collection_name, key):
         def _helper():
@@ -145,7 +157,7 @@ class DB:
             c.execute("SELECT COUNT(*) FROM entries WHERE collection = ? AND key = ? AND value is not null",
                       [collection_name, key])
             return bool(c.fetchone()[0])
-        return self.executor.submit(_helper).result()
+        return self._run(_helper)
 
     def get_entry_state(self, collection_name, key):
         def _helper():
@@ -159,7 +171,7 @@ class DB:
                 return "finished"
             else:
                 return "announced"
-        return self.executor.submit(_helper).result()
+        return self._run(_helper)
 
     def get_entry_no_config(self, collection_name, key):
         def _helper():
@@ -167,7 +179,7 @@ class DB:
             c.execute("SELECT value, created FROM entries WHERE collection = ? AND key = ? AND (value is not null OR executor is null OR executor in (SELECT id FROM executors WHERE {}))".format(self.LIVE_EXECUTOR_QUERY),
                     [collection_name, key])
             return c.fetchone()
-        result = self.executor.submit(_helper).result()
+        result = self._run(_helper)
         if result is None:
             return None
         return Entry(None, pickle.loads(result[0]) if result[0] is not None else None, result[1])
@@ -178,7 +190,7 @@ class DB:
             c.execute("SELECT config, value, created FROM entries WHERE collection = ? AND key = ?",
                     [collection_name, key])
             return c.fetchone()
-        result = self.executor.submit(_helper).result()
+        result = self._run(_helper)
         if result is None:
             return None
         config, value, created = result
@@ -188,7 +200,7 @@ class DB:
         def _helper():
             self.conn.execute("{} DELETE FROM entries WHERE rowid IN (SELECT entries.rowid FROM selected LEFT JOIN entries ON entries.collection == selected.collection AND entries.key == selected.key)".format(self.RECURSIVE_CONSUMERS),
                 [collection_name, key])
-        self.executor.submit(_helper).result()
+        self._run(_helper)
 
     """
     def remove_entries(self, collection_key_pairs):
@@ -216,7 +228,7 @@ class DB:
 
             result.sort(key=lambda x: x["name"])
             return result
-        return self.executor.submit(_helper).result()
+        return self._run(_helper)
 
     def _cleanup_lost_entries(self, cursor):
         cursor.execute("DELETE FROM entries WHERE value is null AND executor IN (SELECT id FROM executors WHERE {})".format(self.DEAD_EXECUTOR_QUERY))
@@ -244,7 +256,7 @@ class DB:
             except sqlite3.IntegrityError as e:
                 self.conn.rollback()
                 return False
-        return self.executor.submit(_helper).result()
+        return self._run(_helper)
 
     def entry_summaries(self, collection_name):
         def _helper():
@@ -254,7 +266,7 @@ class DB:
                 {"key": key, "config": pickle.loads(config), "size": value_size + len(config) if value_size else len(config), "value_repr": value_repr, "created": created}
                 for key, config, value_size, value_repr, created in r.fetchall()
             ]
-        return self.executor.submit(_helper).result()
+        return self._run(_helper)
 
     def register_executor(self, executor):
         assert executor.id is None
@@ -269,7 +281,7 @@ class DB:
                      executor.resources])
             self.conn.commit()
             executor.id = c.lastrowid
-        self.executor.submit(_helper).result()
+        self._run(_helper)
 
     def executor_summaries(self):
         def get_status(is_dead, stats):
@@ -295,21 +307,21 @@ class DB:
                  "resources": resources,
                 } for id, created, is_dead, stats, executor_type, version, resources in r.fetchall()
             ]
-        return self.executor.submit(_helper).result()
+        return self._run(_helper)
 
     def update_heartbeat(self, id):
         def _helper():
             c = self.conn.cursor()
             c.execute("""UPDATE executors SET heartbeat = DATETIME('now') WHERE id = ? AND stats is not null""", [id])
             self.conn.commit()
-        self.executor.submit(_helper).result()
+        self._run(_helper)
 
     def update_stats(self, id, stats):
         def _helper():
             c = self.conn.cursor()
             c.execute("""UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""", [json.dumps(stats), id])
             self.conn.commit()
-        self.executor.submit(_helper).result()
+        self._run(_helper)
 
     def update_executor_stats(self, uuid, stats):
         assert stats != None
@@ -321,4 +333,4 @@ class DB:
             c.execute("""UPDATE executors SET heartbeat = DATETIME('now'), stats = null WHERE id = ?""", [id])
             c.execute("""DELETE FROM entries WHERE executor == ? AND value is null""", [id])
             self.conn.commit()
-        self.executor.submit(_helper).result()
+        self._run(_helper)

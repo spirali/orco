@@ -15,6 +15,7 @@ class Runtime:
 
     def __init__(self, db_path, executor: Executor=None):
         self.db = DB(db_path)
+        self.db.init()
 
         self._executor = executor
         self._collections = {}
