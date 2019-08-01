@@ -5,10 +5,14 @@ import itertools
 import random
 import time
 import threading
+import os
 
-rt = Runtime(":memory:")
+if os.path.isfile("test.db"):
+    os.unlink("test.db")
 
-executor = LocalExecutor(heartbeat_interval=1)
+rt = Runtime("test.db")
+
+executor = LocalExecutor(heartbeat_interval=1, n_processes=1)
 rt.register_executor(executor)
 
 executor2 = LocalExecutor(heartbeat_interval=1)
@@ -36,7 +40,6 @@ models = ["simple", "maxmin"]
 scheduler = ["blevel", "random", {"name": "camp", "iterations": 1000}, {"name": "camp", "iterations": 2000}]
 for g, m, s in itertools.product(graphs, models, scheduler):
     c.insert({"graph": g, "model": m, "scheduler": s}, random.randint(1, 30000))
-
 
 c = rt.register_collection("collection with space in name")
 

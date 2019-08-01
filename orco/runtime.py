@@ -81,17 +81,29 @@ class Runtime:
         else:
             app.run(port=port, debug=debug, use_reloader=False)
 
+    def get_entry(self, ref):
+        collection = ref.collection
+        entry = self.db.get_entry_no_config(collection.name, collection.make_key(ref.config))
+        entry.config = ref.config
+        return entry
+
     def compute_refs(self, refs):
         tasks = {}
         global_deps = []
+        exists = set()
 
         def make_task(ref):
             ref_key = ref.ref_key()
+            if ref_key in exists:
+                return ref
             task = tasks.get(ref_key)
             if task is not None:
                 return task
             collection = ref.collection
             state = self.db.get_entry_state(collection.name, ref_key[1])
+            if state == "finished":
+                exists.add(ref_key)
+                return ref
             if state == "announced":
                 raise Exception("Computation needs announced but not finished entries, it is not supported now: {}".format(ref))
             if state is None and collection.dep_fn:
@@ -104,7 +116,7 @@ class Runtime:
                 inputs = None
             if state is None and collection.build_fn is None:
                 raise Exception("Computation depends on missing configuration '{}' in a fixed collection".format(ref))
-            task = Task(ref, inputs, state is not None)
+            task = Task(ref, inputs)
             tasks[ref_key] = task
             return task
 
@@ -113,8 +125,9 @@ class Runtime:
         executor = self.executors[0]
 
         requested_tasks = [make_task(ref) for ref in  refs]
-        need_to_compute_refs = [task.ref for task in tasks.values() if not task.is_computed]
+        need_to_compute_refs = [task.ref for task in tasks.values()]
         logger.debug("Announcing refs %s at worker %s", need_to_compute_refs, executor.id)
         if not self.db.announce_entries(executor.id, need_to_compute_refs, global_deps):
             raise Exception("Was not able to announce task into DB")
+        del global_deps, need_to_compute_refs  # we do not this anymore, and .run may be long
         return executor.run(tasks, requested_tasks)

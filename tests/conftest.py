@@ -8,15 +8,20 @@ ROOT_DIR = os.path.dirname(TEST_DIR)
 sys.path.insert(0, ROOT_DIR)
 
 import orco  # noqa
+import logging
 
+logger = logging.getLogger("test")
 
 class TestEnv:
 
-    def __init__(self):
+    def __init__(self, tmpdir):
         self.runtimes = []
+        self.tmpdir = tmpdir
 
-    def runtime_in_memory(self):
-        r = orco.Runtime(":memory:")
+    def test_runtime(self):
+        db_path = str(self.tmpdir.join("db"))
+        logger.info("DB path %s", db_path)
+        r = orco.Runtime(db_path)
         self.runtimes.append(r)
         return r
 
@@ -27,7 +32,7 @@ class TestEnv:
 
 
 @pytest.fixture()
-def env():
-    test_env = TestEnv()
+def env(tmpdir):
+    test_env = TestEnv(tmpdir)
     yield test_env
     test_env.stop()

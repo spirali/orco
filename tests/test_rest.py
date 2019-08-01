@@ -40,7 +40,7 @@ def test_rest_collections():
 
 
 def test_rest_executors(env):
-    rt = env.runtime_in_memory()
+    rt = env.test_runtime()
     rt.register_executor(LocalExecutor())
     with rt.serve(testing=True).test_client() as client:
         r = client.get("executors").get_json()

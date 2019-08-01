@@ -1,10 +1,14 @@
 import multiprocessing
 import threading
 import time
+import cloudpickle
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime
+
 
 from .collection import Entry
 from .task import Task
+from .db import DB
 
 
 class Executor:
@@ -63,8 +67,7 @@ class LocalExecutor(Executor):
         self.heartbeat_stop_event = None
 
         self.pool = None
-        if n_processes is not None and n_processes > 1:
-            self.pool = multiprocessing.Pool(n_processes)
+        self.n_processes = n_processes
 
     def get_stats(self):
         return self.stats
@@ -88,62 +91,85 @@ class LocalExecutor(Executor):
             self.heartbeat_thread.daemon = True
             self.heartbeat_thread.start()
 
-    def save_result(self, task: Task, result):
-        ref = task.ref
-        collection = ref.collection
-        entry = Entry(ref.config, result, datetime.now())
-        collection.runtime.db.set_entry_value(self.id, collection.name, collection.make_key(entry.config), entry)
-        self.stats["n_completed"] += 1
-        collection.runtime.db.update_stats(self.id, self.stats)
-        return entry
-
-    def run_tasks(self, tasks, cache):
-        missing = {}
+    def _init(self, tasks):
+        consumers = {}
+        waiting_deps = {}
+        ready = []
 
         for task in tasks:
-            result = cache.get(task)
-            if result is None:
-                if task.is_computed:
-                    entry = task.ref.collection.get_entry(task.ref.config)
-                    assert entry is not None
-                    cache[task] = entry
-                else:
-                    inputs = None
-                    if task.inputs:
-                        inputs = self.run_tasks(task.inputs, cache)
-
-                    collection = task.ref.collection
-                    missing[task] = (collection.build_fn, task.ref.config,
-                                     collection.dep_fn is not None, inputs)
-
-        def save(task, result):
-            entry = self.save_result(task, result)
-            cache[task] = entry
-
-        def compute_local():
-            for (task, args) in missing.items():
-                save(task, compute_task(args))
-
-        def compute_multiprocessing():
-            results = self.pool.imap(compute_task, missing.values())
-
-            for (task, result) in zip(missing.keys(), results):
-                save(task, result)
-
-        fn = compute_multiprocessing if self.pool else compute_local
-        fn()
-
-        result = []
-        for task in tasks:
-            result.append(cache[task])
-
-        return result
+            count = 0
+            if task.inputs is not None:
+                for inp in task.inputs:
+                    if isinstance(inp, Task):
+                        count += 1
+                        c = consumers.get(inp)
+                        if c is None:
+                            c = set()
+                            consumers[inp] = c
+                        c.add(task)
+            if count == 0:
+                ready.append(task)
+            waiting_deps[task] = count
+        return consumers, waiting_deps, ready
 
     def run(self, all_tasks, required_tasks: [Task]):
-        n_tasks = sum(1 for t in all_tasks.values() if not t.is_computed)
+        def submit(task):
+            collection = task.ref.collection
+            if task.inputs is not None:
+                inputs = [t.ref.ref_key() if isinstance(t, Task) else t.ref_key() for t in task.inputs]
+            else:
+                inputs = None
+            return pool.submit(_run_task,
+                               self.id,
+                               db.path,
+                               cloudpickle.dumps(collection.build_fn),
+                               task.ref.ref_key(),
+                               task.ref.config,
+                               inputs)
         self.stats = {
-            "n_tasks": n_tasks,
+            "n_tasks": len(all_tasks),
             "n_completed": 0
         }
-        cache = {}
-        return self.run_tasks(required_tasks, cache)
+        db = self.runtime.db
+        db.update_stats(self.id, self.stats)
+        consumers, waiting_deps, ready = self._init(all_tasks.values())
+        pool = self.pool
+        if pool is None:
+            pool = ProcessPoolExecutor(max_workers=self.n_processes)
+            self.pool = pool
+
+        waiting = [submit(task) for task in ready]
+        del ready
+
+        while waiting:
+            wait_result = wait(waiting, None, return_when=FIRST_COMPLETED)
+            waiting = wait_result.not_done
+            for f in wait_result.done:
+                self.stats["n_completed"] += 1
+                task = all_tasks[f.result()]
+                for c in consumers.get(task, ()):
+                    waiting_deps[c] -= 1
+                    w = waiting_deps[c]
+                    if w <= 0:
+                        assert w == 0
+                        waiting.add(submit(c))
+            db.update_stats(self.id, self.stats)
+        return [self.runtime.get_entry(task.ref if isinstance(task, Task) else task) for task in required_tasks]
+
+
+_per_process_db = None
+
+
+def _run_task(executor_id, db_path, build_fn, ref_key, config, deps):
+    global _per_process_db
+    if _per_process_db is None:
+        _per_process_db = DB(db_path, threading=False)
+    build_fn = cloudpickle.loads(build_fn)
+    if deps is not None:
+        value_deps = [_per_process_db.get_entry(*ref) for ref in deps]
+        value = build_fn(config, value_deps)
+    else:
+        value = build_fn(config)
+    entry = Entry(config, value, datetime.now())
+    _per_process_db.set_entry_value(executor_id, ref_key[0], ref_key[1], entry)
+    return ref_key

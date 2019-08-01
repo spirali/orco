@@ -10,7 +10,7 @@ def test_executor(env, n_processes):
     def to_dict(lst):
         return {x["id"]: x for x in lst}
 
-    runtime = env.runtime_in_memory()
+    runtime = env.test_runtime()
     r = runtime.executor_summaries()
     assert len(r) == 0
 

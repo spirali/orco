@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 
 def test_db_announce(env):
-    r = env.runtime_in_memory()
+    r = env.test_runtime()
     e1 = LocalExecutor(heartbeat_interval=1)
     e1._debug_do_not_start_heartbeat = True
     r.register_executor(e1)
@@ -27,7 +27,7 @@ def test_db_announce(env):
 
 
 def test_db_set_value(env):
-    r = env.runtime_in_memory()
+    r = env.test_runtime()
     e1 = LocalExecutor(heartbeat_interval=1)
     r.register_executor(e1)
 

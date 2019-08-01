@@ -25,6 +25,7 @@ class DB:
             self.conn.execute("""
                 PRAGMA foreign_keys = ON
             """)
+        self.path = path
         if threading:
             self._thread = ThreadPoolExecutor(max_workers=1)
         else:

@@ -1,5 +1,6 @@
 
 import pytest
+import pickle
 
 from orco import LocalExecutor
 
@@ -9,14 +10,14 @@ def adder(config):
 
 
 def test_reopen_collection(env):
-    runtime = env.runtime_in_memory()
+    runtime = env.test_runtime()
     runtime.register_collection("col1", adder)
 
     with pytest.raises(Exception):
         runtime.register_collection("col1", adder)
 
 def test_fixed_collection(env):
-    runtime = env.runtime_in_memory()
+    runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor())
 
     fix1 = runtime.register_collection("fix1")
@@ -33,13 +34,17 @@ def test_fixed_collection(env):
         assert fix1.compute("b")
 
 
-def test_collection_compute(env):
-    runtime = env.runtime_in_memory()
-    runtime.register_executor(LocalExecutor())
-    counter = [0]
+def test_collection_compute(env, tmpdir):
+    runtime = env.test_runtime()
+    runtime.register_executor(LocalExecutor(n_processes=1))
+
+    counter_file = tmpdir.join("counter")
+    counter_file.write_binary(pickle.dumps(0))
 
     def adder(config):
-        counter[0] += 1
+        counter = pickle.loads(counter_file.read_binary())
+        counter += 1
+        counter_file.write_binary(pickle.dumps(counter))
         return config["a"] + config["b"]
 
     collection = runtime.register_collection("col1", adder)
@@ -48,7 +53,8 @@ def test_collection_compute(env):
     assert entry.config["a"] == 10
     assert entry.config["b"] == 30
     assert entry.value == 40
-    assert counter[0] == 1
+    counter = pickle.loads(counter_file.read_binary())
+    assert counter == 1
 
     result = collection.compute_many([{"a": 10, "b": 30}])
     assert len(result) == 1
@@ -56,20 +62,27 @@ def test_collection_compute(env):
     assert entry.config["a"] == 10
     assert entry.config["b"] == 30
     assert entry.value == 40
-    assert counter[0] == 1
+    assert counter == 1
 
 
-def test_collection_deps(env):
-    runtime = env.runtime_in_memory()
-    runtime.register_executor(LocalExecutor())
+def test_collection_deps(env, tmpdir):
+    runtime = env.test_runtime()
+    runtime.register_executor(LocalExecutor(n_processes=1))
     counter = [0, 0]
 
+    counter_file = tmpdir.join("counter")
+    counter_file.write_binary(pickle.dumps(counter))
+
     def builder1(config):
+        counter = pickle.loads(counter_file.read_binary())
         counter[0] += 1
+        counter_file.write_binary(pickle.dumps(counter))
         return config * 10
 
     def builder2(config, deps):
+        counter = pickle.loads(counter_file.read_binary())
         counter[1] += 1
+        counter_file.write_binary(pickle.dumps(counter))
         return sum(e.value for e in deps)
 
     def make_deps(config):
@@ -80,37 +93,42 @@ def test_collection_deps(env):
 
     e = col2.compute(5)
 
+    counter = pickle.loads(counter_file.read_binary())
     assert counter == [5, 1]
     assert e.value == 100
 
     e = col2.compute(4)
 
+    counter = pickle.loads(counter_file.read_binary())
     assert counter == [5, 2]
     assert e.value == 60
 
     col1.remove_many([0, 3])
 
     e = col2.compute(6)
+    counter = pickle.loads(counter_file.read_binary())
     assert counter == [8, 3]
     assert e.value == 150
 
     e = col2.compute(6)
+    counter = pickle.loads(counter_file.read_binary())
     assert counter == [8, 3]
     assert e.value == 150
 
     col2.remove(6)
-
     e = col2.compute(5)
+    counter = pickle.loads(counter_file.read_binary())
     assert counter == [8, 4]
     assert e.value == 100
 
     e = col2.compute(6)
+    counter = pickle.loads(counter_file.read_binary())
     assert counter == [8, 5]
     assert e.value == 150
 
 
 def test_collection_stored_deps(env):
-    runtime = env.runtime_in_memory()
+    runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor())
 
     col1 = runtime.register_collection("col1", lambda c: c * 10)
