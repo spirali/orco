@@ -42,3 +42,28 @@ def test_executor(env, n_processes):
     assert r[executor.id]["status"] == "running"
     assert r[executor2.id]["status"] == "lost"
     assert r[executor3.id]["status"] == "stopped"
+
+
+def test_executor_errorp(env):
+    runtime = env.test_runtime()
+    executor = LocalExecutor(heartbeat_interval=1, n_processes=2)
+    runtime.register_executor(executor)
+
+    col0 = runtime.register_collection("col0", lambda c: c)
+    col1 = runtime.register_collection("col1", lambda c, d: 100 // d[0].value, lambda c: [col0.ref(c)])
+    col2 = runtime.register_collection("col2", lambda c, ds: sum(d.value for d in ds), lambda c: [col1.ref(x) for x in c])
+
+    with pytest.raises(ZeroDivisionError):
+        assert col2.compute([10, 0, 20])
+    assert col0.get_entry_state(0) == "finished"
+
+    assert col2.compute([10, 20]).value == 15
+    assert col2.compute([1, 2, 4]).value == 175
+
+
+    with pytest.raises(ZeroDivisionError):
+        assert col1.compute(0)
+    assert col0.get_entry_state(0) == "finished"
+
+    assert col2.compute([10, 20]).value == 15
+    assert col2.compute([1, 2, 4]).value == 175

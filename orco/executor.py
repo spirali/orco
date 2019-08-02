@@ -154,28 +154,31 @@ class LocalExecutor(Executor):
         #    col_progressbars[col] = tqdm.tqdm(desc=col, total=count, position=i)
 
         progressbar = tqdm.tqdm(total=len(all_tasks)) #  , position=i+1)
-        while waiting:
-            wait_result = wait(waiting, None, return_when=FIRST_COMPLETED)
-            waiting = wait_result.not_done
-            for f in wait_result.done:
-                self.stats["n_completed"] += 1
-                ref_key = f.result()
-                task = all_tasks[ref_key]
-                progressbar.update()
-                #col_progressbars[ref_key[0]].update()
-                logger.debug("Task finished: %s", task.ref)
-                for c in consumers.get(task, ()):
-                    waiting_deps[c] -= 1
-                    w = waiting_deps[c]
-                    if w <= 0:
-                        assert w == 0
-                        waiting.add(submit(c))
-            db.update_stats(self.id, self.stats)
-        progressbar.close()
-        #for p in col_progressbars.values():
-        #    p.close()
-        return [self.runtime.get_entry(task.ref if isinstance(task, Task) else task) for task in required_tasks]
-
+        try:
+            while waiting:
+                wait_result = wait(waiting, None, return_when=FIRST_COMPLETED)
+                waiting = wait_result.not_done
+                for f in wait_result.done:
+                    self.stats["n_completed"] += 1
+                    ref_key = f.result()
+                    task = all_tasks[ref_key]
+                    progressbar.update()
+                    #col_progressbars[ref_key[0]].update()
+                    logger.debug("Task finished: %s", task.ref)
+                    for c in consumers.get(task, ()):
+                        waiting_deps[c] -= 1
+                        w = waiting_deps[c]
+                        if w <= 0:
+                            assert w == 0
+                            waiting.add(submit(c))
+                db.update_stats(self.id, self.stats)
+            #for p in col_progressbars.values():
+            #    p.close()
+            return [self.runtime.get_entry(task.ref if isinstance(task, Task) else task) for task in required_tasks]
+        finally:
+            progressbar.close()
+            for f in waiting:
+                f.cancel()
 
 _per_process_db = None
 

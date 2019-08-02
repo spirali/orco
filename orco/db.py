@@ -281,6 +281,17 @@ class DB:
                 return False
         return self._run(_helper)
 
+    def unannounce_entries(self, executor_id, refs):
+        def _helper():
+            with self.conn:
+                c = self.conn.cursor()
+                self._cleanup_lost_entries(c)
+                c.executemany("DELETE FROM entries WHERE collection = ? AND key = ? AND executor == ? AND value is null",
+                    [[r.collection.name,
+                    r.collection.make_key(r.config),
+                    executor_id] for r in refs])
+        return self._run(_helper)
+
     def entry_summaries(self, collection_name):
         def _helper():
             c = self.conn.cursor()
