@@ -13,7 +13,7 @@ class Ref:
 
     def __repr__(self):
         return "<{}/{}>".format(self.collection.name, repr(self.config))
-    """
+
     def __eq__(self, other):
         if not isinstance(other, Ref) or self.collection != other.collection:
             return False
@@ -21,5 +21,4 @@ class Ref:
         return collection.make_key(self.config) == collection.make_key(other.config)
 
     def __hash__(self):
-        return hash(self.collection) ^ hash(self.collection.make_key(self.config))
-    """
+        return hash((self.collection, self.collection.make_key(self.config)))

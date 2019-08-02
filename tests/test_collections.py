@@ -127,6 +127,17 @@ def test_collection_deps(env, tmpdir):
     assert e.value == 150
 
 
+def test_collection_double_ref(env):
+    runtime = env.test_runtime()
+    runtime.register_executor(LocalExecutor())
+
+    col1 = runtime.register_collection("col1", lambda c: c * 10)
+    col2 = runtime.register_collection("col2",
+                                       (lambda c, d: sum(x.value for x in d)),
+                                       (lambda c: [col1.ref(10), col1.ref(10), col1.ref(10)]))
+    assert col2.compute("abc").value == 300
+
+
 def test_collection_stored_deps(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor())

@@ -2,6 +2,7 @@ import multiprocessing
 import threading
 import time
 import cloudpickle
+import logging
 from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime
 
@@ -10,6 +11,7 @@ from .collection import Entry
 from .task import Task
 from .db import DB
 
+logger = logging.getLogger(__name__)
 
 class Executor:
 
@@ -106,9 +108,9 @@ class LocalExecutor(Executor):
                         count += 1
                         c = consumers.get(inp)
                         if c is None:
-                            c = set()
+                            c = []
                             consumers[inp] = c
-                        c.add(task)
+                        c.append(task)
             if count == 0:
                 ready.append(task)
             waiting_deps[task] = count
@@ -136,11 +138,6 @@ class LocalExecutor(Executor):
         db = self.runtime.db
         db.update_stats(self.id, self.stats)
         consumers, waiting_deps, ready = self._init(all_tasks.values())
-#        pool = self.pool
-#        if pool is None:
-#            pool = ProcessPoolExecutor(max_workers=self.n_processes)
-#            self.pool = pool
-
         waiting = [submit(task) for task in ready]
         del ready
 
@@ -150,6 +147,7 @@ class LocalExecutor(Executor):
             for f in wait_result.done:
                 self.stats["n_completed"] += 1
                 task = all_tasks[f.result()]
+                logger.debug("Task finished: %s", task.ref)
                 for c in consumers.get(task, ()):
                     waiting_deps[c] -= 1
                     w = waiting_deps[c]
@@ -173,6 +171,7 @@ def _run_task(executor_id, db_path, build_fn, ref_key, config, deps):
         value = build_fn(config, value_deps)
     else:
         value = build_fn(config)
+    print("build", build_fn, value)
     entry = Entry(config, value, datetime.now())
     _per_process_db.set_entry_value(executor_id, ref_key[0], ref_key[1], entry)
     return ref_key

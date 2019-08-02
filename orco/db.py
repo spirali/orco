@@ -277,6 +277,7 @@ class DB:
                     ])
                     return True
             except apsw.ConstraintError as e:
+                logger.error(e)
                 return False
         return self._run(_helper)
 

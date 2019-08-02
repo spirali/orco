@@ -89,7 +89,7 @@ class Runtime:
 
     def compute_refs(self, refs):
         tasks = {}
-        global_deps = []
+        global_deps = set()
         exists = set()
 
         def make_task(ref):
@@ -110,7 +110,7 @@ class Runtime:
                 deps = collection.dep_fn(ref.config)
                 for r in deps:
                     assert isinstance(r, Ref)
-                    global_deps.append((r, ref))
+                    global_deps.add((r, ref))
                 inputs = [make_task(r) for r in deps]
             else:
                 inputs = None
