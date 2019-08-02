@@ -91,6 +91,8 @@ class LocalExecutor(Executor):
             self.heartbeat_thread.daemon = True
             self.heartbeat_thread.start()
 
+        self.pool = ProcessPoolExecutor(max_workers=self.n_processes)
+
     def _init(self, tasks):
         consumers = {}
         waiting_deps = {}
@@ -130,13 +132,14 @@ class LocalExecutor(Executor):
             "n_tasks": len(all_tasks),
             "n_completed": 0
         }
+        pool = self.pool
         db = self.runtime.db
         db.update_stats(self.id, self.stats)
         consumers, waiting_deps, ready = self._init(all_tasks.values())
-        pool = self.pool
-        if pool is None:
-            pool = ProcessPoolExecutor(max_workers=self.n_processes)
-            self.pool = pool
+#        pool = self.pool
+#        if pool is None:
+#            pool = ProcessPoolExecutor(max_workers=self.n_processes)
+#            self.pool = pool
 
         waiting = [submit(task) for task in ready]
         del ready

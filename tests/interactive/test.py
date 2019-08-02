@@ -26,8 +26,11 @@ executor3.stop()
 c_sleepers = rt.register_collection("sleepers", lambda c: time.sleep(c))
 c_bedrooms = rt.register_collection("bedrooms", lambda c, d: None, lambda c: [c_sleepers.ref(x) for x in c["sleepers"]])
 
+c_bedrooms.compute({"sleepers": [0.1]})
 t = threading.Thread(target=(lambda: c_bedrooms.compute({"sleepers": list(range(10))})))
 t.start()
+
+time.sleep(0.5)  # To solve a problem with ProcessPool, fix waits for Python3.7
 
 c = rt.register_collection("hello")
 c.insert("e1", "ABC")

@@ -1,10 +1,12 @@
-import sqlite3
+import apsw
 import pickle
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor
-
-
 from .entry import Entry
+
+
+logger = logging.getLogger(__name__)
 
 
 class DB:
@@ -20,11 +22,16 @@ class DB:
             )"""
 
     def __init__(self, path, threading=True):
+        logger.debug("Opening DB: %s, threading = %s", path, threading)
+
         def _helper():
-            self.conn = sqlite3.connect(path)
-            self.conn.execute("""
-                PRAGMA foreign_keys = ON
-            """)
+            self.conn = apsw.Connection(path)
+            self.conn.setbusytimeout(5000)  # In milliseconds
+
+            # The following HAS TO BE OUTSIDE OF TRANSACTION!
+            self.conn.cursor().execute("""
+                    PRAGMA foreign_keys = ON
+                """)
         self.path = path
         if threading:
             self._thread = ThreadPoolExecutor(max_workers=1)
@@ -41,102 +48,117 @@ class DB:
 
     def init(self):
         def _helper():
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS collections (
-                    name TEXT NOT NULL PRIMARY KEY
-                );
-            """)
+            with self.conn:
+                cursor = self.conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS collections (
+                        name TEXT NOT NULL PRIMARY KEY
+                    );
+                """)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS executors (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        created TEXT NOT NULL,
+                        heartbeat TEXT NOT NULL,
+                        heartbeat_interval FLOAT NOT NULL,
+                        stats TEXT,
+                        type STRING NOT NULL,
+                        version STRING NOT NULL,
+                        resources STRING NOT NULL
+                    );
+                """)
 
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS executors (
-                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                    created TEXT NOT NULL,
-                    heartbeat TEXT NOT NULL,
-                    heartbeat_interval FLOAT NOT NULL,
-                    stats TEXT,
-                    type STRING NOT NULL,
-                    version STRING NOT NULL,
-                    resources STRING NOT NULL
-                );
-            """)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS entries (
+                        collection STRING NOT NULL,
+                        key TEXT NOT NULL,
+                        config BLOB NOT NULL,
+                        value BLOB,
+                        value_repr STRING,
+                        created TEXT,
 
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS entries (
-                    collection STRING NOT NULL,
-                    key TEXT NOT NULL,
-                    config BLOB NOT NULL,
-                    value BLOB,
-                    value_repr STRING,
-                    created TEXT,
+                        executor INTEGER,
 
-                    executor INTEGER,
+                        PRIMARY KEY (collection, key)
+                        CONSTRAINT collection_ref
+                            FOREIGN KEY (collection)
+                            REFERENCES collections(name)
+                            ON DELETE CASCADE
+                        CONSTRAINT executor_ref
+                            FOREIGN KEY (executor)
+                            REFERENCES executors(id)
+                            ON DELETE CASCADE
+                    );
+                """)
 
-                    PRIMARY KEY (collection, key)
-                    CONSTRAINT collection_ref
-                        FOREIGN KEY (collection)
-                        REFERENCES collections(name)
-                        ON DELETE CASCADE
-                    CONSTRAINT executor_ref
-                        FOREIGN KEY (executor)
-                        REFERENCES executors(id)
-                        ON DELETE CASCADE
-                );
-            """)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS deps (
+                        collection_s STRING NOT NULL,
+                        key_s STRING NOT NULL,
+                        collection_t STRING NOT NULL,
+                        key_t STRING NOT NULL,
 
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS deps (
-                    collection_s STRING NOT NULL,
-                    key_s STRING NOT NULL,
-                    collection_t STRING NOT NULL,
-                    key_t STRING NOT NULL,
+                        UNIQUE(collection_s, key_s, collection_t, key_t),
 
-                    UNIQUE(collection_s, key_s, collection_t, key_t),
+                        CONSTRAINT entry_s_ref
+                            FOREIGN KEY (collection_s, key_s)
+                            REFERENCES entries(collection, key)
+                            ON DELETE CASCADE,
+                        CONSTRAINT entry_t_ref
+                            FOREIGN KEY (collection_t, key_t)
+                            REFERENCES entries(collection, key)
+                            ON DELETE CASCADE
+                    );
+                """)
+        self._run(_helper)
 
-                    CONSTRAINT entry_s_ref
-                        FOREIGN KEY (collection_s, key_s)
-                        REFERENCES entries(collection, key)
-                        ON DELETE CASCADE,
-                    CONSTRAINT entry_t_ref
-                        FOREIGN KEY (collection_t, key_t)
-                        REFERENCES entries(collection, key)
-                        ON DELETE CASCADE
-                );
-            """)
+    def _dump(self):
+        def _helper():
+            print("ENTRIES ----")
+            c = self.conn.cursor()
+            r = c.execute("SELECT * FROM entries")
+            for x in r:
+                print(x)
+            print("DEPS -----")
+            c = self.conn.cursor()
+            r = c.execute("SELECT * FROM deps")
+            for x in r:
+                print(x)
         self._run(_helper)
 
     def ensure_collection(self, name):
         def _helper():
-            c = self.conn.cursor()
-            c.execute("INSERT OR IGNORE INTO collections VALUES (?)", [name])
-            self.conn.commit()
+            with self.conn:
+                c = self.conn.cursor()
+                c.execute("INSERT OR IGNORE INTO collections VALUES (?)", [name])
         self._run(_helper)
 
     def create_entry(self, collection_name, key, entry):
         def _helper():
-            c = self.conn.cursor()
-            c.execute("INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?, null)",
-                    [collection_name,
-                     key,
-                     pickle.dumps(entry.config),
-                     pickle.dumps(entry.value),
-                     entry.value_repr,
-                     entry.created])
-            self.conn.commit()
+            with self.conn:
+                c = self.conn.cursor()
+                c.execute("INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?, null)",
+                        [collection_name,
+                        key,
+                        pickle.dumps(entry.config),
+                        pickle.dumps(entry.value),
+                        entry.value_repr,
+                        entry.created.isoformat()])
         self._run(_helper)
 
     def set_entry_value(self, executor_id, collection_name, key, entry):
         def _helper():
-            c = self.conn.cursor()
-            c.execute("UPDATE entries SET value = ?, value_repr = ?, created = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null",
-                    [pickle.dumps(entry.value),
-                     entry.value_repr,
-                     entry.created,
-                     collection_name,
-                     key,
-                     executor_id
-                    ])
-            self.conn.commit()
-            return c.rowcount
+            with self.conn:
+                c = self.conn.cursor()
+                c.execute("UPDATE entries SET value = ?, value_repr = ?, created = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null",
+                        [pickle.dumps(entry.value),
+                        entry.value_repr,
+                        entry.created.isoformat(),
+                        collection_name,
+                        key,
+                        executor_id
+                        ])
+            return self.conn.changes()
         if self._run(_helper) != 1:
             raise Exception("Setting value to unannouced config: {}/{}".format(collection_name, entry.config))
 
@@ -199,8 +221,9 @@ class DB:
 
     def remove_entry_by_key(self, collection_name, key):
         def _helper():
-            self.conn.execute("{} DELETE FROM entries WHERE rowid IN (SELECT entries.rowid FROM selected LEFT JOIN entries ON entries.collection == selected.collection AND entries.key == selected.key)".format(self.RECURSIVE_CONSUMERS),
-                [collection_name, key])
+            with self.conn:
+                self.conn.cursor().execute("{} DELETE FROM entries WHERE rowid IN (SELECT entries.rowid FROM selected LEFT JOIN entries ON entries.collection == selected.collection AND entries.key == selected.key)".format(self.RECURSIVE_CONSUMERS),
+                    [collection_name, key])
         self._run(_helper)
 
     """
@@ -236,26 +259,24 @@ class DB:
 
     def announce_entries(self, executor_id, refs, deps):
         def _helper():
-            c = self.conn.cursor()
-            self._cleanup_lost_entries(c)
-            self.conn.commit()
             try:
-                c.executemany("INSERT INTO entries(collection, key, config, executor) VALUES (?, ?, ?, ?)",
-                    [[r.collection.name,
-                      r.collection.make_key(r.config),
-                      pickle.dumps(r.config),
-                      executor_id] for r in refs])
-                c.executemany("INSERT INTO deps VALUES (?, ?, ?, ?)", [
-                    [r1.collection.name,
-                     r1.collection.make_key(r1.config),
-                     r2.collection.name,
-                     r2.collection.make_key(r2.config)
-                    ] for r1, r2 in deps
-                ])
-                self.conn.commit()
-                return True
-            except sqlite3.IntegrityError as e:
-                self.conn.rollback()
+                with self.conn:
+                    c = self.conn.cursor()
+                    self._cleanup_lost_entries(c)
+                    c.executemany("INSERT INTO entries(collection, key, config, executor) VALUES (?, ?, ?, ?)",
+                        [[r.collection.name,
+                        r.collection.make_key(r.config),
+                        pickle.dumps(r.config),
+                        executor_id] for r in refs])
+                    c.executemany("INSERT INTO deps VALUES (?, ?, ?, ?)", [
+                        [r1.collection.name,
+                        r1.collection.make_key(r1.config),
+                        r2.collection.name,
+                        r2.collection.make_key(r2.config)
+                        ] for r1, r2 in deps
+                    ])
+                    return True
+            except apsw.ConstraintError as e:
                 return False
         return self._run(_helper)
 
@@ -272,16 +293,16 @@ class DB:
     def register_executor(self, executor):
         assert executor.id is None
         def _helper():
-            c = self.conn.cursor()
-            c.execute("INSERT INTO executors(created, heartbeat, heartbeat_interval, stats, type, version, resources) VALUES (?, DATETIME('now'), ?, ?, ?, ?, ?)",
-                    [executor.created,
-                     executor.heartbeat_interval,
-                     json.dumps(executor.get_stats()),
-                     executor.executor_type,
-                     executor.version,
-                     executor.resources])
-            self.conn.commit()
-            executor.id = c.lastrowid
+            with self.conn:
+                c = self.conn.cursor()
+                c.execute("INSERT INTO executors(created, heartbeat, heartbeat_interval, stats, type, version, resources) VALUES (?, DATETIME('now'), ?, ?, ?, ?, ?)",
+                        [executor.created.isoformat(),
+                        executor.heartbeat_interval,
+                        json.dumps(executor.get_stats()),
+                        executor.executor_type,
+                        executor.version,
+                        executor.resources])
+                executor.id = self.conn.last_insert_rowid()
         self._run(_helper)
 
     def executor_summaries(self):
@@ -312,16 +333,16 @@ class DB:
 
     def update_heartbeat(self, id):
         def _helper():
-            c = self.conn.cursor()
-            c.execute("""UPDATE executors SET heartbeat = DATETIME('now') WHERE id = ? AND stats is not null""", [id])
-            self.conn.commit()
+            with self.conn:
+                c = self.conn.cursor()
+                c.execute("""UPDATE executors SET heartbeat = DATETIME('now') WHERE id = ? AND stats is not null""", [id])
         self._run(_helper)
 
     def update_stats(self, id, stats):
         def _helper():
-            c = self.conn.cursor()
-            c.execute("""UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""", [json.dumps(stats), id])
-            self.conn.commit()
+            with self.conn:
+                c = self.conn.cursor()
+                c.execute("""UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""", [json.dumps(stats), id])
         self._run(_helper)
 
     def update_executor_stats(self, uuid, stats):
@@ -330,8 +351,8 @@ class DB:
 
     def stop_executor(self, id):
         def _helper():
-            c = self.conn.cursor()
-            c.execute("""UPDATE executors SET heartbeat = DATETIME('now'), stats = null WHERE id = ?""", [id])
-            c.execute("""DELETE FROM entries WHERE executor == ? AND value is null""", [id])
-            self.conn.commit()
+            with self.conn:
+                c = self.conn.cursor()
+                c.execute("""UPDATE executors SET heartbeat = DATETIME('now'), stats = null WHERE id = ?""", [id])
+                c.execute("""DELETE FROM entries WHERE executor == ? AND value is null""", [id])
         self._run(_helper)
