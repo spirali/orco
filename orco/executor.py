@@ -3,6 +3,8 @@ import threading
 import time
 import cloudpickle
 import logging
+import tqdm
+import collections
 from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime
 
@@ -141,12 +143,26 @@ class LocalExecutor(Executor):
         waiting = [submit(task) for task in ready]
         del ready
 
+
+        tasks_per_collection = collections.Counter([t.ref.collection.name for t in all_tasks.values()])
+
+        print("Scheduled tasks\n---------------")
+        for col, count in sorted(tasks_per_collection.items()):
+            print("{:<16}: {}".format(col, count))
+        #col_progressbars = {}
+        #for i, (col, count) in enumerate(tasks_per_collection.items()):
+        #    col_progressbars[col] = tqdm.tqdm(desc=col, total=count, position=i)
+
+        progressbar = tqdm.tqdm(total=len(all_tasks)) #  , position=i+1)
         while waiting:
             wait_result = wait(waiting, None, return_when=FIRST_COMPLETED)
             waiting = wait_result.not_done
             for f in wait_result.done:
                 self.stats["n_completed"] += 1
-                task = all_tasks[f.result()]
+                ref_key = f.result()
+                task = all_tasks[ref_key]
+                progressbar.update()
+                #col_progressbars[ref_key[0]].update()
                 logger.debug("Task finished: %s", task.ref)
                 for c in consumers.get(task, ()):
                     waiting_deps[c] -= 1
@@ -155,6 +171,9 @@ class LocalExecutor(Executor):
                         assert w == 0
                         waiting.add(submit(c))
             db.update_stats(self.id, self.stats)
+        progressbar.close()
+        #for p in col_progressbars.values():
+        #    p.close()
         return [self.runtime.get_entry(task.ref if isinstance(task, Task) else task) for task in required_tasks]
 
 
@@ -171,7 +190,6 @@ def _run_task(executor_id, db_path, build_fn, ref_key, config, deps):
         value = build_fn(config, value_deps)
     else:
         value = build_fn(config)
-    print("build", build_fn, value)
     entry = Entry(config, value, datetime.now())
     _per_process_db.set_entry_value(executor_id, ref_key[0], ref_key[1], entry)
     return ref_key

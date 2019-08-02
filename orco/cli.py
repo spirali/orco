@@ -12,7 +12,7 @@ def _command_compute(runtime, args):
     collection = runtime.collections.get(args.collection)
     if collection is None:
         raise Exception("Unknown collection '%s'", args.collection)
-    runtime.register_executor(LocalExecutor())
+    runtime.register_executor(LocalExecutor(n_processes=1))
     print(collection.compute(json.loads(args.config)).value)
 
 

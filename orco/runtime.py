@@ -6,6 +6,7 @@ from .executor import Executor, LocalExecutor, Task
 import cloudpickle
 import threading
 import logging
+import tqdm
 
 
 logger = logging.getLogger(__name__)
