@@ -2,7 +2,7 @@ import React from 'react';
 import ReactTable, { CellInfo, Column } from 'react-table';
 import { fetchJsonFromServer } from './service';
 import { FaHourglassEnd } from 'react-icons/fa';
-import { formatSize } from './utils';
+import { formatSize, formatTime } from './utils';
 import {
     Link
 } from 'react-router-dom';
@@ -18,6 +18,7 @@ interface Props {
 interface EntrySummary {
     key: string,
     size: number,
+    comp_time: number,
     config: any,
 }
 
@@ -60,6 +61,7 @@ class Collection extends React.Component<Props, State> {
     }
 
     _formatSize = (entry : EntrySummary) => formatSize(entry.size);
+    _formatTime = (entry: EntrySummary) => formatTime(entry.comp_time);
 
     componentDidMount() {
         if (this.props.err.isOk) {
@@ -122,6 +124,12 @@ class Collection extends React.Component<Props, State> {
                             id: "size",
                             Header: "Size",
                             accessor: this._formatSize,
+                            maxWidth: 100,
+                        },
+                        {
+                            id: "comptime",
+                            Header: "CompTime",
+                            accessor: this._formatTime,
                             maxWidth: 100,
                         },
                         {
