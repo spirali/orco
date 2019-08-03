@@ -44,7 +44,7 @@ def test_executor(env, n_processes):
     assert r[executor3.id]["status"] == "stopped"
 
 
-def test_executor_errorp(env):
+def test_executor_error(env):
     runtime = env.test_runtime()
     executor = LocalExecutor(heartbeat_interval=1, n_processes=2)
     runtime.register_executor(executor)

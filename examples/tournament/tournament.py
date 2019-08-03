@@ -7,7 +7,7 @@ runtime = Runtime("mydb.db")
 
 
 def train_player(config):
-    time.sleep(1)
+    time.sleep(random.randint(5, 15) / 10)
     return {"strength": random.randint(0, 10)}
 
 

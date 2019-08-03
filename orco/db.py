@@ -2,6 +2,7 @@ import apsw
 import pickle
 import json
 import logging
+import math
 from concurrent.futures import ThreadPoolExecutor
 from .entry import Entry
 
@@ -78,6 +79,7 @@ class DB:
                         created TEXT,
 
                         executor INTEGER,
+                        comp_time FLOAT,
 
                         PRIMARY KEY (collection, key)
                         CONSTRAINT collection_ref
@@ -134,29 +136,29 @@ class DB:
         self._run(_helper)
 
     def create_entry(self, collection_name, key, entry):
+        assert entry.created is None
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?, null)",
+                c.execute("INSERT INTO entries VALUES (?, ?, ?, ?, ?, DATETIME('now'), null, null)",
                         [collection_name,
-                        key,
-                        pickle.dumps(entry.config),
-                        pickle.dumps(entry.value),
-                        entry.value_repr,
-                        entry.created.isoformat()])
+                         key,
+                         pickle.dumps(entry.config),
+                         pickle.dumps(entry.value),
+                         entry.value_repr])
         self._run(_helper)
 
     def set_entry_value(self, executor_id, collection_name, key, entry):
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("UPDATE entries SET value = ?, value_repr = ?, created = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null",
+                c.execute("UPDATE entries SET value = ?, value_repr = ?, created = DATETIME('now'), comp_time = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null",
                         [pickle.dumps(entry.value),
-                        entry.value_repr,
-                        entry.created.isoformat(),
-                        collection_name,
-                        key,
-                        executor_id
+                         entry.value_repr,
+                         entry.comp_time,
+                         collection_name,
+                         key,
+                         executor_id
                         ])
             return self.conn.changes()
         if self._run(_helper) != 1:
@@ -279,6 +281,7 @@ class DB:
             except apsw.ConstraintError as e:
                 logger.error(e)
                 return False
+        assert executor_id is not None
         return self._run(_helper)
 
     def unannounce_entries(self, executor_id, refs):
@@ -295,10 +298,15 @@ class DB:
     def entry_summaries(self, collection_name):
         def _helper():
             c = self.conn.cursor()
-            r = c.execute("SELECT key, config, length(value), value_repr, created FROM entries WHERE collection = ?", [collection_name])
+            r = c.execute("SELECT key, config, length(value), value_repr, created, comp_time FROM entries WHERE collection = ?", [collection_name])
             return [
-                {"key": key, "config": pickle.loads(config), "size": value_size + len(config) if value_size else len(config), "value_repr": value_repr, "created": created}
-                for key, config, value_size, value_repr, created in r.fetchall()
+                {"key": key,
+                 "config": pickle.loads(config),
+                 "size": value_size + len(config) if value_size else len(config),
+                 "value_repr": value_repr,
+                 "created": created,
+                 "comp_time": comp_time}
+                for key, config, value_size, value_repr, created, comp_time in r.fetchall()
             ]
         return self._run(_helper)
 
@@ -341,6 +349,20 @@ class DB:
                  "resources": resources,
                 } for id, created, is_dead, stats, executor_type, version, resources in r.fetchall()
             ]
+        return self._run(_helper)
+
+    def get_run_stats(self, collection_name):
+        def _helper():
+            with self.conn:
+                c = self.conn.cursor()
+                c.execute("""SELECT AVG(comp_time), COUNT(comp_time) FROM entries WHERE collection = ? AND comp_time is not null""", [collection_name])
+                avg, count = c.fetchone()
+                if avg is not None:
+                    c.execute("""SELECT SUM((comp_time - ?2) * (comp_time - ?2)) FROM entries WHERE collection = ?1 AND comp_time is not null""", [collection_name, avg])
+                    stdev = math.sqrt(c.fetchone()[0] / (count - 1))
+                else:
+                    stdev = None
+                return {"avg": avg, "stdev": stdev, "count": count}
         return self._run(_helper)
 
     def update_heartbeat(self, id):

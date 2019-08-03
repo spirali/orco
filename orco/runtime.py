@@ -1,13 +1,14 @@
-from .db import DB
-from .collection import Collection, Ref
-from .executor import Executor, LocalExecutor, Task
-
 
 import cloudpickle
 import threading
 import logging
 import tqdm
+import collections
 
+from .db import DB
+from .collection import Collection, Ref
+from .executor import Executor, LocalExecutor, Task
+from .utils import format_time
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,20 @@ class Runtime:
         if not self.db.announce_entries(executor.id, need_to_compute_refs, global_deps):
             raise Exception("Was not able to announce task into DB")
         del global_deps  # we do not this anymore, and .run may be long
+
         try:
+            tasks_per_collection = collections.Counter([t.ref.collection.name for t in tasks.values()])
+            print("Scheduled tasks  |     # | Expected comp. time (per entry)\n"
+                  "-----------------+-------+--------------------------------")
+            for col, count in sorted(tasks_per_collection.items()):
+                stats = self.db.get_run_stats(col)
+                if stats["avg"] is None:
+                    print("{:<17}| {:>5} | N/A".format(col, count))
+                else:
+                    print("{:<17}| {:>5} | {:>8} +- {}".format(
+                        col, count, format_time(stats["avg"]), format_time(stats["stdev"])))
+            print("-----------------+-------+--------------------------------")
+
             return executor.run(tasks, requested_tasks)
         except:
             self.db.unannounce_entries(executor.id, need_to_compute_refs)

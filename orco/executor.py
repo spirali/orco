@@ -4,7 +4,7 @@ import time
 import cloudpickle
 import logging
 import tqdm
-import collections
+
 from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime
 
@@ -12,6 +12,7 @@ from datetime import datetime
 from .collection import Entry
 from .task import Task
 from .db import DB
+
 
 logger = logging.getLogger(__name__)
 
@@ -144,11 +145,6 @@ class LocalExecutor(Executor):
         del ready
 
 
-        tasks_per_collection = collections.Counter([t.ref.collection.name for t in all_tasks.values()])
-
-        print("Scheduled tasks\n---------------")
-        for col, count in sorted(tasks_per_collection.items()):
-            print("{:<16}: {}".format(col, count))
         #col_progressbars = {}
         #for i, (col, count) in enumerate(tasks_per_collection.items()):
         #    col_progressbars[col] = tqdm.tqdm(desc=col, total=count, position=i)
@@ -188,11 +184,17 @@ def _run_task(executor_id, db_path, build_fn, ref_key, config, deps):
     if _per_process_db is None:
         _per_process_db = DB(db_path, threading=False)
     build_fn = cloudpickle.loads(build_fn)
+
+    start_time = time.time()
+
     if deps is not None:
         value_deps = [_per_process_db.get_entry(*ref) for ref in deps]
         value = build_fn(config, value_deps)
     else:
         value = build_fn(config)
-    entry = Entry(config, value, datetime.now())
+
+    end_time = time.time()
+
+    entry = Entry(config, value, comp_time=end_time - start_time)
     _per_process_db.set_entry_value(executor_id, ref_key[0], ref_key[1], entry)
     return ref_key
