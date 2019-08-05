@@ -357,9 +357,11 @@ class DB:
                 c = self.conn.cursor()
                 c.execute("""SELECT AVG(comp_time), COUNT(comp_time) FROM entries WHERE collection = ? AND comp_time is not null""", [collection_name])
                 avg, count = c.fetchone()
-                if avg is not None:
+                if avg and count > 2:
                     c.execute("""SELECT SUM((comp_time - ?2) * (comp_time - ?2)) FROM entries WHERE collection = ?1 AND comp_time is not null""", [collection_name, avg])
                     stdev = math.sqrt(c.fetchone()[0] / (count - 1))
+                elif avg:
+                    stdev = 0
                 else:
                     stdev = None
                 return {"avg": avg, "stdev": stdev, "count": count}
