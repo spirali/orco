@@ -1,10 +1,10 @@
 
 
-let SERVER_URL = "/";
+let SERVER_URL = "/rest/";
 
 if (window.location.href.startsWith("http://localhost:3000")) {
-  console.log("DEV mode detected, connecting to http://localhost:8550/");
-  SERVER_URL = "http://localhost:8550/";
+  console.log("DEV mode detected, connecting to http://localhost:8550/rest/");
+  SERVER_URL = "http://localhost:8550/rest/";
 }
 
 export function fetchFromServer(

@@ -75,7 +75,7 @@ class Runtime:
         self.db.update_heartbeat(id)
 
     def serve(self, port=8550, debug=False, testing=False):
-        from .rest import init_service
+        from .browser import init_service
         app = init_service(self)
         if testing:
             app.testing = True
