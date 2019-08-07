@@ -4,6 +4,7 @@ import threading
 import logging
 import tqdm
 import collections
+import time
 
 from .db import DB
 from .collection import Collection, Ref
@@ -89,15 +90,17 @@ class Runtime:
         entry.config = ref.config
         return entry
 
-    def compute_refs(self, refs):
+    def _create_compute_tree(self, refs, exists):
         tasks = {}
         global_deps = set()
-        exists = set()
+        conflicts = set()
 
         def make_task(ref):
             ref_key = ref.ref_key()
             if ref_key in exists:
                 return ref
+            if ref_key in conflicts:
+                return None
             task = tasks.get(ref_key)
             if task is not None:
                 return task
@@ -107,46 +110,85 @@ class Runtime:
                 exists.add(ref_key)
                 return ref
             if state == "announced":
-                raise Exception("Computation needs announced but not finished entries, it is not supported now: {}".format(ref))
+                conflicts.add(ref_key)
+                return None
             if state is None and collection.dep_fn:
                 deps = collection.dep_fn(ref.config)
                 for r in deps:
                     assert isinstance(r, Ref)
-                    global_deps.add((r, ref))
                 inputs = [make_task(r) for r in deps]
+                if any(inp is None for inp in inputs):
+                    return None
+                for r in deps:
+                    global_deps.add((r, ref))
             else:
                 inputs = None
             if state is None and collection.build_fn is None:
-                raise Exception("Computation depends on missing configuration '{}' in a fixed collection".format(ref))
+                raise Exception("Computation depends on a missing configuration '{}' in a fixed collection".format(ref))
             task = Task(ref, inputs)
             tasks[ref_key] = task
             return task
 
-        if len(self.executors) == 0:
-            raise Exception("No executors registered")
-        executor = self.executors[0]
+        for ref in refs:
+            make_task(ref)
 
-        requested_tasks = [make_task(ref) for ref in  refs]
+        return tasks, global_deps, len(conflicts)
+
+
+    def _print_report(self, tasks):
+        tasks_per_collection = collections.Counter([t.ref.collection.name for t in tasks.values()])
+        print("Scheduled tasks  |     # | Expected comp. time (per entry)\n"
+              "-----------------+-------+--------------------------------")
+        for col, count in sorted(tasks_per_collection.items()):
+            stats = self.db.get_run_stats(col)
+            if stats["avg"] is None:
+                print("{:<17}| {:>5} | N/A".format(col, count))
+            else:
+                print("{:<17}| {:>5} | {:>8} +- {}".format(
+                    col, count, format_time(stats["avg"]), format_time(stats["stdev"])))
+        print("-----------------+-------+--------------------------------")
+
+    def _run_computation(self, refs, executor, exists):
+        tasks, global_deps, n_conflicts = self._create_compute_tree(refs, exists)
+        if not tasks and n_conflicts == 0:
+            return "finished"
         need_to_compute_refs = [task.ref for task in tasks.values()]
+        if not need_to_compute_refs:
+            print("Waiting for finished computation on another executor ...")
+            return "wait"
         logger.debug("Announcing refs %s at worker %s", need_to_compute_refs, executor.id)
         if not self.db.announce_entries(executor.id, need_to_compute_refs, global_deps):
-            raise Exception("Was not able to announce task into DB")
-        del global_deps  # we do not this anymore, and .run may be long
-
+            return "wait"
         try:
-            tasks_per_collection = collections.Counter([t.ref.collection.name for t in tasks.values()])
-            print("Scheduled tasks  |     # | Expected comp. time (per entry)\n"
-                  "-----------------+-------+--------------------------------")
-            for col, count in sorted(tasks_per_collection.items()):
-                stats = self.db.get_run_stats(col)
-                if stats["avg"] is None:
-                    print("{:<17}| {:>5} | N/A".format(col, count))
-                else:
-                    print("{:<17}| {:>5} | {:>8} +- {}".format(
-                        col, count, format_time(stats["avg"]), format_time(stats["stdev"])))
-            print("-----------------+-------+--------------------------------")
-
-            return executor.run(tasks, requested_tasks)
+            del global_deps, need_to_compute_refs  # we do not this anymore, and .run may be long
+            if n_conflicts:
+                print("Some computation was temporarily skipped as they depends on tasks computed by another executor")
+            self._print_report(tasks)
+            executor.run(tasks)
+            if n_conflicts == 0:
+                return "finished"
+            else:
+                return "next"
         except:
-            self.db.unannounce_entries(executor.id, need_to_compute_refs)
+            self.db.unannounce_entries(executor.id, [task.ref for task in tasks.values()])
             raise
+
+    def compute_refs(self, refs, executor=None):
+        exists = set()
+        if executor is None:
+            if len(self.executors) == 0:
+                raise Exception("No executors registered")
+            executor = self.executors[0]
+
+        while True:
+            status = self._run_computation(refs, executor, exists)
+            if status == "finished":
+                break
+            elif status == "next":
+                continue
+            elif status == "wait":
+                time.sleep(1)
+                continue
+            else:
+                assert 0
+        return [self.get_entry(ref) for ref in refs]

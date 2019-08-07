@@ -305,7 +305,7 @@ WHERE rowid IN
                     ])
                     return True
             except apsw.ConstraintError as e:
-                logger.error(e)
+                logger.debug(e)
                 return False
         assert executor_id is not None
         return self._run(_helper)

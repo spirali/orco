@@ -119,7 +119,7 @@ class LocalExecutor(Executor):
             waiting_deps[task] = count
         return consumers, waiting_deps, ready
 
-    def run(self, all_tasks, required_tasks: [Task]):
+    def run(self, all_tasks):
         def submit(task):
             collection = task.ref.collection
             if task.inputs is not None:
@@ -170,7 +170,6 @@ class LocalExecutor(Executor):
                 db.update_stats(self.id, self.stats)
             #for p in col_progressbars.values():
             #    p.close()
-            return [self.runtime.get_entry(task.ref if isinstance(task, Task) else task) for task in required_tasks]
         finally:
             progressbar.close()
             for f in waiting:

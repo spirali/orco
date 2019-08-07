@@ -1,11 +1,12 @@
 import time
-
+import threading
 import pytest
+
 
 from orco import LocalExecutor
 
 
-@pytest.mark.parametrize("n_processes", [None, 2])
+@pytest.mark.parametrize("n_processes", [1, 2])
 def test_executor(env, n_processes):
     def to_dict(lst):
         return {x["id"]: x for x in lst}
@@ -66,3 +67,75 @@ def test_executor_error(env):
 
     assert col2.compute([10, 20]).value == 15
     assert col2.compute([1, 2, 4]).value == 175
+
+
+
+def test_executor_conflict(env, tmpdir):
+
+    def compute_0(c):
+        path = tmpdir.join("test-{}".format(c))
+        assert not path.check()
+        path.write("Done")
+        time.sleep(1)
+        return c
+
+    def compute_1(c, d):
+        return sum([x.value for x in d])
+
+    def init():
+        runtime = env.test_runtime()
+        executor = LocalExecutor(heartbeat_interval=1, n_processes=1)
+        runtime.register_executor(executor)
+        col0 = runtime.register_collection("col0", compute_0)
+        col1 = runtime.register_collection("col1", compute_1, lambda c: [col0.ref(x) for x in c])
+        return runtime, col0, col1
+
+    runtime1, col0_0, col1_0 = init()
+    runtime2, col0_1, col1_1 = init()
+
+    results = [None, None]
+
+    def comp1(runtime, col0, col1):
+        results[0] = col1.compute([2,3,7,10])
+
+    def comp2(runtime, col0, col1):
+        results[1] = col1.compute([2,3,7,11])
+
+    t1 = threading.Thread(target=comp1, args=(runtime1, col0_0, col1_0))
+    t1.start()
+    time.sleep(0.5)
+    t2 = threading.Thread(target=comp2, args=(runtime1, col1_0, col1_1))
+    t2.start()
+    t1.join()
+    t2.join()
+    assert results[0].value == 22
+    assert results[1].value == 23
+
+    assert tmpdir.join("test-10").mtime() > tmpdir.join("test-11").mtime()
+
+    results = [None, None]
+
+    def comp3(runtime, col0, col1):
+        results[0] = col1.compute([2,7,10, 30])
+
+    def comp4(runtime, col0, col1):
+        results[1] = col0.compute(30)
+
+    t1 = threading.Thread(target=comp3, args=(runtime1, col0_0, col1_0))
+    t1.start()
+    t2 = threading.Thread(target=comp4, args=(runtime1, col0_1, col1_1))
+    t2.start()
+    t1.join()
+    t2.join()
+    assert results[0].value == 49
+    assert results[1].value == 30
+
+
+    t1 = threading.Thread(target=comp1, args=(runtime1, col0_0, col1_0))
+    t1.start()
+    t2 = threading.Thread(target=comp2, args=(runtime1, col1_0, col1_1))
+    t2.start()
+    t1.join()
+    t2.join()
+    assert results[0].value == 22
+    assert results[1].value == 23
