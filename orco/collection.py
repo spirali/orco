@@ -1,9 +1,11 @@
 
 from collections import namedtuple
 from datetime import datetime
+import pickle
+
 
 from .obj import Obj
-from .entry import Entry
+from .entry import Entry, RawEntry
 from .task import Task
 from .ref import Ref
 
@@ -39,12 +41,22 @@ def default_make_key(config):
     return "".join(stream)
 
 
+def _make_raw_entry(collection_name, key, config, value, comp_time):
+    value_repr = repr(value)
+    if len(value_repr) > 85:
+        value_repr = value_repr[:80] + " ..."
+    if config is not None:
+        config = pickle.dumps(config)
+    return RawEntry(collection_name, key, config, pickle.dumps(value), value_repr, comp_time)
+
+
 class Collection:
 
     def __init__(self, runtime, name: str, build_fn, dep_fn):
         self.runtime = runtime
         self.name = name
         self.build_fn = build_fn
+        self._make_raw_entry = _make_raw_entry
         self.dep_fn = dep_fn
 
     def ref(self, config):
@@ -81,8 +93,8 @@ class Collection:
         return self.runtime.compute_refs([self.ref(config) for config in configs])
 
     def insert(self, config, value):
-        entry = Entry(config, value)
-        self.runtime.db.create_entry(self.name, self.make_key(config), entry)
+        entry = self._make_raw_entry(self.name, self.make_key(config), config, value, None)
+        self.runtime.db.create_entries((entry,))
 
     def make_key(self, config):
         return default_make_key(config)

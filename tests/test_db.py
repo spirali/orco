@@ -1,9 +1,9 @@
 import time
-
+import pickle
 import pytest
 
 from orco import LocalExecutor
-from orco.entry import Entry
+from orco.entry import Entry, RawEntry
 
 
 def test_db_announce(env):
@@ -27,6 +27,10 @@ def test_db_announce(env):
     assert not r.db.announce_entries(e2.id, [c.ref("test2")], [])
 
 
+def make_raw_entry(c, cfg, value, comp_time=1):
+    return c._make_raw_entry(c.name, c.make_key(cfg), cfg, pickle.dumps("value1"), comp_time)
+
+
 def test_db_set_value(env):
     r = env.test_runtime()
     e1 = LocalExecutor(heartbeat_interval=1)
@@ -38,24 +42,24 @@ def test_db_set_value(env):
     r.db.announce_entries(e1.id, [c.ref("cfg1")], [])
     assert r.db.get_entry_state(c.name, c.make_key("cfg1")) == "announced"
 
-    entry = Entry("cfg1", "value1")
-    r.db.set_entry_value(e1.id, c.name, c.make_key(entry.config), entry)
+    e = make_raw_entry(c, "cfg1", "value1")
+    r.db.set_entry_values(e1.id, [e])
     assert r.db.get_entry_state(c.name, c.make_key("cfg1")) == "finished"
 
     with pytest.raises(Exception):
-        r.db.set_entry_value(e1.id, c.name, c.make_key(entry.config), entry)
+        r.db.set_entry_values(e1.id, [e])
 
-    entry2 = Entry("cfg2", "value2")
+    e2 = make_raw_entry(c, "cfg2", "value2")
     with pytest.raises(Exception):
-        r.db.set_entry_value(e1.id, c.name, c.make_key(entry2.config), entry2)
+        r.db.set_entry_values(e1.id, [e2])
     r.db.announce_entries(e1.id, [c.ref("cfg2")], [])
-    r.db.set_entry_value(e1.id, c.name, c.make_key(entry2.config), entry2)
+    r.db.set_entry_values(e1.id, [e2])
 
     with pytest.raises(Exception):
-        r.db.create_entry(c.name, c.make_key(entry2.config), entry2)
+        r.db.create_entries([e2])
 
-    entry3 = Entry("cfg3", "value3")
-    r.db.create_entry(c.name, c.make_key(entry3.config), entry3)
+    e3 = make_raw_entry(c, "cfg3", "value3")
+    r.db.create_entries([e3])
 
 
 def test_db_run_stats(env):
@@ -68,14 +72,14 @@ def test_db_run_stats(env):
     assert runtime.db.announce_entries(e1.id, [c.ref("a"), c.ref("b"), c.ref("c"), c.ref("d"), c.ref("e")], [])
     assert runtime.db.get_entry_state(c.name, c.make_key("a")) == "announced"
     runtime.db._dump()
-    entry = Entry("a", "value", comp_time=1)
-    runtime.db.set_entry_value(e1.id, c.name, c.make_key("a"), entry)
-    entry = Entry("b", "value", comp_time=2)
-    runtime.db.set_entry_value(e1.id, c.name, c.make_key("b"), entry)
-    entry = Entry("c", "value", comp_time=3)
-    runtime.db.set_entry_value(e1.id, c.name, c.make_key("c"), entry)
-    entry = Entry("d", "value", comp_time=4)
-    runtime.db.set_entry_value(e1.id, c.name, c.make_key("d"), entry)
+    entry = make_raw_entry(c, "a", "value", comp_time=1)
+    runtime.db.set_entry_values(e1.id, [entry])
+    entry = make_raw_entry(c, "b", "value", comp_time=2)
+    runtime.db.set_entry_values(e1.id, [entry])
+    entry = make_raw_entry(c, "c", "value", comp_time=3)
+    runtime.db.set_entry_values(e1.id, [entry])
+    entry = make_raw_entry(c, "d", "value", comp_time=4)
+    runtime.db.set_entry_values(e1.id, [entry])
 
     r = runtime.db.get_run_stats("col1")
     assert pytest.approx(2.5) == r["avg"]

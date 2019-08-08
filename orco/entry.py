@@ -1,4 +1,4 @@
-
+import collections
 
 class Entry:
 
@@ -11,15 +11,14 @@ class Entry:
         self.comp_time = comp_time
 
     @property
-    def value_repr(self):
-        value_repr = repr(self.value)
-        if len(value_repr) > 85:
-            value_repr = value_repr[:85] + " ..."
-        return value_repr
-
-    @property
     def is_computed(self):
         return bool(self.created)
 
     def __repr__(self):
-        return "<Entry {}: {}>".format(self.config, self.value_repr)
+        return "<Entry {}>".format(self.config)
+
+
+# Value is serialized
+RawEntry = collections.namedtuple(
+    "RawEntry",
+    ["collection_name", "key", "config", "value", "value_repr", "comp_time"])

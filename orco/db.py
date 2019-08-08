@@ -161,34 +161,37 @@ WHERE rowid IN
     """, [name])
         self._run(_helper)
 
-    def create_entry(self, collection_name, key, entry):
-        assert entry.created is None
+    def create_entries(self, raw_entries):
         def _helper():
+            data = [(e.collection_name, e.key, e.config, e.value,
+                     e.value_repr) for e in raw_entries]
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("INSERT INTO entries VALUES (?, ?, ?, ?, ?, DATETIME('now'), null, null)",
-                        [collection_name,
-                         key,
-                         pickle.dumps(entry.config),
-                         pickle.dumps(entry.value),
-                         entry.value_repr])
+                c.executemany("INSERT INTO entries VALUES (?, ?, ?, ?, ?, DATETIME('now'), null, null)", data)
         self._run(_helper)
 
-    def set_entry_value(self, executor_id, collection_name, key, entry):
+    def set_entry_values(self, executor_id, raw_entries, stats=None):
+        if stats is not None:
+            stats_data = (json.dumps(stats), executor_id)
+        else:
+            stats_data = None
+
         def _helper():
+            data = [
+                (e.value, e.value_repr, e.comp_time, e.collection_name, e.key, executor_id)
+                for e in raw_entries
+            ]
+            changes = 0
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("UPDATE entries SET value = ?, value_repr = ?, created = DATETIME('now'), comp_time = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null",
-                        [pickle.dumps(entry.value),
-                         entry.value_repr,
-                         entry.comp_time,
-                         collection_name,
-                         key,
-                         executor_id
-                        ])
-            return self.conn.changes()
-        if self._run(_helper) != 1:
-            raise Exception("Setting value to unannouced config: {}/{}".format(collection_name, entry.config))
+                for d in data:
+                    c.execute("UPDATE entries SET value = ?, value_repr = ?, created = DATETIME('now'), comp_time = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null", d)
+                    changes += self.conn.changes()
+                if stats_data:
+                    c.execute("""UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""", stats_data)
+            return changes
+        if self._run(_helper) != len(raw_entries):
+            raise Exception("Setting value to unannouced config (all configs: {})", ["{}/{}".format(c.collection_name, c.key) for c in raw_entries])
 
     def get_recursive_consumers(self, collection_name, key):
         #WHERE EXISTS(SELECT null FROM selected AS s WHERE deps.collection_s == selected.collection AND deps.key_s == selected.key

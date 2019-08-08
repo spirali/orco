@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime
 
 
-from .collection import Entry
+from .entry import RawEntry
 from .task import Task
 from .db import DB
 
@@ -65,7 +65,7 @@ class LocalExecutor(Executor):
 
     _debug_do_not_start_heartbeat = False
 
-    def __init__(self, heartbeat_interval=5, n_processes=None):
+    def __init__(self, heartbeat_interval=7, n_processes=None):
         super().__init__("local", "0.0", "{} cpus".format(multiprocessing.cpu_count()),
                          heartbeat_interval)
         self.heartbeat_thread = None
@@ -120,8 +120,27 @@ class LocalExecutor(Executor):
         return consumers, waiting_deps, ready
 
     def run(self, all_tasks):
+        def process_unprocessed():
+            logging.debug("Writing into db: %s", unprocessed)
+            db.set_entry_values(self.id, unprocessed, self.stats)
+            last_write = time.time()
+            for raw_entry in unprocessed:
+                ref_key = (raw_entry.collection_name, raw_entry.key)
+                task = all_tasks[ref_key]
+                #col_progressbars[ref_key[0]].update()
+                for c in consumers.get(task, ()):
+                    waiting_deps[c] -= 1
+                    w = waiting_deps[c]
+                    if w <= 0:
+                        assert w == 0
+                        waiting.add(submit(c))
+
         def submit(task):
             collection = task.ref.collection
+            pickled_fns = pickle_cache.get(collection.name)
+            if pickled_fns is None:
+                pickled_fns = cloudpickle.dumps((collection.build_fn, collection._make_raw_entry))
+                pickle_cache[collection.name] = pickled_fns
             if task.inputs is not None:
                 inputs = [t.ref.ref_key() if isinstance(t, Task) else t.ref_key() for t in task.inputs]
             else:
@@ -129,7 +148,7 @@ class LocalExecutor(Executor):
             return pool.submit(_run_task,
                                self.id,
                                db.path,
-                               cloudpickle.dumps(collection.build_fn),
+                               pickled_fns,
                                task.ref.ref_key(),
                                task.ref.config,
                                inputs)
@@ -137,6 +156,8 @@ class LocalExecutor(Executor):
             "n_tasks": len(all_tasks),
             "n_completed": 0
         }
+
+        pickle_cache = {}
         pool = self.pool
         db = self.runtime.db
         db.update_stats(self.id, self.stats)
@@ -144,45 +165,44 @@ class LocalExecutor(Executor):
         waiting = [submit(task) for task in ready]
         del ready
 
-
         #col_progressbars = {}
         #for i, (col, count) in enumerate(tasks_per_collection.items()):
         #    col_progressbars[col] = tqdm.tqdm(desc=col, total=count, position=i)
 
         progressbar = tqdm.tqdm(total=len(all_tasks)) #  , position=i+1)
+        unprocessed = []
+        last_write = time.time()
         try:
             while waiting:
-                wait_result = wait(waiting, None, return_when=FIRST_COMPLETED)
+                wait_result = wait(waiting, return_when=FIRST_COMPLETED, timeout=1 if unprocessed else None)
                 waiting = wait_result.not_done
                 for f in wait_result.done:
                     self.stats["n_completed"] += 1
-                    ref_key = f.result()
-                    task = all_tasks[ref_key]
                     progressbar.update()
-                    #col_progressbars[ref_key[0]].update()
-                    logger.debug("Task finished: %s", task.ref)
-                    for c in consumers.get(task, ()):
-                        waiting_deps[c] -= 1
-                        w = waiting_deps[c]
-                        if w <= 0:
-                            assert w == 0
-                            waiting.add(submit(c))
-                db.update_stats(self.id, self.stats)
+                    raw_entry = f.result()
+                    logger.debug("Task finished: %s/%s", raw_entry.collection_name, raw_entry.key)
+                    unprocessed.append(raw_entry)
+                if unprocessed and (not waiting or time.time() - last_write > 1):
+                    process_unprocessed()
+                    unprocessed = []
+            #    db.update_stats(self.id, self.stats)
             #for p in col_progressbars.values():
             #    p.close()
+            db.set_entry_values(self.id, unprocessed, self.stats)
         finally:
             progressbar.close()
             for f in waiting:
                 f.cancel()
 
+
 _per_process_db = None
 
 
-def _run_task(executor_id, db_path, build_fn, ref_key, config, deps):
+def _run_task(executor_id, db_path, fns, ref_key, config, deps):
     global _per_process_db
     if _per_process_db is None:
         _per_process_db = DB(db_path, threading=False)
-    build_fn = cloudpickle.loads(build_fn)
+    build_fn, finalize_fn = cloudpickle.loads(fns)
 
     start_time = time.time()
 
@@ -191,9 +211,5 @@ def _run_task(executor_id, db_path, build_fn, ref_key, config, deps):
         value = build_fn(config, value_deps)
     else:
         value = build_fn(config)
-
     end_time = time.time()
-
-    entry = Entry(config, value, comp_time=end_time - start_time)
-    _per_process_db.set_entry_value(executor_id, ref_key[0], ref_key[1], entry)
-    return ref_key
+    return finalize_fn(ref_key[0], ref_key[1], None, value, end_time - start_time)
