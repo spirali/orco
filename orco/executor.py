@@ -123,7 +123,6 @@ class LocalExecutor(Executor):
         def process_unprocessed():
             logging.debug("Writing into db: %s", unprocessed)
             db.set_entry_values(self.id, unprocessed, self.stats)
-            last_write = time.time()
             for raw_entry in unprocessed:
                 ref_key = (raw_entry.collection_name, raw_entry.key)
                 task = all_tasks[ref_key]
@@ -185,6 +184,7 @@ class LocalExecutor(Executor):
                 if unprocessed and (not waiting or time.time() - last_write > 1):
                     process_unprocessed()
                     unprocessed = []
+                    last_write = time.time()
             #    db.update_stats(self.id, self.stats)
             #for p in col_progressbars.values():
             #    p.close()
