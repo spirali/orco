@@ -61,10 +61,10 @@ class DB:
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS executors (
                         id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                        created TEXT NOT NULL,
                         heartbeat TEXT NOT NULL,
                         heartbeat_interval FLOAT NOT NULL,
                         stats TEXT,
+                        created TEXT NOT NULL,
                         type STRING NOT NULL,
                         version STRING NOT NULL,
                         resources STRING NOT NULL
@@ -75,12 +75,11 @@ class DB:
                     CREATE TABLE IF NOT EXISTS entries (
                         collection STRING NOT NULL,
                         key TEXT NOT NULL,
-                        config BLOB NOT NULL,
+                        executor INTEGER,
                         value BLOB,
+                        config BLOB NOT NULL,
                         value_repr STRING,
                         created TEXT,
-
-                        executor INTEGER,
                         comp_time FLOAT,
 
                         PRIMARY KEY (collection, key)
@@ -165,11 +164,11 @@ WHERE rowid IN
 
     def create_entries(self, raw_entries):
         def _helper():
-            data = [(e.collection_name, e.key, e.config, e.value,
+            data = [(e.collection_name, e.key, e.value, e.config,
                      e.value_repr) for e in raw_entries]
             with self.conn:
                 c = self.conn.cursor()
-                c.executemany("INSERT INTO entries VALUES (?, ?, ?, ?, ?, DATETIME('now'), null, null)", data)
+                c.executemany("INSERT INTO entries VALUES (?, ?, null, ?, ?, ?, DATETIME('now'), null)", data)
         self._run(_helper)
 
     def set_entry_values(self, executor_id, raw_entries, stats=None):
