@@ -321,38 +321,36 @@ DELETE FROM entries
 
     def announce_entries(self, executor_id, refs, deps):
         def _helper():
+            entry_data = [(r.collection.name,
+                           r.collection.make_key(r.config),
+                           pickle.dumps(r.config),
+                           executor_id) for r in refs]
+            deps_data = [
+                (r1.collection.name,
+                 r1.collection.make_key(r1.config),
+                 r2.collection.name,
+                 r2.collection.make_key(r2.config)) for r1, r2 in deps
+            ]
             try:
                 with self.conn:
                     c = self.conn.cursor()
                     self._cleanup_lost_entries(c)
-                    c.executemany("INSERT INTO entries(collection, key, config, executor) VALUES (?, ?, ?, ?)",
-                        [[r.collection.name,
-                        r.collection.make_key(r.config),
-                        pickle.dumps(r.config),
-                        executor_id] for r in refs])
-                    c.executemany("INSERT INTO deps VALUES (?, ?, ?, ?)", [
-                        [r1.collection.name,
-                        r1.collection.make_key(r1.config),
-                        r2.collection.name,
-                        r2.collection.make_key(r2.config)
-                        ] for r1, r2 in deps
-                    ])
-                    return True
+                    c.executemany("INSERT INTO entries(collection, key, config, executor) VALUES (?, ?, ?, ?)", entry_data)
+                    c.executemany("INSERT INTO deps VALUES (?, ?, ?, ?)", deps_data)
+                return True
             except apsw.ConstraintError as e:
                 logger.debug(e)
                 return False
         assert executor_id is not None
         return self._run(_helper)
 
-    def unannounce_entries(self, executor_id, refs):
+    def unannounce_entries(self, executor_id, ref_keys):
         def _helper():
+            data = [(r[0], r[1], executor_id) for r in ref_keys]
             with self.conn:
                 c = self.conn.cursor()
                 self._cleanup_lost_entries(c)
-                c.executemany("DELETE FROM entries WHERE collection = ? AND key = ? AND executor == ? AND value is null",
-                    [[r.collection.name,
-                    r.collection.make_key(r.config),
-                    executor_id] for r in refs])
+                c.executemany("DELETE FROM entries WHERE collection = ? AND key = ? AND executor = ? AND value is null", data)
         return self._run(_helper)
 
     def entry_summaries(self, collection_name):
@@ -373,12 +371,13 @@ DELETE FROM entries
     def register_executor(self, executor):
         assert executor.id is None
         def _helper():
+            stats = json.dumps(executor.get_stats())
             with self.conn:
                 c = self.conn.cursor()
                 c.execute("INSERT INTO executors(created, heartbeat, heartbeat_interval, stats, type, version, resources) VALUES (?, DATETIME('now'), ?, ?, ?, ?, ?)",
                         [executor.created.isoformat(),
                         executor.heartbeat_interval,
-                        json.dumps(executor.get_stats()),
+                        stats,
                         executor.executor_type,
                         executor.version,
                         executor.resources])
@@ -429,16 +428,18 @@ DELETE FROM entries
 
     def update_heartbeat(self, id):
         def _helper():
+            id_list = [id]
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("""UPDATE executors SET heartbeat = DATETIME('now') WHERE id = ? AND stats is not null""", [id])
+                c.execute("""UPDATE executors SET heartbeat = DATETIME('now') WHERE id = ? AND stats is not null""", id_list)
         self._run(_helper)
 
     def update_stats(self, id, stats):
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("""UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""", [json.dumps(stats), id])
+                c.execute("""UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""", stats_data)
+        stats_data = [json.dumps(stats), id]
         self._run(_helper)
 
     def update_executor_stats(self, uuid, stats):
@@ -465,5 +466,4 @@ DELETE FROM entries
                  "comp_time": comp_time}
                 for config, value, comp_time in r.fetchall()
             ]
-
         return pd.DataFrame(self._run(_helper))

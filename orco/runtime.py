@@ -179,7 +179,7 @@ class Runtime:
             else:
                 return "next"
         except:
-            self.db.unannounce_entries(executor.id, [task.ref for task in tasks.values()])
+            self.db.unannounce_entries(executor.id, list(tasks))
             raise
 
     def compute_refs(self, refs, executor=None):
