@@ -4,10 +4,12 @@ import threading
 import time
 
 from orco.ref import collect_refs
-from .collection import Collection
+from .collection import Collection, CollectionRef
 from .db import DB
 from .executor import Executor, Task
 from .utils import format_time
+from .ref import collect_refs, resolve_refs, make_key
+
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +66,9 @@ class Runtime:
             if name in self._collections:
                 raise Exception("Collection already registered")
             self.db.ensure_collection(name)
-            collection = Collection(self, name, build_fn=build_fn, dep_fn=dep_fn)
+            collection = Collection(name, build_fn=build_fn, dep_fn=dep_fn)
             self._collections[name] = collection
-            return collection
+        return CollectionRef(name)
 
     @property
     def collections(self):
@@ -103,11 +105,38 @@ class Runtime:
             else:
                 run_app()
 
+    def get_entry_state(self, ref):
+        return self.db.get_entry_state(ref.collection_name, ref.key)
+
     def get_entry(self, ref):
-        collection = ref.collection
-        entry = self.db.get_entry_no_config(collection.name, collection.make_key(ref.config))
-        entry.config = ref.config
+        entry = self.db.get_entry_no_config(ref.collection_name, ref.key)
+        if entry is not None:
+            entry.config = ref.config
         return entry
+
+    def get_entries(self, refs):
+        return [self.get_entry(ref) for ref in refs]
+
+    def _get_collection(self, ref):
+        return self.collections[ref.collection_name]
+
+    def insert(self, ref, value):
+        collection = self.collections[ref.collection_name]
+        entry = collection.make_raw_entry(
+            collection.name, make_key(ref.config), ref.config, value, None)
+        self.db.create_entries((entry,))
+
+    def clean(self, collection_ref):
+        self.db.clean_collection(collection_ref.name)
+
+    def to_pandas(self, collection_ref):
+        return self.db.to_pandas(collection_ref.name)
+
+    def invalidate(self, ref):
+        self.invalidate_many([ref])
+
+    def invalidate_many(self, refs):
+        self.db.invalidate_entries_by_key(refs)
 
     def _create_compute_tree(self, refs, exists):
         tasks = {}
@@ -115,37 +144,36 @@ class Runtime:
         conflicts = set()
 
         def make_task(ref):
-            ref_key = ref.ref_key()
-            if ref_key in exists:
+            if ref in exists:
                 return ref
-            if ref_key in conflicts:
+            if ref in conflicts:
                 return None
-            task = tasks.get(ref_key)
+            task = tasks.get(ref)
             if task is not None:
                 return task
-            collection = ref.collection
-            state = self.db.get_entry_state(collection.name, ref_key.key)
+            collection = self._get_collection(ref)
+            state = self.db.get_entry_state(ref.collection_name, ref.key)
             if state == "finished":
-                exists.add(ref_key)
+                exists.add(ref)
                 return ref
             if state == "announced":
-                conflicts.add(ref_key)
+                conflicts.add(ref)
                 return None
             if state is None and collection.dep_fn:
-                deps = collection.dep_fn(ref.config)
-                ref_set = set()
-                collect_refs(deps, ref_set)
-                inputs = [make_task(r) for r in ref_set]
+                dep_value = collection.dep_fn(ref.config)
+                dep_refs = collect_refs(dep_value)
+                inputs = [make_task(r) for r in dep_refs]
                 if any(inp is None for inp in inputs):
                     return None
-                for r in ref_set:
+                for r in dep_refs:
                     global_deps.add((r, ref))
             else:
                 inputs = None
+                dep_value = None
             if state is None and collection.build_fn is None:
                 raise Exception("Computation depends on a missing configuration '{}' in a fixed collection".format(ref))
-            task = Task(ref, inputs)
-            tasks[ref_key] = task
+            task = Task(ref, inputs, dep_value)
+            tasks[ref] = task
             return task
 
         for ref in refs:
@@ -158,7 +186,7 @@ class Runtime:
             raise Exception("Runtime was already stopped")
 
     def _print_report(self, tasks):
-        tasks_per_collection = collections.Counter([t.ref.collection.name for t in tasks.values()])
+        tasks_per_collection = collections.Counter([t.ref.collection_name for t in tasks.values()])
         print("Scheduled tasks  |     # | Expected comp. time (per entry)\n"
               "-----------------+-------+--------------------------------")
         for col, count in sorted(tasks_per_collection.items()):
@@ -195,7 +223,11 @@ class Runtime:
             self.db.unannounce_entries(executor.id, list(tasks))
             raise
 
-    def compute_refs(self, refs, executor=None):
+    def compute(self, obj):
+        results = self._compute_refs(collect_refs(obj))
+        return resolve_refs(obj, results)
+
+    def _compute_refs(self, refs, executor=None):
         exists = set()
         if executor is None:
             if len(self.executors) == 0:
@@ -213,4 +245,10 @@ class Runtime:
                 continue
             else:
                 assert 0
-        return [self.get_entry(ref) for ref in refs]
+        return {ref: self.get_entry(ref) for ref in refs}
+
+    def remove(self, ref):
+        return self.remove_many([ref])
+
+    def remove_many(self, refs):
+        self.db.remove_entries_by_key(refs)

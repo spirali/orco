@@ -26,15 +26,15 @@ executor3.stop()
 c_sleepers = rt.register_collection("sleepers", lambda c: time.sleep(c))
 c_bedrooms = rt.register_collection("bedrooms", lambda c, d: None, lambda c: [c_sleepers.ref(x) for x in c["sleepers"]])
 
-c_bedrooms.compute({"sleepers": [0.1]})
-t = threading.Thread(target=(lambda: c_bedrooms.compute({"sleepers": list(range(10))})))
+rt.compute(c_bedrooms.ref({"sleepers": [0.1]}))
+t = threading.Thread(target=(lambda: rt.compute(c_bedrooms.ref({"sleepers": list(range(10))}))))
 t.start()
 
 time.sleep(0.5)  # To solve a problem with ProcessPool, fix waits for Python3.7
 
 c = rt.register_collection("hello")
-c.insert("e1", "ABC")
-c.insert("e2", "A" * (7 * 1024 * 1024 + 200000))
+rt.insert(c.ref("e1"), "ABC")
+rt.insert(c.ref("e2"), "A" * (7 * 1024 * 1024 + 200000))
 
 
 c = rt.register_collection("estee")
@@ -42,7 +42,7 @@ graphs = ["crossv", "fastcrossv", "gridcat"]
 models = ["simple", "maxmin"]
 scheduler = ["blevel", "random", {"name": "camp", "iterations": 1000}, {"name": "camp", "iterations": 2000}]
 for g, m, s in itertools.product(graphs, models, scheduler):
-    c.insert({"graph": g, "model": m, "scheduler": s}, random.randint(1, 30000))
+    rt.insert(c.ref({"graph": g, "model": m, "scheduler": s}), random.randint(1, 30000))
 
 c = rt.register_collection("collection with space in name")
 

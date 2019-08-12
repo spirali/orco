@@ -2,6 +2,7 @@ import argparse
 import json
 
 from .executor import LocalExecutor
+from .collection import CollectionRef
 
 
 def _command_serve(runtime, args):
@@ -9,11 +10,9 @@ def _command_serve(runtime, args):
 
 
 def _command_compute(runtime, args):
-    collection = runtime.collections.get(args.collection)
-    if collection is None:
-        raise Exception("Unknown collection '%s'", args.collection)
     runtime.register_executor(LocalExecutor(n_processes=1))
-    print(collection.compute(json.loads(args.config)).value)
+    ref = CollectionRef(args.collection).ref(json.loads(args.config))
+    print(runtime.compute(ref).value)
 
 
 def _command_remove(runtime, args):

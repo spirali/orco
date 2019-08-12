@@ -4,6 +4,7 @@ import pytest
 
 
 from orco import LocalExecutor
+from orco.ref import make_key
 
 
 @pytest.mark.parametrize("n_processes", [1, 2])
@@ -26,9 +27,9 @@ def test_executor(env, n_processes):
     runtime.register_executor(executor3)
     c = runtime.register_collection("abc")
     runtime.db.announce_entries(executor3.id, [c.ref("x")], [])
-    assert runtime.db.get_entry_state(c.name, c.make_key("x")) == "announced"
+    assert runtime.db.get_entry_state(c.name, make_key("x")) == "announced"
     executor3.stop()
-    assert runtime.db.get_entry_state(c.name, c.make_key("x")) is None
+    assert runtime.db.get_entry_state(c.name, make_key("x")) is None
 
     r = to_dict(runtime.executor_summaries())
     assert len(r) == 3
@@ -55,19 +56,18 @@ def test_executor_error(env):
     col2 = runtime.register_collection("col2", lambda c, ds: sum(d.value for d in ds), lambda c: [col1.ref(x) for x in c])
 
     with pytest.raises(ZeroDivisionError):
-        assert col2.compute([10, 0, 20])
-    assert col0.get_entry_state(0) == "finished"
+        assert runtime.compute(col2.ref([10, 0, 20]))
+    assert runtime.get_entry_state(col0.ref(0)) == "finished"
 
-    assert col2.compute([10, 20]).value == 15
-    assert col2.compute([1, 2, 4]).value == 175
+    assert runtime.compute(col2.ref([10, 20])).value == 15
+    assert runtime.compute(col2.ref([1, 2, 4])).value == 175
 
     with pytest.raises(ZeroDivisionError):
-        assert col1.compute(0)
-    assert col0.get_entry_state(0) == "finished"
+        assert runtime.compute(col1.ref(0))
+    assert runtime.get_entry_state(col0.ref(0)) == "finished"
 
-    assert col2.compute([10, 20]).value == 15
-    assert col2.compute([1, 2, 4]).value == 175
-
+    assert runtime.compute(col2.ref([10, 20])).value == 15
+    assert runtime.compute(col2.ref([1, 2, 4])).value == 175
 
 
 def test_executor_conflict(env, tmpdir):
@@ -96,10 +96,10 @@ def test_executor_conflict(env, tmpdir):
     results = [None, None]
 
     def comp1(runtime, col0, col1):
-        results[0] = col1.compute([2,3,7,10])
+        results[0] = runtime1.compute(col1.ref([2, 3, 7, 10]))
 
     def comp2(runtime, col0, col1):
-        results[1] = col1.compute([2,3,7,11])
+        results[1] = runtime2.compute(col1.ref([2, 3, 7, 11]))
 
     t1 = threading.Thread(target=comp1, args=(runtime1, col0_0, col1_0))
     t1.start()
@@ -116,10 +116,10 @@ def test_executor_conflict(env, tmpdir):
     results = [None, None]
 
     def comp3(runtime, col0, col1):
-        results[0] = col1.compute([2,7,10, 30])
+        results[0] = runtime1.compute(col1.ref([2,7,10, 30]))
 
     def comp4(runtime, col0, col1):
-        results[1] = col0.compute(30)
+        results[1] = runtime2.compute(col0.ref(30))
 
     t1 = threading.Thread(target=comp3, args=(runtime1, col0_0, col1_0))
     t1.start()
@@ -129,7 +129,6 @@ def test_executor_conflict(env, tmpdir):
     t2.join()
     assert results[0].value == 49
     assert results[1].value == 30
-
 
     t1 = threading.Thread(target=comp1, args=(runtime1, col0_0, col1_0))
     t1.start()

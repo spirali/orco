@@ -260,7 +260,8 @@ WHERE rowid IN
         return Entry(pickle.loads(config), pickle.loads(value) if value is not None else None,
                      created, comp_time)
 
-    def remove_entries_by_key(self, collection_name, keys):
+    def remove_entries_by_key(self, ref_keys):
+        data = [(r.collection_name, r.key) for r in ref_keys]
         def _helper():
             with self.conn:
                 self.conn.cursor().executemany("""{}
@@ -269,10 +270,11 @@ WHERE rowid IN
                     (SELECT entries.rowid
                      FROM selected LEFT JOIN entries ON
                      entries.collection == selected.collection AND entries.key == selected.key)
-                """.format(self.RECURSIVE_CONSUMERS), [[collection_name, key] for key in keys])
+                """.format(self.RECURSIVE_CONSUMERS), data)
         self._run(_helper)
 
-    def invalidate_entries_by_key(self, collection_name, keys):
+    def invalidate_entries_by_key(self, ref_keys):
+        data = [(r.collection_name, r.key) for r in ref_keys]
         def _helper():
             with self.conn:
                 self.conn.cursor().executemany("""
@@ -294,7 +296,7 @@ DELETE FROM entries
         (SELECT entries.rowid
          FROM children LEFT JOIN entries ON
          entries.collection == children.collection AND entries.key == children.key)
-                """.format(self.RECURSIVE_CONSUMERS), [[collection_name, key] for key in keys])
+                """.format(self.RECURSIVE_CONSUMERS), data)
         self._run(_helper)
 
     """
@@ -330,15 +332,15 @@ DELETE FROM entries
 
     def announce_entries(self, executor_id, refs, deps):
         def _helper():
-            entry_data = [(r.collection.name,
-                           r.collection.make_key(r.config),
+            entry_data = [(r.collection_name,
+                           r.key,
                            pickle.dumps(r.config),
                            executor_id) for r in refs]
             deps_data = [
-                (r1.collection.name,
-                 r1.collection.make_key(r1.config),
-                 r2.collection.name,
-                 r2.collection.make_key(r2.config)) for r1, r2 in deps
+                (r1.collection_name,
+                 r1.key,
+                 r2.collection_name,
+                 r2.key) for r1, r2 in deps
             ]
             try:
                 with self.conn:
@@ -355,7 +357,7 @@ DELETE FROM entries
 
     def unannounce_entries(self, executor_id, ref_keys):
         def _helper():
-            data = [(r.collection, r.key, executor_id) for r in ref_keys]
+            data = [(r.collection_name, r.key, executor_id) for r in ref_keys]
             with self.conn:
                 c = self.conn.cursor()
                 self._cleanup_lost_entries(c)

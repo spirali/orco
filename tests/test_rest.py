@@ -12,8 +12,8 @@ def test_rest_collections():
 
         c = rt.register_collection("hello")
 
-        c.insert({"x": 1, "y": [1, 2, 3]}, "ABC")
-        c.insert("e2", "A" * (1024 * 1024))
+        rt.insert(c.ref({"x": 1, "y": [1, 2, 3]}), "ABC")
+        rt.insert(c.ref("e2"), "A" * (1024 * 1024))
 
         rt.register_collection("hello2")
 

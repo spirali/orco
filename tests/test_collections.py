@@ -22,15 +22,15 @@ def test_fixed_collection(env):
     fix1 = runtime.register_collection("fix1")
     col2 = runtime.register_collection("col2", lambda c, d: d[0].value * 10, lambda c: [fix1.ref(c)])
 
-    fix1.insert("a", 11)
+    runtime.insert(fix1.ref("a"), 11)
 
-    assert col2.compute("a").value == 110
-    assert fix1.compute("a").value == 11
+    assert runtime.compute(col2.ref("a")).value == 110
+    assert runtime.compute(fix1.ref("a")).value == 11
 
     with pytest.raises(Exception, match=".* fixed collection.*"):
-        assert col2.compute("b")
+        assert runtime.compute(col2.ref("b"))
     with pytest.raises(Exception, match=".* fixed collection.*"):
-        assert fix1.compute("b")
+        assert runtime.compute(col2.ref("b"))
 
 
 def test_collection_compute(env):
@@ -45,14 +45,14 @@ def test_collection_compute(env):
 
     collection = runtime.register_collection("col1", adder)
 
-    entry = collection.compute({"a": 10, "b": 30})
+    entry = runtime.compute(collection.ref({"a": 10, "b": 30}))
     assert entry.config["a"] == 10
     assert entry.config["b"] == 30
     assert entry.value == 40
     assert entry.comp_time >= 0
     assert counter.read() == 1
 
-    result = collection.compute_many([{"a": 10, "b": 30}])
+    result = runtime.compute([collection.ref({"a": 10, "b": 30})])
     assert len(result) == 1
     entry = result[0]
     assert entry.config["a"] == 10
@@ -86,37 +86,36 @@ def test_collection_deps(env):
     col1 = runtime.register_collection("col1", builder1)
     col2 = runtime.register_collection("col2", builder2, make_deps)
 
-    e = col2.compute(5)
-
+    e = runtime.compute(col2.ref(5))
     counter = counter_file.read()
     assert counter == [5, 1]
     assert e.value == 100
 
-    e = col2.compute(4)
+    e = runtime.compute(col2.ref(4))
 
     counter = counter_file.read()
     assert counter == [5, 2]
     assert e.value == 60
 
-    col1.remove_many([0, 3])
+    runtime.remove_many(col1.refs([0, 3]))
 
-    e = col2.compute(6)
+    e = runtime.compute(col2.ref(6))
     counter = counter_file.read()
     assert counter == [8, 3]
     assert e.value == 150
 
-    e = col2.compute(6)
+    e = runtime.compute(col2.ref(6))
     counter = counter_file.read()
     assert counter == [8, 3]
     assert e.value == 150
 
-    col2.remove(6)
-    e = col2.compute(5)
+    runtime.remove(col2.ref(6))
+    e = runtime.compute(col2.ref(5))
     counter = counter_file.read()
     assert counter == [8, 4]
     assert e.value == 100
 
-    e = col2.compute(6)
+    e = runtime.compute(col2.ref(6))
     counter = counter_file.read()
     assert counter == [8, 5]
     assert e.value == 150
@@ -143,7 +142,7 @@ def test_collection_deps_complex(env):
     col1 = runtime.register_collection("col1", builder1)
     col2 = runtime.register_collection("col2", builder2, make_deps)
 
-    e = col2.compute(1)
+    e = runtime.compute(col2.ref(1))
     assert e.value == 95
 
 
@@ -155,7 +154,7 @@ def test_collection_double_ref(env):
     col2 = runtime.register_collection("col2",
                                        (lambda c, d: sum(x.value for x in d)),
                                        (lambda c: [col1.ref(10), col1.ref(10), col1.ref(10)]))
-    assert col2.compute("abc").value == 300
+    assert runtime.compute(col2.ref("abc")).value == 300
 
 
 def test_collection_stored_deps(env):
@@ -169,73 +168,73 @@ def test_collection_stored_deps(env):
     col3 = runtime.register_collection("col3",
                                        (lambda c, d: sum(x.value for x in d)),
                                        lambda c: [col2.ref({"start": 0, "end": c, "step": 2}), col2.ref({"start": 0, "end": c, "step": 3})])
-    assert col3.compute(10).value == 380
+    assert runtime.compute(col3.ref(10)).value == 380
 
     cc2_2 = {"end": 10, "start": 0, "step": 2}
     cc2_3 = {"end": 10, "start": 0, "step": 3}
-    c2_2 = col2.make_key(cc2_2)
-    c2_3 = col2.make_key(cc2_3)
+    c2_2 = col2.ref(cc2_2)
+    c2_3 = col2.ref(cc2_3)
 
-    assert col3.get_entry_state(10) == "finished"
-    assert col2.get_entry_state(cc2_2) == "finished"
-    assert col2.get_entry_state(cc2_3) == "finished"
-    assert col1.get_entry_state(0) == "finished"
-    assert col1.get_entry_state(2) == "finished"
+    assert runtime.get_entry_state(col3.ref(10)) == "finished"
+    assert runtime.get_entry_state(c2_2) == "finished"
+    assert runtime.get_entry_state(c2_3) == "finished"
+    assert runtime.get_entry_state(col1.ref(0)) == "finished"
+    assert runtime.get_entry_state(col1.ref(2)) == "finished"
 
     assert set(runtime.db.get_recursive_consumers(col1.name, "2")) == {
         ("col1", "2"), ('col2', "{'end':10,'start':0,'step':2,}"), ('col3', "10")
     }
 
     assert set(runtime.db.get_recursive_consumers(col1.name, "6")) == {
-        ("col1", "6"), ('col2', c2_2), ("col2", c2_3),  ('col3', "10")
+        ("col1", "6"), ('col2', c2_2.key), ("col2", c2_3.key), ('col3', "10")
     }
 
     assert set(runtime.db.get_recursive_consumers(col1.name, "9")) == {
-            ("col1", "9"), ("col2", c2_3),  ('col3', "10")
+            ("col1", "9"), ("col2", c2_3.key), ('col3', "10")
     }
 
-    assert set(runtime.db.get_recursive_consumers(col2.name, c2_3)) == {
-        ("col2", c2_3),  ('col3', "10")
+    assert set(runtime.db.get_recursive_consumers(col2.name, c2_3.key)) == {
+        ("col2", c2_3.key),  ('col3', "10")
     }
 
-    assert set(runtime.db.get_recursive_consumers(col3.name, col3.make_key(10))) == {
+    assert set(runtime.db.get_recursive_consumers(col3.name, col3.ref(10).key)) == {
         ('col3', '10')
     }
 
-    col1.remove(6)
-    assert col3.get_entry_state(10) is  None
-    assert col2.get_entry_state(cc2_2) is None
-    assert col2.get_entry_state(cc2_3) is None
-    assert col1.get_entry_state(0) == "finished"
-    assert col1.get_entry_state(6) is None
-    assert col1.get_entry_state(2) == "finished"
+    runtime.remove(col1.ref(6))
+    assert runtime.get_entry_state(col3.ref(10)) is None
+    assert runtime.get_entry_state(c2_2) is None
+    assert runtime.get_entry_state(c2_3) is None
+    assert runtime.get_entry_state(col1.ref(0)) == "finished"
+    assert runtime.get_entry_state(col1.ref(6)) is None
+    assert runtime.get_entry_state(col1.ref(2)) == "finished"
 
-    col1.remove(0)
-    assert col3.get_entry_state(10) is  None
-    assert col2.get_entry_state(cc2_2) is None
-    assert col2.get_entry_state(cc2_3) is None
-    assert col1.get_entry_state(0) is None
-    assert col1.get_entry_state(6) is None
-    assert col1.get_entry_state(2) == "finished"
+    runtime.remove(col1.ref(0))
+    assert runtime.get_entry_state(col3.ref(10)) is None
+    assert runtime.get_entry_state(c2_2) is None
+    assert runtime.get_entry_state(c2_3) is None
+    assert runtime.get_entry_state(col1.ref(0)) is None
+    assert runtime.get_entry_state(col1.ref(6)) is None
+    assert runtime.get_entry_state(col1.ref(2)) == "finished"
 
-    assert col3.compute(10).value == 380
+    assert runtime.compute(col3.ref(10)).value == 380
 
-    assert col3.get_entry_state(10) == "finished"
-    assert col2.get_entry_state(cc2_2) == "finished"
-    assert col2.get_entry_state(cc2_3) == "finished"
-    assert col1.get_entry_state(0) == "finished"
-    assert col1.get_entry_state(2) == "finished"
+    assert runtime.get_entry_state(col3.ref(10)) == "finished"
+    assert runtime.get_entry_state(c2_2) == "finished"
+    assert runtime.get_entry_state(c2_3) == "finished"
+    assert runtime.get_entry_state(col1.ref(0)) == "finished"
+    assert runtime.get_entry_state(col1.ref(2)) == "finished"
 
-    col1.remove(2)
+    runtime.remove(col1.ref(2))
 
-    assert col3.get_entry_state(10) is  None
-    assert col2.get_entry_state(cc2_2) is None
-    assert col2.get_entry_state(cc2_3) == "finished"
-    assert col1.get_entry_state(0) == "finished"
-    assert col1.get_entry_state(6) == "finished"
-    assert col1.get_entry_state(2) is None
+    assert runtime.get_entry_state(col3.ref(10)) is None
+    assert runtime.get_entry_state(c2_2) is None
+    assert runtime.get_entry_state(c2_3) == "finished"
+    assert runtime.get_entry_state(col1.ref(0)) == "finished"
+    assert runtime.get_entry_state(col1.ref(6)) == "finished"
+    assert runtime.get_entry_state(col1.ref(2)) is None
 
-    col1.compute(2)
+    runtime.remove(col1.ref(2))
 
 
 def test_collection_clean(env):
@@ -245,9 +244,11 @@ def test_collection_clean(env):
     col1 = runtime.register_collection("col1", lambda c: c)
     col2 = runtime.register_collection("col2", lambda c, d: c, lambda c: [col1.ref(c)])
 
-    col2.compute(1)
-    col1.clean()
-    assert col2.get_entry_state(1) is None
+    runtime.compute(col2.ref(1))
+    runtime.clean(col1)
+    assert runtime.get_entry_state(col1.ref(1)) is None
+    assert runtime.get_entry_state(col2.ref(1)) is None
+    assert runtime.get_entry_state(col2.ref(2)) is None
 
 
 def test_collection_to_pandas(env):
@@ -255,9 +256,8 @@ def test_collection_to_pandas(env):
     runtime.register_executor(LocalExecutor())
 
     col1 = runtime.register_collection("col1", lambda c: c * 2)
-    col1.compute_many([1, 2, 3, 4])
-
-    frame = col1.to_pandas()
+    runtime.compute(col1.refs([1, 2, 3, 4]))
+    frame = runtime.to_pandas(col1)
     assert len(frame) == 4
     assert sorted(frame["config"]) == [1, 2, 3, 4]
     assert sorted(frame["value"]) == [2, 4, 6, 8]
@@ -274,14 +274,13 @@ def test_collection_invalidate(env):
     col3 = runtime.register_collection("col3", lambda c, d: c, lambda c: [col1.ref(c)])
     col4 = runtime.register_collection("col4", lambda c, d: c, lambda c: [col2.ref(c)])
 
-    col4.compute(1)
-    col3.compute(1)
-
-    col2.invalidate(1)
-    assert col1.get_entry_state(1) is None
-    assert col2.get_entry_state(1) is None
-    assert col4.get_entry_state(1) is None
-    assert col3.get_entry_state(1) is None
+    runtime.compute(col4.ref(1))
+    runtime.compute(col3.ref(1))
+    runtime.invalidate(col2.ref(1))
+    assert runtime.get_entry_state(col1.ref(1)) is None
+    assert runtime.get_entry_state(col2.ref(1)) is None
+    assert runtime.get_entry_state(col3.ref(1)) is None
+    assert runtime.get_entry_state(col4.ref(1)) is None
 
 
 def test_collection_computed(env):
@@ -292,9 +291,9 @@ def test_collection_computed(env):
         return x * 10
 
     collection = runtime.register_collection("col1", build_fn)
-    configs = [2, 3, 4, 0, 5]
+    refs = collection.refs([2, 3, 4, 0, 5])
+    assert len(refs) == 5
+    assert runtime.get_entries(refs) == [None] * len(refs)
 
-    assert collection.get_entries(configs) == [None] * len(configs)
-
-    collection.compute_many(configs)
-    assert [e.value if e else e for e in collection.get_entries(configs)] == [20, 30, 40, 0, 50]
+    runtime.compute(refs)
+    assert [e.value for e in runtime.get_entries(refs)] == [20, 30, 40, 0, 50]

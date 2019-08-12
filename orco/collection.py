@@ -10,38 +10,7 @@ from .task import Task
 from .ref import Ref
 
 
-def _default_make_key_helper(obj, stream):
-    if isinstance(obj, str) or isinstance(obj, int) or isinstance(obj, float):
-        stream.append(repr(obj))
-    elif isinstance(obj, list) or isinstance(obj, tuple):
-        stream.append("[")
-        for value in obj:
-            _default_make_key_helper(value, stream)
-            stream.append(",")
-        stream.append("]")
-    elif isinstance(obj, dict):
-        stream.append("{")
-        for key, value in sorted(obj.items()):
-            if not isinstance(key, str):
-                raise Exception("Invalid key in config: '{}', type: {}".format(repr(key), type(key)))
-            if key.startswith("_"):
-                continue
-            stream.append(repr(key))
-            stream.append(":")
-            _default_make_key_helper(value, stream)
-            stream.append(",")
-        stream.append("}")
-    else:
-        raise Exception("Invalid item in config: '{}', type: {}".format(repr(obj), type(obj)))
-
-
-def default_make_key(config):
-    stream = []
-    _default_make_key_helper(config, stream)
-    return "".join(stream)
-
-
-def _make_raw_entry(collection_name, key, config, value, comp_time):
+def default_make_raw_entry(collection_name, key, config, value, comp_time):
     value_repr = repr(value)
     if len(value_repr) > 85:
         value_repr = value_repr[:80] + " ..."
@@ -52,16 +21,27 @@ def _make_raw_entry(collection_name, key, config, value, comp_time):
 
 class Collection:
 
-    def __init__(self, runtime, name: str, build_fn, dep_fn):
-        self.runtime = runtime
+    def __init__(self, name: str, build_fn, dep_fn):
         self.name = name
         self.build_fn = build_fn
-        self._make_raw_entry = _make_raw_entry
+        self.make_raw_entry = default_make_raw_entry
         self.dep_fn = dep_fn
 
-    def ref(self, config):
-        return Ref(self, config)
 
+class CollectionRef:
+
+    def __init__(self, name):
+        self.name = name
+
+    def ref(self, config):
+        return Ref(self.name, config)
+
+    def refs(self, configs):
+        name = self.name
+        return [Ref(name, config) for config in configs]
+
+
+"""
     def compute(self, config):
         return self.compute_many([config])[0]
 
@@ -106,6 +86,4 @@ class Collection:
 
     def make_key(self, config):
         return default_make_key(config)
-
-    def to_pandas(self):
-        return self.runtime.db.to_pandas(self.name)
+"""

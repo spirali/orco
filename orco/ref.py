@@ -1,34 +1,71 @@
-from collections import Iterable
+from collections import Iterable, namedtuple
 
 
 class Ref:
-    __slots__ = ["collection", "config"]
 
-    def __init__(self, collection, config):
-        self.collection = collection
+    __slots__ = ["collection_name", "config", "key"]
+
+    def __init__(self, collection_name, config):
+        self.collection_name = collection_name
         self.config = config
-
-    def ref_key(self):
-        return RefKey(self.collection.name, self.collection.make_key(self.config))
-
-    def __repr__(self):
-        return "<{}/{}>".format(self.collection.name, repr(self.config))
+        self.key = make_key(config)
 
     def __eq__(self, other):
-        if not isinstance(other, Ref) or self.collection != other.collection:
+        if not isinstance(other, Ref):
             return False
-        collection = self.collection
-        return collection.make_key(self.config) == collection.make_key(other.config)
+        if self.key != other.key:
+            return False
+        return self.collection_name == other.collection_name
 
     def __hash__(self):
-        return hash((self.collection, self.collection.make_key(self.config)))
+        return hash((self.collection_name, self.key))
+
+    def __repr__(self):
+        return "<{}/{}>".format(self.collection_name, repr(self.config))
+
+    def ref_key(self):
+        return RefKey(self.collection_name, self.key)
 
 
+def _make_key_helper(obj, stream):
+    if isinstance(obj, str) or isinstance(obj, int) or isinstance(obj, float):
+        stream.append(repr(obj))
+    elif isinstance(obj, list) or isinstance(obj, tuple):
+        stream.append("[")
+        for value in obj:
+            _make_key_helper(value, stream)
+            stream.append(",")
+        stream.append("]")
+    elif isinstance(obj, dict):
+        stream.append("{")
+        for key, value in sorted(obj.items()):
+            if not isinstance(key, str):
+                raise Exception("Invalid key in config: '{}', type: {}".format(repr(key), type(key)))
+            if key.startswith("_"):
+                continue
+            stream.append(repr(key))
+            stream.append(":")
+            _make_key_helper(value, stream)
+            stream.append(",")
+        stream.append("}")
+    else:
+        raise Exception("Invalid item in config: '{}', type: {}".format(repr(obj), type(obj)))
+
+
+def make_key(config):
+    stream = []
+    _make_key_helper(config, stream)
+    return "".join(stream)
+
+
+RefKey = namedtuple("RefKey", ("collection_name", "key"))
+
+"""
 class RefKey:
-    __slots__ = ["collection", "key"]
+    __slots__ = ["collection_name", "key"]
 
-    def __init__(self, collection, key):
-        self.collection = collection
+    def __init__(self, collection_name, key):
+        self.collection_name = collection_name
         self.key = key
 
     def __eq__(self, other):
@@ -38,21 +75,31 @@ class RefKey:
 
     def __hash__(self):
         return hash((self.collection, self.key))
+"""
+
+def collect_refs(obj):
+    result = set()
+    _collect_refs_helper(obj, result)
+    return result
 
 
-def collect_refs(dep_value, ref_set):
+def _collect_refs_helper(dep_value, ref_set):
     if isinstance(dep_value, Ref):
         ref_set.add(dep_value)
     elif isinstance(dep_value, dict):
         for val in dep_value.values():
-            collect_refs(val, ref_set)
+            _collect_refs_helper(val, ref_set)
     elif isinstance(dep_value, Iterable):
         for val in dep_value:
-            collect_refs(val, ref_set)
+            _collect_refs_helper(val, ref_set)
+
+
+def resolve_ref_keys(dep_value, ref_map):
+    return walk_map(dep_value, RefKey, lambda r: ref_map[r])
 
 
 def resolve_refs(dep_value, ref_map):
-    return walk_map(dep_value, RefKey, lambda r: ref_map[r])
+    return walk_map(dep_value, Ref, lambda r: ref_map[r])
 
 
 def ref_to_refkey(dep_value):

@@ -8,7 +8,7 @@ from datetime import datetime
 import cloudpickle
 import tqdm
 
-from orco.ref import resolve_refs, ref_to_refkey, RefKey
+from orco.ref import resolve_ref_keys, ref_to_refkey, RefKey
 from .db import DB
 from .task import Task
 
@@ -134,16 +134,15 @@ class LocalExecutor(Executor):
                         waiting.add(submit(c))
 
         def submit(task):
-            collection = task.ref.collection
-            pickled_fns = pickle_cache.get(collection.name)
+            ref = task.ref
+            pickled_fns = pickle_cache.get(ref.collection_name)
             if pickled_fns is None:
-                pickled_fns = cloudpickle.dumps((collection.build_fn, collection._make_raw_entry))
-                pickle_cache[collection.name] = pickled_fns
-            dep_value = None
+                collection = self.runtime._get_collection(task.ref)
+                pickled_fns = cloudpickle.dumps((collection.build_fn, collection.make_raw_entry))
+                pickle_cache[ref.collection_name] = pickled_fns
             if task.inputs is not None:
-                dep_value = collection.dep_fn(task.ref.config)
-                dep_value = ref_to_refkey(dep_value)
-                inputs = [t.ref.ref_key() if isinstance(t, Task) else t.ref_key() for t in task.inputs]
+                inputs = [t.ref.ref_key()
+                          if isinstance(t, Task) else t.ref_key() for t in task.inputs]
             else:
                 inputs = None
             return pool.submit(_run_task,
@@ -152,13 +151,14 @@ class LocalExecutor(Executor):
                                pickled_fns,
                                task.ref.ref_key(),
                                task.ref.config,
-                               dep_value,
+                               ref_to_refkey(task.dep_value),
                                inputs)
         self.stats = {
             "n_tasks": len(all_tasks),
             "n_completed": 0
         }
 
+        all_tasks = {ref.ref_key(): task for (ref, task) in all_tasks.items()}
         pickle_cache = {}
         pool = self.pool
         db = self.runtime.db
@@ -210,10 +210,10 @@ def _run_task(executor_id, db_path, fns, ref_key, config, dep_value, deps):
     start_time = time.time()
 
     if deps is not None:
-        ref_map = {ref: _per_process_db.get_entry(ref.collection, ref.key) for ref in deps}
-        dep_value = resolve_refs(dep_value, ref_map)
+        ref_map = {ref: _per_process_db.get_entry(ref.collection_name, ref.key) for ref in deps}
+        dep_value = resolve_ref_keys(dep_value, ref_map)
         value = build_fn(config, dep_value)
     else:
         value = build_fn(config)
     end_time = time.time()
-    return finalize_fn(ref_key.collection, ref_key.key, None, value, end_time - start_time)
+    return finalize_fn(ref_key.collection_name, ref_key.key, None, value, end_time - start_time)
