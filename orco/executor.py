@@ -8,7 +8,7 @@ from datetime import datetime
 import cloudpickle
 import tqdm
 
-from orco.ref import resolve_ref_keys, ref_to_refkey, RefKey
+from orco.ref import resolve_ref_keys, ref_to_refkey, RefKey, collect_ref_keys
 from .db import DB
 from .task import Task
 
@@ -104,15 +104,14 @@ class LocalExecutor(Executor):
 
         for task in tasks:
             count = 0
-            if task.inputs is not None:
-                for inp in task.inputs:
-                    if isinstance(inp, Task):
-                        count += 1
-                        c = consumers.get(inp)
-                        if c is None:
-                            c = []
-                            consumers[inp] = c
-                        c.append(task)
+            for inp in task.inputs:
+                if isinstance(inp, Task):
+                    count += 1
+                    c = consumers.get(inp)
+                    if c is None:
+                        c = []
+                        consumers[inp] = c
+                    c.append(task)
             if count == 0:
                 ready.append(task)
             waiting_deps[task] = count
@@ -140,19 +139,13 @@ class LocalExecutor(Executor):
                 collection = self.runtime._get_collection(task.ref)
                 pickled_fns = cloudpickle.dumps((collection.build_fn, collection.make_raw_entry))
                 pickle_cache[ref.collection_name] = pickled_fns
-            if task.inputs is not None:
-                inputs = [t.ref.ref_key()
-                          if isinstance(t, Task) else t.ref_key() for t in task.inputs]
-            else:
-                inputs = None
             return pool.submit(_run_task,
                                self.id,
                                db.path,
                                pickled_fns,
                                task.ref.ref_key(),
                                task.ref.config,
-                               ref_to_refkey(task.dep_value),
-                               inputs)
+                               ref_to_refkey(task.dep_value))
         self.stats = {
             "n_tasks": len(all_tasks),
             "n_completed": 0
@@ -201,7 +194,7 @@ class LocalExecutor(Executor):
 _per_process_db = None
 
 
-def _run_task(executor_id, db_path, fns, ref_key, config, dep_value, deps):
+def _run_task(executor_id, db_path, fns, ref_key, config, dep_value):
     global _per_process_db
     if _per_process_db is None:
         _per_process_db = DB(db_path, threading=False)
@@ -209,11 +202,9 @@ def _run_task(executor_id, db_path, fns, ref_key, config, dep_value, deps):
 
     start_time = time.time()
 
-    if deps is not None:
-        ref_map = {ref: _per_process_db.get_entry(ref.collection_name, ref.key) for ref in deps}
-        dep_value = resolve_ref_keys(dep_value, ref_map)
-        value = build_fn(config, dep_value)
-    else:
-        value = build_fn(config)
+    deps = collect_ref_keys(dep_value)
+    ref_map = {ref: _per_process_db.get_entry(ref.collection_name, ref.key) for ref in deps}
+    dep_value = resolve_ref_keys(dep_value, ref_map)
+    value = build_fn(config, dep_value)
     end_time = time.time()
     return finalize_fn(ref_key.collection_name, ref_key.key, None, value, end_time - start_time)

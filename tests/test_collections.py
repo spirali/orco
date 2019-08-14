@@ -39,7 +39,8 @@ def test_collection_compute(env):
 
     counter = env.file_storage("counter", 0)
 
-    def adder(config):
+    def adder(config, deps):
+        assert not deps
         counter.write(counter.read() + 1)
         return config["a"] + config["b"]
 
@@ -68,7 +69,7 @@ def test_collection_deps(env):
 
     counter_file = env.file_storage("counter", [0, 0])
 
-    def builder1(config):
+    def builder1(config, input):
         counter = counter_file.read()
         counter[0] += 1
         counter_file.write(counter)
@@ -125,7 +126,7 @@ def test_collection_deps_complex(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor(n_processes=1))
 
-    def builder1(config):
+    def builder1(config, input):
         return config * 10
 
     def builder2(config, deps):
@@ -150,7 +151,7 @@ def test_collection_double_ref(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor())
 
-    col1 = runtime.register_collection("col1", lambda c: c * 10)
+    col1 = runtime.register_collection("col1", lambda c, d: c * 10)
     col2 = runtime.register_collection("col2",
                                        (lambda c, d: sum(x.value for x in d)),
                                        (lambda c: [col1.ref(10), col1.ref(10), col1.ref(10)]))
@@ -161,7 +162,7 @@ def test_collection_stored_deps(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor())
 
-    col1 = runtime.register_collection("col1", lambda c: c * 10)
+    col1 = runtime.register_collection("col1", lambda c, d: c * 10)
     col2 = runtime.register_collection("col2",
                                        (lambda c, d: sum(x.value for x in d)),
                                        lambda c: [col1.ref(i) for i in range(c["start"], c["end"], c["step"])])
@@ -241,7 +242,7 @@ def test_collection_clean(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor())
 
-    col1 = runtime.register_collection("col1", lambda c: c)
+    col1 = runtime.register_collection("col1", lambda c, d: c)
     col2 = runtime.register_collection("col2", lambda c, d: c, lambda c: [col1.ref(c)])
 
     runtime.compute(col2.ref(1))
@@ -255,7 +256,7 @@ def test_collection_to_pandas(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor())
 
-    col1 = runtime.register_collection("col1", lambda c: c * 2)
+    col1 = runtime.register_collection("col1", lambda c, d: c * 2)
     runtime.compute(col1.refs([1, 2, 3, 4]))
     frame = runtime.to_pandas(col1)
     assert len(frame) == 4
@@ -269,7 +270,7 @@ def test_collection_invalidate(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor())
 
-    col1 = runtime.register_collection("col1", lambda c: c)
+    col1 = runtime.register_collection("col1", lambda c, d: c)
     col2 = runtime.register_collection("col2", lambda c, d: c, lambda c: [col1.ref(c)])
     col3 = runtime.register_collection("col3", lambda c, d: c, lambda c: [col1.ref(c)])
     col4 = runtime.register_collection("col4", lambda c, d: c, lambda c: [col2.ref(c)])
@@ -287,7 +288,7 @@ def test_collection_computed(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor(n_processes=1))
 
-    def build_fn(x):
+    def build_fn(x, deps):
         return x * 10
 
     collection = runtime.register_collection("col1", build_fn)

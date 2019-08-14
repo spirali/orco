@@ -168,7 +168,7 @@ class Runtime:
                 for r in dep_refs:
                     global_deps.add((r, ref))
             else:
-                inputs = None
+                inputs = ()
                 dep_value = None
             if state is None and collection.build_fn is None:
                 raise Exception("Computation depends on a missing configuration '{}' in a fixed collection".format(ref))

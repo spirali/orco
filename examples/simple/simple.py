@@ -6,7 +6,7 @@ import time, random
 runtime = Runtime("mydb.db")
 
 
-def do_preprocessing(config):
+def do_preprocessing(config, deps):
     time.sleep(0.3)  # Simulate computation
     return random.randint(0, 10)
 

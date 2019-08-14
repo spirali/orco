@@ -23,7 +23,7 @@ executor3 = LocalExecutor(heartbeat_interval=1)
 rt.register_executor(executor3)
 executor3.stop()
 
-c_sleepers = rt.register_collection("sleepers", lambda c: time.sleep(c))
+c_sleepers = rt.register_collection("sleepers", lambda c, d: time.sleep(c))
 c_bedrooms = rt.register_collection("bedrooms", lambda c, d: None, lambda c: [c_sleepers.ref(x) for x in c["sleepers"]])
 
 rt.compute(c_bedrooms.ref({"sleepers": [0.1]}))

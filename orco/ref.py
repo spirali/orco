@@ -77,13 +77,31 @@ class RefKey:
         return hash((self.collection, self.key))
 """
 
+
 def collect_refs(obj):
     result = set()
-    _collect_refs_helper(obj, result)
+    _collect_refs_helper(obj, result, Ref)
     return result
 
 
-def _collect_refs_helper(dep_value, ref_set):
+def _collect_refs_helper(dep_value, ref_set, r_class):
+    if isinstance(dep_value, r_class):
+        ref_set.add(dep_value)
+    elif isinstance(dep_value, dict):
+        for val in dep_value.values():
+            _collect_refs_helper(val, ref_set, r_class)
+    elif isinstance(dep_value, Iterable):
+        for val in dep_value:
+            _collect_refs_helper(val, ref_set, r_class)
+
+
+def collect_ref_keys(obj):
+    result = set()
+    _collect_refs_helper(obj, result, RefKey)
+    return result
+
+
+def _collect_ref_keys_helper(dep_value, ref_set):
     if isinstance(dep_value, Ref):
         ref_set.add(dep_value)
     elif isinstance(dep_value, dict):

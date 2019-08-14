@@ -51,7 +51,7 @@ def test_executor_error(env):
     executor = LocalExecutor(heartbeat_interval=1, n_processes=2)
     runtime.register_executor(executor)
 
-    col0 = runtime.register_collection("col0", lambda c: c)
+    col0 = runtime.register_collection("col0", lambda c, d: c)
     col1 = runtime.register_collection("col1", lambda c, d: 100 // d[0].value, lambda c: [col0.ref(c)])
     col2 = runtime.register_collection("col2", lambda c, ds: sum(d.value for d in ds), lambda c: [col1.ref(x) for x in c])
 
@@ -72,7 +72,7 @@ def test_executor_error(env):
 
 def test_executor_conflict(env, tmpdir):
 
-    def compute_0(c):
+    def compute_0(c, d):
         path = tmpdir.join("test-{}".format(c))
         assert not path.check()
         path.write("Done")
