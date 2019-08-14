@@ -465,16 +465,17 @@ DELETE FROM entries
                 c.execute("""DELETE FROM entries WHERE executor == ? AND value is null""", [id])
         self._run(_helper)
 
-    def to_pandas(self, collection_name):
+    def get_all_entries(self, collection_name):
         def _helper():
             c = self.conn.cursor()
             r = c.execute(
-                "SELECT config, value, comp_time FROM entries WHERE collection = ?",
+                "SELECT config, value, comp_time, created FROM entries WHERE collection = ?",
                 [collection_name])
-            return [
-                {"config": pickle.loads(config),
-                 "value": pickle.loads(value),
-                 "comp_time": comp_time}
-                for config, value, comp_time in r.fetchall()
-            ]
-        return pd.DataFrame(self._run(_helper))
+            return list(r.fetchall())
+        return [
+            Entry(pickle.loads(config),
+                  pickle.loads(value),
+                  created,
+                  comp_time)
+            for (config, value, comp_time, created) in self._run(_helper)
+        ]

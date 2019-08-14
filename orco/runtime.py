@@ -129,9 +129,6 @@ class Runtime:
     def clean(self, collection_ref):
         self.db.clean_collection(collection_ref.name)
 
-    def to_pandas(self, collection_ref):
-        return self.db.to_pandas(collection_ref.name)
-
     def invalidate(self, ref):
         self.invalidate_many([ref])
 
