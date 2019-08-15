@@ -252,7 +252,7 @@ def test_collection_clean(env):
     assert runtime.get_entry_state(col2.ref(2)) is None
 
 
-def test_collection_invalidate(env):
+def test_collection_remove_inputs(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor())
 
@@ -263,7 +263,7 @@ def test_collection_invalidate(env):
 
     runtime.compute(col4.ref(1))
     runtime.compute(col3.ref(1))
-    runtime.invalidate(col2.ref(1))
+    runtime.remove(col2.ref(1), remove_inputs=True)
     assert runtime.get_entry_state(col1.ref(1)) is None
     assert runtime.get_entry_state(col2.ref(1)) is None
     assert runtime.get_entry_state(col3.ref(1)) is None

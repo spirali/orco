@@ -103,11 +103,14 @@ class Runtime:
             results = [entry for entry in results if entry is not None]
         return results
 
-    def remove(self, ref):
-        return self.remove_many([ref])
+    def remove(self, ref, remove_inputs=False):
+        return self.remove_many([ref], remove_inputs)
 
-    def remove_many(self, refs):
-        self.db.remove_entries_by_key(refs)
+    def remove_many(self, refs, remove_inputs=False):
+        if remove_inputs:
+            self.db.invalidate_entries_by_key(refs)
+        else:
+            self.db.remove_entries_by_key(refs)
 
     def insert(self, ref, value):
         collection = self.collections[ref.collection_name]
@@ -117,12 +120,6 @@ class Runtime:
 
     def clean(self, collection_ref):
         self.db.clean_collection(collection_ref.name)
-
-    def invalidate(self, ref):
-        self.invalidate_many([ref])
-
-    def invalidate_many(self, refs):
-        self.db.invalidate_entries_by_key(refs)
 
     def compute(self, obj):
         results = self._compute_refs(collect_refs(obj))
