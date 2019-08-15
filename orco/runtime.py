@@ -98,7 +98,7 @@ class Runtime:
         return entry
 
     def get_entries(self, refs, include_announced=False, drop_missing=False):
-        results = [self.get_entry(ref) for ref in refs]
+        results = [self.get_entry(ref, include_announced) for ref in refs]
         if drop_missing:
             results = [entry for entry in results if entry is not None]
         return results
