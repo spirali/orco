@@ -3,7 +3,7 @@ import threading
 import pytest
 
 
-from orco import LocalExecutor
+from orco import LocalExecutor, CollectionRef
 from orco.ref import make_key
 
 
@@ -96,7 +96,7 @@ def test_executor_conflict(env, tmpdir):
     results = [None, None]
 
     def comp1(runtime, col0, col1):
-        results[0] = runtime1.compute(col1.ref([2, 3, 7, 10]))
+        results[0] = runtime1.compute(col1.ref([0, 2, 3, 7, 10]))
 
     def comp2(runtime, col0, col1):
         results[1] = runtime2.compute(col1.ref([2, 3, 7, 11]))
@@ -104,7 +104,8 @@ def test_executor_conflict(env, tmpdir):
     t1 = threading.Thread(target=comp1, args=(runtime1, col0_0, col1_0))
     t1.start()
     time.sleep(0.5)
-    t2 = threading.Thread(target=comp2, args=(runtime1, col1_0, col1_1))
+    runtime2.get_entry_state(CollectionRef("col0").ref(0)) == "announced"
+    t2 = threading.Thread(target=comp2, args=(runtime2, col0_1, col1_1))
     t2.start()
     t1.join()
     t2.join()
@@ -123,7 +124,7 @@ def test_executor_conflict(env, tmpdir):
 
     t1 = threading.Thread(target=comp3, args=(runtime1, col0_0, col1_0))
     t1.start()
-    t2 = threading.Thread(target=comp4, args=(runtime1, col0_1, col1_1))
+    t2 = threading.Thread(target=comp4, args=(runtime2, col0_1, col1_1))
     t2.start()
     t1.join()
     t2.join()
