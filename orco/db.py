@@ -228,16 +228,22 @@ WHERE rowid IN
                 return "announced"
         return self._run(_helper)
 
-    def get_entry_no_config(self, collection_name, key):
+    def get_entry_no_config(self, collection_name, key, include_announced=False):
         def _helper():
             c = self.conn.cursor()
-            c.execute("""
-                SELECT value, created, comp_time
-                FROM entries
-                WHERE collection = ? AND key = ? AND
-                    (value is not null OR executor is null OR executor in
-                    (SELECT id FROM executors WHERE {}))"""
-                      .format(self.LIVE_EXECUTOR_QUERY), [collection_name, key])
+            if include_announced:
+                c.execute("""
+                    SELECT value, created, comp_time
+                    FROM entries
+                    WHERE collection = ? AND key = ? AND
+                        (value is not null OR executor is null OR executor in
+                        (SELECT id FROM executors WHERE {}))"""
+                        .format(self.LIVE_EXECUTOR_QUERY), [collection_name, key])
+            else:
+                c.execute("""
+                    SELECT value, created, comp_time
+                    FROM entries
+                    WHERE collection = ? AND key = ? AND value is not null""", [collection_name, key])
             return c.fetchone()
         result = self._run(_helper)
         if result is None:
@@ -251,7 +257,7 @@ WHERE rowid IN
             c.execute("""
                 SELECT config, value, created, comp_time
                 FROM entries
-                WHERE collection = ? AND key = ?""", [collection_name, key])
+                WHERE collection = ? AND key = ? AND value is not null""", [collection_name, key])
             return c.fetchone()
         result = self._run(_helper)
         if result is None:

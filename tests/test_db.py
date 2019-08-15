@@ -44,9 +44,15 @@ def test_db_set_value(env):
     r.db.announce_entries(e1.id, [c.ref("cfg1")], [])
     assert r.db.get_entry_state(c.name, make_key("cfg1")) == "announced"
 
+    assert r.get_entry(c.ref("cfg1")) is None
+    assert r.get_entry(c.ref("cfg1"), include_announced=True) is not None
+
     e = make_raw_entry(r, c, "cfg1", "value1")
     r.db.set_entry_values(e1.id, [e])
     assert r.db.get_entry_state(c.name, make_key("cfg1")) == "finished"
+
+    assert r.get_entry(c.ref("cfg1")) is not None
+    assert r.get_entry(c.ref("cfg1"), include_announced=True) is not None
 
     with pytest.raises(Exception):
         r.db.set_entry_values(e1.id, [e])

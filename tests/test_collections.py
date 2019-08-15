@@ -281,6 +281,9 @@ def test_collection_computed(env):
     refs = collection.refs([2, 3, 4, 0, 5])
     assert len(refs) == 5
     assert runtime.get_entries(refs) == [None] * len(refs)
+    assert runtime.get_entries(refs, drop_missing=True) == []
 
     runtime.compute(refs)
     assert [e.value for e in runtime.get_entries(refs)] == [20, 30, 40, 0, 50]
+    assert [e.value if e else "missing" for e in runtime.get_entries(refs + [collection.ref(123)])] == [20, 30, 40, 0, 50, "missing"]
+    assert [e.value if e else "missing" for e in runtime.get_entries(refs + [collection.ref(123)], drop_missing=True)] == [20, 30, 40, 0, 50]

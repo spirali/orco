@@ -108,14 +108,17 @@ class Runtime:
     def get_entry_state(self, ref):
         return self.db.get_entry_state(ref.collection_name, ref.key)
 
-    def get_entry(self, ref):
-        entry = self.db.get_entry_no_config(ref.collection_name, ref.key)
+    def get_entry(self, ref, include_announced=False):
+        entry = self.db.get_entry_no_config(ref.collection_name, ref.key, include_announced)
         if entry is not None:
             entry.config = ref.config
         return entry
 
-    def get_entries(self, refs):
-        return [self.get_entry(ref) for ref in refs]
+    def get_entries(self, refs, include_announced=False, drop_missing=False):
+        results = [self.get_entry(ref) for ref in refs]
+        if drop_missing:
+            results = [entry for entry in results if entry is not None]
+        return results
 
     def _get_collection(self, ref):
         return self.collections[ref.collection_name]
