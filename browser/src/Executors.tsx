@@ -54,7 +54,6 @@ class Executors extends React.Component<Props, State> {
 
     _cellStatus = (cellInfo : CellInfo) => {
         let v = cellInfo.value;
-        console.log(cellInfo);
         return (<span className={"executor-status-" + v}>{v}</span>);
     };
 

@@ -38,6 +38,19 @@ class Executors(Resource):
 api.add_resource(Executors, '/executors')
 
 
+class Reports(Resource):
+
+    def get(self):
+        reports = current_app.runtime.get_reports()
+        return [
+            report.to_dict() for report in reports
+        ]
+
+
+api.add_resource(Reports, '/reports')
+
+
+
 def from_gzipped_file(filename):
     assert not os.path.isabs(filename)
     filename = os.path.join(STATIC_ROOT, filename)

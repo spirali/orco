@@ -13,3 +13,11 @@
 .executor-status-lost {
   color: red;
 }
+
+.report-type-info {
+  color: green;
+}
+
+.report-type-error {
+  color: red;
+}

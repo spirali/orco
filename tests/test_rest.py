@@ -46,3 +46,15 @@ def test_rest_executors(env):
         r = client.get("rest/executors").get_json()
         assert len(r) == 1
         assert r[0]["status"] == "running"
+
+
+def test_rest_reports(env):
+    rt = env.test_runtime()
+    rt.register_executor(LocalExecutor())
+    col1 = rt.register_collection("col1", lambda c, d: c * 10)
+    rt.compute([col1.ref(20), col1.ref(30)])
+    with rt.serve(testing=True).test_client() as client:
+        r = client.get("rest/reports").get_json()
+        assert len(r) == 1
+        assert r[0]["type"] == "info"
+        assert r[0]["collection"] is None

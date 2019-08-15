@@ -36,11 +36,6 @@ class Collection extends React.Component<Props, State> {
         this.state = {data: [], columns: [], loading: true}
     }
 
-    _formatEntry = (entry : EntrySummary) => {
-        let config = entry.config;
-        return JSON.stringify(config);
-    };
-
     _cellConfigItem = (cellInfo : CellInfo) => {
         let v;
         if (typeof cellInfo.value === "string") {

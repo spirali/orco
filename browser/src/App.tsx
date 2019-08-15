@@ -10,6 +10,7 @@ import { Nav, Navbar, NavbarBrand, NavItem, NavLink } from "reactstrap";
 import Collections from "./Collections";
 import Collection from "./Collection";
 import Executors from "./Executors";
+import Reports from "./Reports";
 import { ErrorDisplay, ErrorContainer } from "./Error";
 import { Subscribe, Provider } from 'unstated';
 
@@ -33,8 +34,8 @@ class App extends React.Component {
               </NavLink>
             </NavItem>
             <NavItem>
-              <NavLink tag={Link} to="/status">
-                Status
+              <NavLink tag={Link} to="/reports">
+                Reports
               </NavLink>
             </NavItem>
             <NavItem>
@@ -55,6 +56,7 @@ class App extends React.Component {
               <Route path="/executors" component={(p: any) => <Executors err={err} {...p} />}/>
               <Route path="/collection/:name" component={(p: any) => <Collection err={err} {...p} />}/>
               <Route path="/collections" component={(p: any) => <Collections err={err} {...p} />} />
+              <Route path="/reports" component={(p: any) => <Reports err={err} {...p} />} />
               <Route path="/" component={(p: any) => <Collections err={err} {...p} />} />
             </Switch>
             </div>

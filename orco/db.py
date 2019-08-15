@@ -8,6 +8,7 @@ import apsw
 import pandas as pd
 
 from .entry import Entry
+from .report import Report
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,18 @@ class DB:
                             FOREIGN KEY (collection_t, key_t)
                             REFERENCES entries(collection, key)
                             ON DELETE CASCADE
+                    );
+                """)
+
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS reports (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        timestamp TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        executor INTEGER,
+                        collection TEXT,
+                        message TEXT,
+                        config BLOB
                     );
                 """)
         self._run(_helper)
@@ -266,6 +279,20 @@ WHERE rowid IN
         return Entry(pickle.loads(config), pickle.loads(value) if value is not None else None,
                      created, comp_time)
 
+    def get_config(self, collection_name, key):
+        def _helper():
+            c = self.conn.cursor()
+            c.execute("""
+                SELECT config
+                FROM entries
+                WHERE collection = ? AND key = ?""", [collection_name, key])
+            return c.fetchone()
+        result = self._run(_helper)
+        if result is None:
+            return None
+        config = result[0]
+        return pickle.loads(config)
+
     def remove_entries_by_key(self, ref_keys):
         data = [(r.collection_name, r.key) for r in ref_keys]
         def _helper():
@@ -336,8 +363,45 @@ DELETE FROM entries
     def _cleanup_lost_entries(self, cursor):
         cursor.execute("DELETE FROM entries WHERE value is null AND executor IN (SELECT id FROM executors WHERE {})".format(self.DEAD_EXECUTOR_QUERY))
 
-    def announce_entries(self, executor_id, refs, deps):
+    def _unfold_report(self, report):
+        #cursor.execute("INSERT INTO report VALUES (DATETIME('now'), ?, ?, ?, ?)",
+        return (report.report_type,
+                report.executor_id,
+                report.collection_name,
+                report.message,
+                pickle.dumps(report.config) if report.config is not None else None)
+
+    def _insert_report(self, cursor, unfolded_report):
+        cursor.execute("INSERT INTO reports (timestamp, type, executor, collection, message, config)"
+                       "VALUES (DATETIME('now'), ?, ?, ?, ?, ?)", unfolded_report)
+
+    def insert_report(self, report):
+        report = self._unfold_report(report)
         def _helper():
+            with self.conn:
+                c = self.conn.cursor()
+                self._insert_report(c, report)
+        self._run(_helper)
+
+    def get_reports(self, count):
+        def _helper():
+            c = self.conn.cursor()
+            c.execute("SELECT timestamp, type, executor, collection, message, config "
+                      "FROM reports ORDER BY id DESC LIMIT ?", (count,))
+            return list(c.fetchall())
+        return [
+            Report(report_type,
+                   executor_id, message,
+                   collection_name=collection_name,
+                   config=pickle.loads(config) if config else None,
+                   timestamp=timestamp)
+            for timestamp, report_type, executor_id, collection_name, message, config in self._run(_helper)
+        ]
+
+    def announce_entries(self, executor_id, refs, deps, report=None):
+        def _helper():
+            if report:
+                report_data = self._unfold_report(report)
             entry_data = [(r.collection_name,
                            r.key,
                            pickle.dumps(r.config),
@@ -354,6 +418,8 @@ DELETE FROM entries
                     self._cleanup_lost_entries(c)
                     c.executemany("INSERT INTO entries(collection, key, config, executor) VALUES (?, ?, ?, ?)", entry_data)
                     c.executemany("INSERT INTO deps VALUES (?, ?, ?, ?)", deps_data)
+                    if report:
+                        self._insert_report(c, report_data)
                 return True
             except apsw.ConstraintError as e:
                 logger.debug(e)

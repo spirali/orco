@@ -2,17 +2,28 @@ import logging
 import multiprocessing
 import threading
 import time
+
 from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime
+from collections import namedtuple
 
 import cloudpickle
 import tqdm
+import traceback
 
 from orco.ref import resolve_ref_keys, ref_to_refkey, RefKey, collect_ref_keys
 from .db import DB
 from .task import Task
+from .report import Report
 
 logger = logging.getLogger(__name__)
+
+
+class TaskFailException(Exception):
+    pass
+
+
+TaskErrorResult = namedtuple("TaskErrorResult", ["exception_str", "ref_key", "traceback"])
 
 
 class Executor:
@@ -45,10 +56,6 @@ def heartbeat(runtime, id, event, heartbeat_interval):
     while not event.is_set():
         runtime.update_heartbeat(id)
         time.sleep(heartbeat_interval)
-
-
-def gather_announcements(tasks):
-    result = set()
 
 
 def compute_task(args):
@@ -174,9 +181,20 @@ class LocalExecutor(Executor):
                 for f in wait_result.done:
                     self.stats["n_completed"] += 1
                     progressbar.update()
-                    raw_entry = f.result()
-                    logger.debug("Task finished: %s/%s", raw_entry.collection_name, raw_entry.key)
-                    unprocessed.append(raw_entry)
+                    result = f.result()
+                    if isinstance(result, TaskErrorResult):
+                        ref_key = result.ref_key
+                        config = db.get_config(ref_key[0], ref_key[1])
+                        message = "Task failed: {}\n{}".format(result.exception_str, result.traceback)
+                        db.insert_report(Report("error", self.id, message, collection_name=ref_key[0], config=config))
+                        message = "Task failed {}/{}:{}\n{}".format(
+                            result.ref_key[0],
+                            repr(result.ref_key[1]),
+                            result.exception_str,
+                            result.traceback)
+                        raise TaskFailException(message)
+                    logger.debug("Task finished: %s/%s", result.collection_name, result.key)
+                    unprocessed.append(result)
                 if unprocessed and (not waiting or time.time() - last_write > 1):
                     process_unprocessed()
                     unprocessed = []
@@ -196,15 +214,16 @@ _per_process_db = None
 
 def _run_task(executor_id, db_path, fns, ref_key, config, dep_value):
     global _per_process_db
-    if _per_process_db is None:
-        _per_process_db = DB(db_path, threading=False)
-    build_fn, finalize_fn = cloudpickle.loads(fns)
-
-    start_time = time.time()
-
-    deps = collect_ref_keys(dep_value)
-    ref_map = {ref: _per_process_db.get_entry(ref.collection_name, ref.key) for ref in deps}
-    dep_value = resolve_ref_keys(dep_value, ref_map)
-    value = build_fn(config, dep_value)
-    end_time = time.time()
-    return finalize_fn(ref_key.collection_name, ref_key.key, None, value, end_time - start_time)
+    try:
+        if _per_process_db is None:
+            _per_process_db = DB(db_path, threading=False)
+        build_fn, finalize_fn = cloudpickle.loads(fns)
+        start_time = time.time()
+        deps = collect_ref_keys(dep_value)
+        ref_map = {ref: _per_process_db.get_entry(ref.collection_name, ref.key) for ref in deps}
+        dep_value = resolve_ref_keys(dep_value, ref_map)
+        value = build_fn(config, dep_value)
+        end_time = time.time()
+        return finalize_fn(ref_key.collection_name, ref_key.key, None, value, end_time - start_time)
+    except Exception as exception:
+        return TaskErrorResult(str(exception), ref_key, traceback.format_exc())

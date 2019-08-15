@@ -9,6 +9,7 @@ from .db import DB
 from .executor import Executor, Task
 from .utils import format_time
 from .ref import collect_refs, resolve_refs, make_key
+from .report import Report
 
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,9 @@ class Runtime:
         results = self._compute_refs(collect_refs(obj))
         return resolve_refs(obj, results)
 
+    def get_reports(self, count=100):
+        return self.db.get_reports(count)
+
     @property
     def collections(self):
         with self._lock:
@@ -213,8 +217,12 @@ class Runtime:
         if not need_to_compute_refs:
             print("Waiting for finished computation on another executor ...")
             return "wait"
-        logger.debug("Announcing refs %s at worker %s", need_to_compute_refs, executor.id)
-        if not self.db.announce_entries(executor.id, need_to_compute_refs, global_deps):
+        logger.debug("Announcing refs %s at executor %s", need_to_compute_refs, executor.id)
+        if not self.db.announce_entries(
+                executor.id,
+                need_to_compute_refs,
+                global_deps,
+                Report("info", executor.id, "Computing {} task(s)".format(len(need_to_compute_refs)))):
             return "wait"
         try:
             del global_deps, need_to_compute_refs  # we do not this anymore, and .run may be long

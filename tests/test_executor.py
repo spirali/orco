@@ -3,7 +3,7 @@ import threading
 import pytest
 
 
-from orco import LocalExecutor, CollectionRef
+from orco import LocalExecutor, CollectionRef, TaskFailException
 from orco.ref import make_key
 
 
@@ -55,14 +55,24 @@ def test_executor_error(env):
     col1 = runtime.register_collection("col1", lambda c, d: 100 // d[0].value, lambda c: [col0.ref(c)])
     col2 = runtime.register_collection("col2", lambda c, ds: sum(d.value for d in ds), lambda c: [col1.ref(x) for x in c])
 
-    with pytest.raises(ZeroDivisionError):
+    assert not runtime.get_reports()
+
+    with pytest.raises(TaskFailException, match=".*ZeroDivisionError.*"):
         assert runtime.compute(col2.ref([10, 0, 20]))
+
+    reports = runtime.get_reports()
+    assert len(reports) == 2
+    assert reports[0].report_type == "error"
+    assert reports[0].collection_name == "col1"
+    assert reports[0].config == 0
+    assert "ZeroDivisionError" in reports[0].message
+
     assert runtime.get_entry_state(col0.ref(0)) == "finished"
 
     assert runtime.compute(col2.ref([10, 20])).value == 15
     assert runtime.compute(col2.ref([1, 2, 4])).value == 175
 
-    with pytest.raises(ZeroDivisionError):
+    with pytest.raises(TaskFailException, match=".*ZeroDivisionError.*"):
         assert runtime.compute(col1.ref(0))
     assert runtime.get_entry_state(col0.ref(0)) == "finished"
 

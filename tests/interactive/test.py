@@ -26,11 +26,22 @@ executor3.stop()
 c_sleepers = rt.register_collection("sleepers", lambda c, d: time.sleep(c))
 c_bedrooms = rt.register_collection("bedrooms", lambda c, d: None, lambda c: [c_sleepers.ref(x) for x in c["sleepers"]])
 
+def failer(config, deps):
+    raise Exception("Here!")
+
+c_failers = rt.register_collection("failers", failer)
+try:
+    rt.compute(c_failers.ref({"type": "fail1"}))
+except Exception as e:
+    print(e)
+print("Failer failed (and it is ok")
+
 rt.compute(c_bedrooms.ref({"sleepers": [0.1]}))
 t = threading.Thread(target=(lambda: rt.compute(c_bedrooms.ref({"sleepers": list(range(10))}))))
 t.start()
 
 time.sleep(0.5)  # To solve a problem with ProcessPool, fix waits for Python3.7
+
 
 c = rt.register_collection("hello")
 rt.insert(c.ref("e1"), "ABC")

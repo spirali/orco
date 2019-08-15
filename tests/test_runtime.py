@@ -18,3 +18,18 @@ def test_runtime_stop(env):
     with pytest.raises(Exception):
         with runtime:
             pass
+
+
+def test_reports(env):
+
+    def adder(config, deps):
+        return config["a"] + config["b"]
+
+    executor = LocalExecutor()
+    runtime = env.test_runtime()
+    runtime.register_executor(executor)
+    collection = runtime.register_collection("col1", adder)
+    entry = runtime.compute(collection.ref({"a": 10, "b": 30}))
+
+    reports = runtime.get_reports()
+    assert len(reports) == 1
