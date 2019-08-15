@@ -70,23 +70,6 @@ class Runtime:
             self._collections[name] = collection
         return CollectionRef(name)
 
-    @property
-    def collections(self):
-        with self._lock:
-            return self._collections.copy()
-
-    def collection_summaries(self):
-        return self.db.collection_summaries()
-
-    def entry_summaries(self, collection_name):
-        return self.db.entry_summaries(collection_name)
-
-    def executor_summaries(self):
-        return self.db.executor_summaries()
-
-    def update_heartbeat(self, id):
-        self.db.update_heartbeat(id)
-
     def serve(self, port=8550, debug=False, testing=False, nonblocking=False):
         from .browser import init_service
         app = init_service(self)
@@ -120,8 +103,11 @@ class Runtime:
             results = [entry for entry in results if entry is not None]
         return results
 
-    def _get_collection(self, ref):
-        return self.collections[ref.collection_name]
+    def remove(self, ref):
+        return self.remove_many([ref])
+
+    def remove_many(self, refs):
+        self.db.remove_entries_by_key(refs)
 
     def insert(self, ref, value):
         collection = self.collections[ref.collection_name]
@@ -137,6 +123,30 @@ class Runtime:
 
     def invalidate_many(self, refs):
         self.db.invalidate_entries_by_key(refs)
+
+    def compute(self, obj):
+        results = self._compute_refs(collect_refs(obj))
+        return resolve_refs(obj, results)
+
+    @property
+    def collections(self):
+        with self._lock:
+            return self._collections.copy()
+
+    def collection_summaries(self):
+        return self.db.collection_summaries()
+
+    def entry_summaries(self, collection_name):
+        return self.db.entry_summaries(collection_name)
+
+    def executor_summaries(self):
+        return self.db.executor_summaries()
+
+    def update_heartbeat(self, id):
+        self.db.update_heartbeat(id)
+
+    def _get_collection(self, ref):
+        return self.collections[ref.collection_name]
 
     def _create_compute_tree(self, refs, exists):
         tasks = {}
@@ -223,10 +233,6 @@ class Runtime:
             self.db.unannounce_entries(executor.id, list(tasks))
             raise
 
-    def compute(self, obj):
-        results = self._compute_refs(collect_refs(obj))
-        return resolve_refs(obj, results)
-
     def _compute_refs(self, refs, executor=None):
         exists = set()
         if executor is None:
@@ -246,9 +252,3 @@ class Runtime:
             else:
                 assert 0
         return {ref: self.get_entry(ref) for ref in refs}
-
-    def remove(self, ref):
-        return self.remove_many([ref])
-
-    def remove_many(self, refs):
-        self.db.remove_entries_by_key(refs)
