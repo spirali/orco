@@ -107,11 +107,13 @@ class DB:
                         CONSTRAINT entry_s_ref
                             FOREIGN KEY (collection_s, key_s)
                             REFERENCES entries(collection, key)
-                            ON DELETE CASCADE,
+                            ON DELETE CASCADE
+                            DEFERRABLE INITIALLY DEFERRED,
                         CONSTRAINT entry_t_ref
                             FOREIGN KEY (collection_t, key_t)
                             REFERENCES entries(collection, key)
                             ON DELETE CASCADE
+                            DEFERRABLE INITIALLY DEFERRED
                     );
                 """)
 
@@ -551,3 +553,29 @@ DELETE FROM entries
                   comp_time)
             for (config, value, comp_time, created) in self._run(_helper)
         ]
+
+    def get_all_configs(self, collection_name):
+        def _helper():
+            c = self.conn.cursor()
+            r = c.execute(
+                "SELECT config FROM entries WHERE collection = ? AND value is not null",
+                [collection_name])
+            return list(r.fetchall())
+        return [
+            pickle.loads(row[0])
+            for row in self._run(_helper)
+        ]
+
+    def upgrade_collection(self, collection_name, data):
+        # Data has to be [(collection_name, old_key, new_key, config)]
+        # UPDATE deps SET key_t = ?3 WHERE collection_t = ?1 AND key_t = ?2;
+        shorter_data = [d[:3] for d in data]
+
+        def _helper():
+            with self.conn:
+                c = self.conn.cursor()
+                c.executemany("UPDATE deps SET key_s = ?3 WHERE collection_s = ?1 AND key_s = ?2;", shorter_data)
+                c.executemany("UPDATE deps SET key_t = ?3 WHERE collection_t = ?1 AND key_t = ?2;", shorter_data)
+                c.executemany("UPDATE entries SET key = ?3, config = ?4 WHERE collection = ?1 AND key = ?2;", data)
+
+        self._run(_helper)

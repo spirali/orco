@@ -33,6 +33,50 @@ def test_fixed_collection(env):
         assert runtime.compute(col2.ref("b"))
 
 
+def test_collection_upgrade(env):
+    runtime = env.test_runtime()
+    runtime.register_executor(LocalExecutor(n_processes=1))
+
+    def creator(config, deps):
+        return config * 10
+
+    def adder(config, deps):
+        return deps["a"].value + deps["b"].value
+
+    def adder_deps(config):
+        return {"a": col1.ref(config["a"]), "b": col1.ref(config["b"])}
+
+    def upgrade(config):
+        config["c"] = config["a"] + config["b"]
+        return config
+
+    def upgrade_confict(config):
+        del config["a"]
+        return config
+
+    col1 = runtime.register_collection("col1", creator)
+    col2 = runtime.register_collection("col2", adder, adder_deps)
+
+    runtime.compute(col1.ref(123))
+    runtime.compute(col2.refs([{"a": 10, "b": 12},
+                               {"a": 14, "b": 11},
+                               {"a": 17, "b": 12}]))
+
+    assert runtime.get_entry(col2.ref({"a": 10, "b": 12})).value == 220
+
+    with pytest.raises(Exception, match=".* collision.*"):
+        runtime.upgrade_collection(col2, upgrade_confict)
+
+    assert runtime.get_entry(col2.ref({"a": 10, "b": 12})).value == 220
+
+    runtime.upgrade_collection(col2, upgrade)
+
+    assert runtime.get_entry(col2.ref({"a": 10, "b": 12})) is None
+    assert runtime.get_entry(col2.ref({"a": 10, "b": 12, "c": 22})).value == 220
+    assert runtime.get_entry(col2.ref({"a": 14, "b": 11})) is None
+    assert runtime.get_entry(col2.ref({"a": 14, "b": 11, "c": 25})).value == 250
+
+
 def test_collection_compute(env):
     runtime = env.test_runtime()
     runtime.register_executor(LocalExecutor(n_processes=1))

@@ -2,6 +2,8 @@ import collections
 import logging
 import threading
 import time
+import pickle
+
 
 from orco.ref import collect_refs
 from .collection import Collection, CollectionRef
@@ -128,6 +130,22 @@ class Runtime:
 
     def get_reports(self, count=100):
         return self.db.get_reports(count)
+
+    def upgrade_collection(self, collection, upgrade_fn):
+        configs = self.db.get_all_configs(collection.name)
+        to_update = []
+        collection_name = collection.name
+        keys = set()
+        for config in configs:
+            key = make_key(config)
+            config = upgrade_fn(config)
+            new_key = make_key(config)
+            if new_key in keys:
+                raise Exception("Key collision in upgrade, config={}".format(repr(config)))
+            if new_key != key:
+                to_update.append((collection_name, key, new_key, pickle.dumps(config)))
+            keys.add(new_key)
+        self.db.upgrade_collection(collection.name, to_update)
 
     @property
     def collections(self):
