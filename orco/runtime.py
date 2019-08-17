@@ -116,7 +116,7 @@ class Runtime:
             self.db.remove_entries_by_key(refs)
 
     def insert(self, ref, value):
-        collection = self.collections[ref.collection_name]
+        collection = self._collections[ref.collection_name]
         entry = collection.make_raw_entry(
             collection.name, make_key(ref.config), ref.config, value, None)
         self.db.create_entries((entry,))
@@ -147,11 +147,6 @@ class Runtime:
             keys.add(new_key)
         self.db.upgrade_collection(collection.name, to_update)
 
-    @property
-    def collections(self):
-        with self._lock:
-            return self._collections.copy()
-
     def collection_summaries(self):
         return self.db.collection_summaries()
 
@@ -165,7 +160,7 @@ class Runtime:
         self.db.update_heartbeat(id)
 
     def _get_collection(self, ref):
-        return self.collections[ref.collection_name]
+        return self._collections[ref.collection_name]
 
     def _create_compute_tree(self, refs, exists):
         tasks = {}

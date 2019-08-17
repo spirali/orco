@@ -29,7 +29,7 @@ def test_db_announce(env):
 
 
 def make_raw_entry(runtime, c, cfg, value, comp_time=1):
-    collection = runtime.collections[c.name]
+    collection = runtime._collections[c.name]
     return collection.make_raw_entry(c.name, make_key(cfg), cfg, pickle.dumps("value1"), comp_time)
 
 

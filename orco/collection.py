@@ -4,7 +4,6 @@ from datetime import datetime
 import pickle
 
 
-from .obj import Obj
 from .entry import Entry, RawEntry
 from .task import Task
 from .ref import Ref
