@@ -80,6 +80,20 @@ def test_executor_error(env):
     assert runtime.compute(col2.ref([1, 2, 4])).value == 175
 
 
+    r1 = [col2.ref([100 + x, 101 + x, 102 + x]) for x in range(20)]
+    r2 = [col2.ref([200 + x, 201 + x, 202 + x]) for x in range(20)]
+    result = runtime.compute(r1 + [col2.ref([303, 0, 304])] + r2, continue_on_error=True)
+    for i in range(20):
+        assert result[i] is not None
+    for i in range(21, 41):
+        assert result[i] is not None
+    assert result[20] is None
+    reports = runtime.get_reports()
+    reports[0].report_type = "error"
+    reports[0].config = [303, 0, 304]
+    print(result)
+
+
 def test_executor_conflict(env, tmpdir):
 
     def compute_0(c, d):

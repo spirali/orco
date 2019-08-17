@@ -124,10 +124,12 @@ class LocalExecutor(Executor):
             waiting_deps[task] = count
         return consumers, waiting_deps, ready
 
-    def run(self, all_tasks):
+    def run(self, all_tasks, continue_on_error):
         def process_unprocessed():
             logging.debug("Writing into db: %s", unprocessed)
-            db.set_entry_values(self.id, unprocessed, self.stats)
+            db.set_entry_values(self.id, unprocessed, self.stats, pending_reports)
+            if pending_reports:
+                del pending_reports[:]
             for raw_entry in unprocessed:
                 ref_key = RefKey(raw_entry.collection_name, raw_entry.key)
                 task = all_tasks[ref_key]
@@ -158,6 +160,7 @@ class LocalExecutor(Executor):
             "n_completed": 0
         }
 
+        pending_reports = []
         all_tasks = {ref.ref_key(): task for (ref, task) in all_tasks.items()}
         pickle_cache = {}
         pool = self.pool
@@ -174,6 +177,7 @@ class LocalExecutor(Executor):
         progressbar = tqdm.tqdm(total=len(all_tasks)) #  , position=i+1)
         unprocessed = []
         last_write = time.time()
+        errors = []
         try:
             while waiting:
                 wait_result = wait(waiting, return_when=FIRST_COMPLETED, timeout=1 if unprocessed else None)
@@ -186,13 +190,19 @@ class LocalExecutor(Executor):
                         ref_key = result.ref_key
                         config = db.get_config(ref_key[0], ref_key[1])
                         message = "Task failed: {}\n{}".format(result.exception_str, result.traceback)
-                        db.insert_report(Report("error", self.id, message, collection_name=ref_key[0], config=config))
-                        message = "Task failed {}/{}:{}\n{}".format(
-                            result.ref_key[0],
-                            repr(result.ref_key[1]),
-                            result.exception_str,
-                            result.traceback)
-                        raise TaskFailException(message)
+                        report = Report("error", self.id, message, collection_name=ref_key[0], config=config)
+                        if continue_on_error:
+                            errors.append(ref_key)
+                            pending_reports.append(report)
+                        else:
+                            db.insert_report(report)
+                            message = "Task failed {}/{}:{}\n{}".format(
+                                result.ref_key[0],
+                                repr(result.ref_key[1]),
+                                result.exception_str,
+                                result.traceback)
+                            raise TaskFailException(message)
+                        continue
                     logger.debug("Task finished: %s/%s", result.collection_name, result.key)
                     unprocessed.append(result)
                 if unprocessed and (not waiting or time.time() - last_write > 1):
@@ -202,7 +212,8 @@ class LocalExecutor(Executor):
             #    db.update_stats(self.id, self.stats)
             #for p in col_progressbars.values():
             #    p.close()
-            db.set_entry_values(self.id, unprocessed, self.stats)
+            db.set_entry_values(self.id, unprocessed, self.stats, pending_reports)
+            return errors
         finally:
             progressbar.close()
             for f in waiting:

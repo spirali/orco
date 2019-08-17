@@ -124,8 +124,8 @@ class Runtime:
     def clean(self, collection_ref):
         self.db.clean_collection(collection_ref.name)
 
-    def compute(self, obj):
-        results = self._compute_refs(collect_refs(obj))
+    def compute(self, obj, executor=None, continue_on_error=False):
+        results = self._compute_refs(collect_refs(obj), executor, continue_on_error)
         return resolve_refs(obj, results)
 
     def get_reports(self, count=100):
@@ -162,7 +162,7 @@ class Runtime:
     def _get_collection(self, ref):
         return self._collections[ref.collection_name]
 
-    def _create_compute_tree(self, refs, exists):
+    def _create_compute_tree(self, refs, exists, errors):
         tasks = {}
         global_deps = set()
         conflicts = set()
@@ -170,7 +170,7 @@ class Runtime:
         def make_task(ref):
             if ref in exists:
                 return ref
-            if ref in conflicts:
+            if ref in conflicts or (errors and ref in errors):
                 return None
             task = tasks.get(ref)
             if task is not None:
@@ -222,8 +222,8 @@ class Runtime:
                     col, count, format_time(stats["avg"]), format_time(stats["stdev"])))
         print("-----------------+-------+--------------------------------")
 
-    def _run_computation(self, refs, executor, exists):
-        tasks, global_deps, n_conflicts = self._create_compute_tree(refs, exists)
+    def _run_computation(self, refs, executor, exists, errors):
+        tasks, global_deps, n_conflicts = self._create_compute_tree(refs, exists, errors)
         if not tasks and n_conflicts == 0:
             return "finished"
         need_to_compute_refs = [task.ref for task in tasks.values()]
@@ -242,7 +242,11 @@ class Runtime:
             if n_conflicts:
                 print("Some computation was temporarily skipped as they depends on tasks computed by another executor")
             self._print_report(tasks)
-            executor.run(tasks)
+            new_errors = executor.run(tasks, errors is not None)
+            if errors is not None:
+                errors.update(new_errors)
+            else:
+                assert not new_errors
             if n_conflicts == 0:
                 return "finished"
             else:
@@ -251,15 +255,19 @@ class Runtime:
             self.db.unannounce_entries(executor.id, list(tasks))
             raise
 
-    def _compute_refs(self, refs, executor=None):
+    def _compute_refs(self, refs, executor=None, continue_on_error=False):
         exists = set()
+        if continue_on_error:
+            errors = set()
+        else:
+            errors = None
         if executor is None:
             if len(self.executors) == 0:
                 raise Exception("No executors registered")
             executor = self.executors[0]
 
         while True:
-            status = self._run_computation(refs, executor, exists)
+            status = self._run_computation(refs, executor, exists, errors)
             if status == "finished":
                 break
             elif status == "next":
@@ -269,4 +277,6 @@ class Runtime:
                 continue
             else:
                 assert 0
+        if errors:
+            print("During computation, {} errors occured, see reports for details".format(len(errors)))
         return {ref: self.get_entry(ref) for ref in refs}

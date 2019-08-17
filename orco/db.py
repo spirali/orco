@@ -186,11 +186,14 @@ WHERE rowid IN
                 c.executemany("INSERT INTO entries VALUES (?, ?, null, ?, ?, ?, DATETIME('now'), null)", data)
         self._run(_helper)
 
-    def set_entry_values(self, executor_id, raw_entries, stats=None):
+    def set_entry_values(self, executor_id, raw_entries, stats=None, reports=None):
         if stats is not None:
             stats_data = (json.dumps(stats), executor_id)
         else:
             stats_data = None
+
+        if reports:
+            reports_data = [self._unfold_report(report) for report in reports]
 
         def _helper():
             data = [
@@ -205,6 +208,9 @@ WHERE rowid IN
                     changes += self.conn.changes()
                 if stats_data:
                     c.execute("""UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""", stats_data)
+                if reports:
+                    for r in reports_data:
+                        self._insert_report(c, r)
             return changes
         if self._run(_helper) != len(raw_entries):
             raise Exception("Setting value to unannouced config (all configs: {})", ["{}/{}".format(c.collection_name, c.key) for c in raw_entries])
