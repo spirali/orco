@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 
 from .executor import LocalExecutor
 from .collection import CollectionRef
@@ -25,6 +26,7 @@ def _command_remove(runtime, args):
 def _parse_args(runtime):
     parser = argparse.ArgumentParser("orco", description="Organized Computing")
     sp = parser.add_subparsers(title="command")
+    parser.set_defaults(command=None)
 
     # SERVE
     p = sp.add_parser("serve")
@@ -48,6 +50,9 @@ def _parse_args(runtime):
 def run_cli(runtime):
     try:
         args = _parse_args(runtime)
-        args.command(runtime, args)
+        if args.command is None:
+            print("No command provided", file=sys.stderr)
+        else:
+            args.command(runtime, args)
     finally:
         runtime.stop()

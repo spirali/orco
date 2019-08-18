@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="87.976341mm"
+   height="29.860125mm"
+   viewBox="0 0 87.976341 29.860125"
+   version="1.1"
+   id="svg8"
+   inkscape:version="0.92.4 (unknown)"
+   sodipodi:docname="orco.svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.7"
+     inkscape:cx="-22.199773"
+     inkscape:cy="219.30541"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     inkscape:window-width="1600"
+     inkscape:window-height="1128"
+     inkscape:window-x="0"
+     inkscape:window-y="32"
+     inkscape:window-maximized="1"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-51.026783,-120.29613)">
+    <rect
+       style="color:#000000;display:inline;overflow:visible;visibility:visible;opacity:1;fill:#ffac33;fill-opacity:1;stroke:none;stroke-width:0.1569379;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:0.62775156, 0.62775156;stroke-dashoffset:0;stroke-opacity:1;marker:none;enable-background:accumulate"
+       id="rect827"
+       width="20.410709"
+       height="29.860125"
+       x="51.026783"
+       y="120.29613"
+       ry="2.0788691" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.729249px;line-height:125%;font-family:Raleway-v4020;-inkscape-font-specification:Raleway-v4020;letter-spacing:0px;word-spacing:0px;fill:#ffeeaa;fill-opacity:1;stroke:none;stroke-width:0.45461601px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="52.315212"
+       y="131.84909"
+       id="text823"><tspan
+         sodipodi:role="line"
+         id="tspan821"
+         x="52.315212"
+         y="131.84909"
+         style="fill:#ffeeaa;stroke-width:0.45461601px"><tspan
+           style="fill:#ffeeaa"
+           id="tspan829">OR</tspan></tspan><tspan
+         sodipodi:role="line"
+         x="52.315212"
+         y="147.76065"
+         style="fill:#ffeeaa;stroke-width:0.45461601px"
+         id="tspan825"><tspan
+           style="fill:#ffeeaa"
+           id="tspan831">CO</tspan></tspan></text>
+    <text
+       id="text849"
+       y="131.84909"
+       x="71.592003"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:12.729249px;line-height:125%;font-family:Raleway-v4020;-inkscape-font-specification:Raleway-v4020;letter-spacing:0px;word-spacing:0px;fill:#502d16;fill-opacity:1;stroke:none;stroke-width:0.45461601px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       xml:space="preserve"><tspan
+         style="fill:#502d16;stroke-width:0.45461601px"
+         y="131.84909"
+         x="71.592003"
+         id="tspan843"
+         sodipodi:role="line">GANIZED</tspan><tspan
+         id="tspan847"
+         style="fill:#502d16;stroke-width:0.45461601px"
+         y="147.76065"
+         x="71.592003"
+         sodipodi:role="line">OMPUTING<tspan
+   id="tspan845"
+   style="fill:#502d16" /></tspan><tspan
+         style="fill:#502d16;stroke-width:0.45461601px"
+         y="163.67221"
+         x="71.592003"
+         sodipodi:role="line"
+         id="tspan851" /></text>
+  </g>
+</svg>
