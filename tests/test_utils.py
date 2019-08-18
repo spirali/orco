@@ -23,13 +23,23 @@ def test_format_time():
 
 def test_unpack_frame():
     frame = pd.DataFrame([{
-        "config": {"a": 5, "b": 3},
+        "config": {
+            "a": 5,
+            "b": 3
+        },
         "value": 10
     }, {
-        "config": {"a": 7, "b": 6},
+        "config": {
+            "a": 7,
+            "b": 6
+        },
         "value": 1
     }, {
-        "config": {"a": 8, "b": 4, "c": False},
+        "config": {
+            "a": 8,
+            "b": 4,
+            "c": False
+        },
         "value": 2
     }])
     unpacked = unpack_frame(frame)

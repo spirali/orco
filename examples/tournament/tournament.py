@@ -1,4 +1,3 @@
-
 from orco import Runtime, LocalExecutor, run_cli
 import time, random
 import itertools
@@ -27,12 +26,17 @@ def play_tournament(config, deps):
 
 
 def tournament_deps(config):
-    return [plays.ref({"player1": p1, "player2": p2})
-            for (p1, p2) in itertools.product(config["players"], config["players"])]
+    return [
+        plays.ref({
+            "player1": p1,
+            "player2": p2
+        }) for (p1, p2) in itertools.product(config["players"], config["players"])
+    ]
 
 
 players = runtime.register_collection("players", build_fn=train_player)
 plays = runtime.register_collection("plays", build_fn=play_game, dep_fn=game_deps)
-tournaments = runtime.register_collection("tournaments", build_fn=play_tournament, dep_fn=tournament_deps)
+tournaments = runtime.register_collection(
+    "tournaments", build_fn=play_tournament, dep_fn=tournament_deps)
 
 run_cli(runtime)

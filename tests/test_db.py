@@ -77,8 +77,9 @@ def test_db_run_stats(env):
     c = runtime.register_collection("col1")
     _ = runtime.register_collection("col2")
 
-    assert runtime.db.announce_entries(e1.id,
-        [c.ref("a"), c.ref("b"), c.ref("c"), c.ref("d"), c.ref("e")], [])
+    assert runtime.db.announce_entries(
+        e1.id, [c.ref("a"), c.ref("b"), c.ref("c"),
+                c.ref("d"), c.ref("e")], [])
     assert runtime.db.get_entry_state(c.name, make_key("a")) == "announced"
     runtime.db._dump()
     entry = make_raw_entry(runtime, c, "a", "value", comp_time=1)

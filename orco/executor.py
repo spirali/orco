@@ -95,10 +95,9 @@ class LocalExecutor(Executor):
 
         if not self._debug_do_not_start_heartbeat:
             self.heartbeat_stop_event = threading.Event()
-            self.heartbeat_thread = threading.Thread(target=heartbeat,
-                                                     args=(self.runtime, self.id,
-                                                           self.heartbeat_stop_event,
-                                                           self.heartbeat_interval))
+            self.heartbeat_thread = threading.Thread(
+                target=heartbeat,
+                args=(self.runtime, self.id, self.heartbeat_stop_event, self.heartbeat_interval))
             self.heartbeat_thread.daemon = True
             self.heartbeat_thread.start()
 
@@ -125,6 +124,7 @@ class LocalExecutor(Executor):
         return consumers, waiting_deps, ready
 
     def run(self, all_tasks, continue_on_error):
+
         def process_unprocessed():
             logging.debug("Writing into db: %s", unprocessed)
             db.set_entry_values(self.id, unprocessed, self.stats, pending_reports)
@@ -148,17 +148,10 @@ class LocalExecutor(Executor):
                 collection = self.runtime._get_collection(task.ref)
                 pickled_fns = cloudpickle.dumps((collection.build_fn, collection.make_raw_entry))
                 pickle_cache[ref.collection_name] = pickled_fns
-            return pool.submit(_run_task,
-                               self.id,
-                               db.path,
-                               pickled_fns,
-                               task.ref.ref_key(),
-                               task.ref.config,
-                               ref_to_refkey(task.dep_value))
-        self.stats = {
-            "n_tasks": len(all_tasks),
-            "n_completed": 0
-        }
+            return pool.submit(_run_task, self.id, db.path, pickled_fns, task.ref.ref_key(),
+                               task.ref.config, ref_to_refkey(task.dep_value))
+
+        self.stats = {"n_tasks": len(all_tasks), "n_completed": 0}
 
         pending_reports = []
         all_tasks = {ref.ref_key(): task for (ref, task) in all_tasks.items()}
@@ -174,13 +167,14 @@ class LocalExecutor(Executor):
         #for i, (col, count) in enumerate(tasks_per_collection.items()):
         #    col_progressbars[col] = tqdm.tqdm(desc=col, total=count, position=i)
 
-        progressbar = tqdm.tqdm(total=len(all_tasks)) #  , position=i+1)
+        progressbar = tqdm.tqdm(total=len(all_tasks))  #  , position=i+1)
         unprocessed = []
         last_write = time.time()
         errors = []
         try:
             while waiting:
-                wait_result = wait(waiting, return_when=FIRST_COMPLETED, timeout=1 if unprocessed else None)
+                wait_result = wait(
+                    waiting, return_when=FIRST_COMPLETED, timeout=1 if unprocessed else None)
                 waiting = wait_result.not_done
                 for f in wait_result.done:
                     self.stats["n_completed"] += 1
@@ -189,17 +183,17 @@ class LocalExecutor(Executor):
                     if isinstance(result, TaskErrorResult):
                         ref_key = result.ref_key
                         config = db.get_config(ref_key[0], ref_key[1])
-                        message = "Task failed: {}\n{}".format(result.exception_str, result.traceback)
-                        report = Report("error", self.id, message, collection_name=ref_key[0], config=config)
+                        message = "Task failed: {}\n{}".format(result.exception_str,
+                                                               result.traceback)
+                        report = Report(
+                            "error", self.id, message, collection_name=ref_key[0], config=config)
                         if continue_on_error:
                             errors.append(ref_key)
                             pending_reports.append(report)
                         else:
                             db.insert_report(report)
                             message = "Task failed {}/{}:{}\n{}".format(
-                                result.ref_key[0],
-                                repr(result.ref_key[1]),
-                                result.exception_str,
+                                result.ref_key[0], repr(result.ref_key[1]), result.exception_str,
                                 result.traceback)
                             raise TaskFailException(message)
                         continue

@@ -2,13 +2,13 @@ import time
 import threading
 import pytest
 
-
 from orco import LocalExecutor, CollectionRef, TaskFailException
 from orco.ref import make_key
 
 
 @pytest.mark.parametrize("n_processes", [1, 2])
 def test_executor(env, n_processes):
+
     def to_dict(lst):
         return {x["id"]: x for x in lst}
 
@@ -52,8 +52,10 @@ def test_executor_error(env):
     runtime.register_executor(executor)
 
     col0 = runtime.register_collection("col0", lambda c, d: c)
-    col1 = runtime.register_collection("col1", lambda c, d: 100 // d[0].value, lambda c: [col0.ref(c)])
-    col2 = runtime.register_collection("col2", lambda c, ds: sum(d.value for d in ds), lambda c: [col1.ref(x) for x in c])
+    col1 = runtime.register_collection("col1", lambda c, d: 100 // d[0].value,
+                                       lambda c: [col0.ref(c)])
+    col2 = runtime.register_collection("col2", lambda c, ds: sum(d.value for d in ds),
+                                       lambda c: [col1.ref(x) for x in c])
 
     assert not runtime.get_reports()
 
@@ -78,7 +80,6 @@ def test_executor_error(env):
 
     assert runtime.compute(col2.ref([10, 20])).value == 15
     assert runtime.compute(col2.ref([1, 2, 4])).value == 175
-
 
     r1 = [col2.ref([100 + x, 101 + x, 102 + x]) for x in range(20)]
     r2 = [col2.ref([200 + x, 201 + x, 202 + x]) for x in range(20)]
@@ -141,7 +142,7 @@ def test_executor_conflict(env, tmpdir):
     results = [None, None]
 
     def comp3(runtime, col0, col1):
-        results[0] = runtime1.compute(col1.ref([2,7,10, 30]))
+        results[0] = runtime1.compute(col1.ref([2, 7, 10, 30]))
 
     def comp4(runtime, col0, col1):
         results[1] = runtime2.compute(col0.ref(30))

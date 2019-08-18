@@ -4,7 +4,6 @@ import threading
 import time
 import pickle
 
-
 from orco.ref import collect_refs
 from .collection import Collection, CollectionRef
 from .db import DB
@@ -13,13 +12,12 @@ from .utils import format_time
 from .ref import collect_refs, resolve_refs, make_key
 from .report import Report
 
-
 logger = logging.getLogger(__name__)
 
 
 class Runtime:
 
-    def __init__(self, db_path, executor: Executor=None):
+    def __init__(self, db_path, executor: Executor = None):
         self.db = DB(db_path)
         self.db.init()
 
@@ -80,6 +78,7 @@ class Runtime:
             app.testing = True
             return app
         else:
+
             def run_app():
                 app.run(port=port, debug=debug, use_reloader=False)
 
@@ -117,9 +116,9 @@ class Runtime:
 
     def insert(self, ref, value):
         collection = self._collections[ref.collection_name]
-        entry = collection.make_raw_entry(
-            collection.name, make_key(ref.config), ref.config, value, None)
-        self.db.create_entries((entry,))
+        entry = collection.make_raw_entry(collection.name, make_key(ref.config), ref.config, value,
+                                          None)
+        self.db.create_entries((entry, ))
 
     def clean(self, collection_ref):
         self.db.clean_collection(collection_ref.name)
@@ -195,7 +194,9 @@ class Runtime:
                 inputs = ()
                 dep_value = None
             if state is None and collection.build_fn is None:
-                raise Exception("Computation depends on a missing configuration '{}' in a fixed collection".format(ref))
+                raise Exception(
+                    "Computation depends on a missing configuration '{}' in a fixed collection"
+                    .format(ref))
             task = Task(ref, inputs, dep_value)
             tasks[ref] = task
             return task
@@ -218,8 +219,8 @@ class Runtime:
             if stats["avg"] is None:
                 print("{:<17}| {:>5} | N/A".format(col, count))
             else:
-                print("{:<17}| {:>5} | {:>8} +- {}".format(
-                    col, count, format_time(stats["avg"]), format_time(stats["stdev"])))
+                print("{:<17}| {:>5} | {:>8} +- {}".format(col, count, format_time(stats["avg"]),
+                                                           format_time(stats["stdev"])))
         print("-----------------+-------+--------------------------------")
 
     def _run_computation(self, refs, executor, exists, errors):
@@ -232,15 +233,17 @@ class Runtime:
             return "wait"
         logger.debug("Announcing refs %s at executor %s", need_to_compute_refs, executor.id)
         if not self.db.announce_entries(
-                executor.id,
-                need_to_compute_refs,
-                global_deps,
-                Report("info", executor.id, "Computing {} task(s)".format(len(need_to_compute_refs)))):
+                executor.id, need_to_compute_refs, global_deps,
+                Report("info", executor.id, "Computing {} task(s)".format(
+                    len(need_to_compute_refs)))):
             return "wait"
         try:
-            del global_deps, need_to_compute_refs  # we do not this anymore, and .run may be long
+            # we do not this anymore, and .run may be long
+            del global_deps, need_to_compute_refs
             if n_conflicts:
-                print("Some computation was temporarily skipped as they depends on tasks computed by another executor")
+                print(
+                    "Some computation was temporarily skipped as they depends on tasks computed by another executor"
+                )
             self._print_report(tasks)
             new_errors = executor.run(tasks, errors is not None)
             if errors is not None:
@@ -278,5 +281,6 @@ class Runtime:
             else:
                 assert 0
         if errors:
-            print("During computation, {} errors occured, see reports for details".format(len(errors)))
+            print("During computation, {} errors occured, see reports for details".format(
+                len(errors)))
         return {ref: self.get_entry(ref) for ref in refs}

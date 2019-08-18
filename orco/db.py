@@ -36,6 +36,7 @@ class DB:
             self.conn.cursor().execute("""
                     PRAGMA foreign_keys = ON
                 """)
+
         self.path = path
         if threading:
             self._thread = ThreadPoolExecutor(max_workers=1)
@@ -51,6 +52,7 @@ class DB:
             return fn()
 
     def init(self):
+
         def _helper():
             with self.conn:
                 cursor = self.conn.cursor()
@@ -128,9 +130,11 @@ class DB:
                         config BLOB
                     );
                 """)
+
         self._run(_helper)
 
     def _dump(self):
+
         def _helper():
             print("ENTRIES ----")
             c = self.conn.cursor()
@@ -142,23 +146,28 @@ class DB:
             r = c.execute("SELECT * FROM deps")
             for x in r:
                 print(x)
+
         self._run(_helper)
 
     def _ensure_collection_query(self, cursor, name):
         cursor.execute("INSERT OR IGNORE INTO collections VALUES (?)", [name])
 
     def ensure_collection(self, name):
+
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
                 self._ensure_collection_query(c, name)
+
         self._run(_helper)
 
     def clean_collection(self, name):
+
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("""
+                c.execute(
+                    """
 WITH RECURSIVE
     selected(collection, key) AS (
         SELECT collection, key
@@ -175,15 +184,19 @@ WHERE rowid IN
     FROM selected
     LEFT JOIN entries ON entries.collection == selected.collection AND entries.key == selected.key)
     """, [name])
+
         self._run(_helper)
 
     def create_entries(self, raw_entries):
+
         def _helper():
-            data = [(e.collection_name, e.key, e.value, e.config,
-                     e.value_repr) for e in raw_entries]
+            data = [(e.collection_name, e.key, e.value, e.config, e.value_repr)
+                    for e in raw_entries]
             with self.conn:
                 c = self.conn.cursor()
-                c.executemany("INSERT INTO entries VALUES (?, ?, null, ?, ?, ?, DATETIME('now'), null)", data)
+                c.executemany(
+                    "INSERT INTO entries VALUES (?, ?, null, ?, ?, ?, DATETIME('now'), null)", data)
+
         self._run(_helper)
 
     def set_entry_values(self, executor_id, raw_entries, stats=None, reports=None):
@@ -196,24 +209,28 @@ WHERE rowid IN
             reports_data = [self._unfold_report(report) for report in reports]
 
         def _helper():
-            data = [
-                (e.value, e.value_repr, e.comp_time, e.collection_name, e.key, executor_id)
-                for e in raw_entries
-            ]
+            data = [(e.value, e.value_repr, e.comp_time, e.collection_name, e.key, executor_id)
+                    for e in raw_entries]
             changes = 0
             with self.conn:
                 c = self.conn.cursor()
                 for d in data:
-                    c.execute("UPDATE entries SET value = ?, value_repr = ?, created = DATETIME('now'), comp_time = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null", d)
+                    c.execute(
+                        "UPDATE entries SET value = ?, value_repr = ?, created = DATETIME('now'), comp_time = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null",
+                        d)
                     changes += self.conn.changes()
                 if stats_data:
-                    c.execute("""UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""", stats_data)
+                    c.execute(
+                        """UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""",
+                        stats_data)
                 if reports:
                     for r in reports_data:
                         self._insert_report(c, r)
             return changes
+
         if self._run(_helper) != len(raw_entries):
-            raise Exception("Setting value to unannouced config (all configs: {})", ["{}/{}".format(c.collection_name, c.key) for c in raw_entries])
+            raise Exception("Setting value to unannouced config (all configs: {})",
+                            ["{}/{}".format(c.collection_name, c.key) for c in raw_entries])
 
     def get_recursive_consumers(self, collection_name, key):
         #WHERE EXISTS(SELECT null FROM selected AS s WHERE deps.collection_s == selected.collection AND deps.key_s == selected.key
@@ -221,25 +238,32 @@ WHERE rowid IN
             {}
             SELECT collection, key FROM selected
         """.format(self.RECURSIVE_CONSUMERS)
+
         def _helper():
             c = self.conn.cursor()
             rs = c.execute(query, [collection_name, key])
             return [(r[0], r[1]) for r in rs]
+
         return self._run(_helper)
 
     def has_entry_by_key(self, collection_name, key):
+
         def _helper():
             c = self.conn.cursor()
-            c.execute("SELECT COUNT(*) FROM entries WHERE collection = ? AND key = ? AND value is not null",
-                      [collection_name, key])
+            c.execute(
+                "SELECT COUNT(*) FROM entries WHERE collection = ? AND key = ? AND value is not null",
+                [collection_name, key])
             return bool(c.fetchone()[0])
+
         return self._run(_helper)
 
     def get_entry_state(self, collection_name, key):
+
         def _helper():
             c = self.conn.cursor()
-            c.execute("SELECT value is not null FROM entries WHERE collection = ? AND key = ? AND (value is not null OR executor is null OR executor in (SELECT id FROM executors WHERE {}))".format(self.LIVE_EXECUTOR_QUERY),
-                      [collection_name, key])
+            c.execute(
+                "SELECT value is not null FROM entries WHERE collection = ? AND key = ? AND (value is not null OR executor is null OR executor in (SELECT id FROM executors WHERE {}))"
+                .format(self.LIVE_EXECUTOR_QUERY), [collection_name, key])
             v = c.fetchone()
             if v is None:
                 return None
@@ -247,54 +271,68 @@ WHERE rowid IN
                 return "finished"
             else:
                 return "announced"
+
         return self._run(_helper)
 
     def get_entry_no_config(self, collection_name, key, include_announced=False):
+
         def _helper():
             c = self.conn.cursor()
             if include_announced:
-                c.execute("""
+                c.execute(
+                    """
                     SELECT value, created, comp_time
                     FROM entries
                     WHERE collection = ? AND key = ? AND
                         (value is not null OR executor is null OR executor in
-                        (SELECT id FROM executors WHERE {}))"""
-                        .format(self.LIVE_EXECUTOR_QUERY), [collection_name, key])
+                        (SELECT id FROM executors WHERE {}))""".format(self.LIVE_EXECUTOR_QUERY),
+                    [collection_name, key])
             else:
-                c.execute("""
+                c.execute(
+                    """
                     SELECT value, created, comp_time
                     FROM entries
-                    WHERE collection = ? AND key = ? AND value is not null""", [collection_name, key])
+                    WHERE collection = ? AND key = ? AND value is not null""",
+                    [collection_name, key])
             return c.fetchone()
+
         result = self._run(_helper)
         if result is None:
             return None
-        return Entry(None, pickle.loads(result[0]) if result[0] is not None else None,
-                     result[1], result[2])
+        return Entry(None,
+                     pickle.loads(result[0]) if result[0] is not None else None, result[1],
+                     result[2])
 
     def get_entry(self, collection_name, key):
+
         def _helper():
             c = self.conn.cursor()
-            c.execute("""
+            c.execute(
+                """
                 SELECT config, value, created, comp_time
                 FROM entries
                 WHERE collection = ? AND key = ? AND value is not null""", [collection_name, key])
             return c.fetchone()
+
         result = self._run(_helper)
         if result is None:
             return None
         config, value, created, comp_time = result
-        return Entry(pickle.loads(config), pickle.loads(value) if value is not None else None,
-                     created, comp_time)
+        return Entry(
+            pickle.loads(config),
+            pickle.loads(value) if value is not None else None, created, comp_time)
 
     def get_config(self, collection_name, key):
+
         def _helper():
             c = self.conn.cursor()
-            c.execute("""
+            c.execute(
+                """
                 SELECT config
                 FROM entries
                 WHERE collection = ? AND key = ?""", [collection_name, key])
             return c.fetchone()
+
         result = self._run(_helper)
         if result is None:
             return None
@@ -303,22 +341,27 @@ WHERE rowid IN
 
     def remove_entries_by_key(self, ref_keys):
         data = [(r.collection_name, r.key) for r in ref_keys]
+
         def _helper():
             with self.conn:
-                self.conn.cursor().executemany("""{}
+                self.conn.cursor().executemany(
+                    """{}
                 DELETE FROM entries
                 WHERE rowid IN
                     (SELECT entries.rowid
                      FROM selected LEFT JOIN entries ON
                      entries.collection == selected.collection AND entries.key == selected.key)
                 """.format(self.RECURSIVE_CONSUMERS), data)
+
         self._run(_helper)
 
     def invalidate_entries_by_key(self, ref_keys):
         data = [(r.collection_name, r.key) for r in ref_keys]
+
         def _helper():
             with self.conn:
-                self.conn.cursor().executemany("""
+                self.conn.cursor().executemany(
+                    """
 WITH RECURSIVE
 children(collection, key) AS (
     WITH RECURSIVE
@@ -338,6 +381,7 @@ DELETE FROM entries
          FROM children LEFT JOIN entries ON
          entries.collection == children.collection AND entries.key == children.key)
                 """.format(self.RECURSIVE_CONSUMERS), data)
+
         self._run(_helper)
 
     """
@@ -348,9 +392,12 @@ DELETE FROM entries
     """
 
     def collection_summaries(self):
+
         def _helper():
             c = self.conn.cursor()
-            r = c.execute("SELECT collection, COUNT(key), TOTAL(length(value)), TOTAL(length(config)) FROM entries GROUP BY collection ORDER BY collection")
+            r = c.execute(
+                "SELECT collection, COUNT(key), TOTAL(length(value)), TOTAL(length(config)) FROM entries GROUP BY collection ORDER BY collection"
+            )
             result = []
             found = set()
             for name, count, size_value, size_config in r.fetchall():
@@ -366,65 +413,70 @@ DELETE FROM entries
 
             result.sort(key=lambda x: x["name"])
             return result
+
         return self._run(_helper)
 
     def _cleanup_lost_entries(self, cursor):
-        cursor.execute("DELETE FROM entries WHERE value is null AND executor IN (SELECT id FROM executors WHERE {})".format(self.DEAD_EXECUTOR_QUERY))
+        cursor.execute(
+            "DELETE FROM entries WHERE value is null AND executor IN (SELECT id FROM executors WHERE {})"
+            .format(self.DEAD_EXECUTOR_QUERY))
 
     def _unfold_report(self, report):
         #cursor.execute("INSERT INTO report VALUES (DATETIME('now'), ?, ?, ?, ?)",
-        return (report.report_type,
-                report.executor_id,
-                report.collection_name,
-                report.message,
+        return (report.report_type, report.executor_id, report.collection_name, report.message,
                 pickle.dumps(report.config) if report.config is not None else None)
 
     def _insert_report(self, cursor, unfolded_report):
-        cursor.execute("INSERT INTO reports (timestamp, type, executor, collection, message, config)"
-                       "VALUES (DATETIME('now'), ?, ?, ?, ?, ?)", unfolded_report)
+        cursor.execute(
+            "INSERT INTO reports (timestamp, type, executor, collection, message, config)"
+            "VALUES (DATETIME('now'), ?, ?, ?, ?, ?)", unfolded_report)
 
     def insert_report(self, report):
         report = self._unfold_report(report)
+
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
                 self._insert_report(c, report)
+
         self._run(_helper)
 
     def get_reports(self, count):
+
         def _helper():
             c = self.conn.cursor()
-            c.execute("SELECT timestamp, type, executor, collection, message, config "
-                      "FROM reports ORDER BY id DESC LIMIT ?", (count,))
+            c.execute(
+                "SELECT timestamp, type, executor, collection, message, config "
+                "FROM reports ORDER BY id DESC LIMIT ?", (count, ))
             return list(c.fetchall())
+
         return [
-            Report(report_type,
-                   executor_id, message,
-                   collection_name=collection_name,
-                   config=pickle.loads(config) if config else None,
-                   timestamp=timestamp)
-            for timestamp, report_type, executor_id, collection_name, message, config in self._run(_helper)
+            Report(
+                report_type,
+                executor_id,
+                message,
+                collection_name=collection_name,
+                config=pickle.loads(config) if config else None,
+                timestamp=timestamp) for timestamp, report_type, executor_id, collection_name,
+            message, config in self._run(_helper)
         ]
 
     def announce_entries(self, executor_id, refs, deps, report=None):
+
         def _helper():
             if report:
                 report_data = self._unfold_report(report)
-            entry_data = [(r.collection_name,
-                           r.key,
-                           pickle.dumps(r.config),
-                           executor_id) for r in refs]
-            deps_data = [
-                (r1.collection_name,
-                 r1.key,
-                 r2.collection_name,
-                 r2.key) for r1, r2 in deps
-            ]
+            entry_data = [(r.collection_name, r.key, pickle.dumps(r.config), executor_id)
+                          for r in refs]
+            deps_data = [(r1.collection_name, r1.key, r2.collection_name, r2.key)
+                         for r1, r2 in deps]
             try:
                 with self.conn:
                     c = self.conn.cursor()
                     self._cleanup_lost_entries(c)
-                    c.executemany("INSERT INTO entries(collection, key, config, executor) VALUES (?, ?, ?, ?)", entry_data)
+                    c.executemany(
+                        "INSERT INTO entries(collection, key, config, executor) VALUES (?, ?, ?, ?)",
+                        entry_data)
                     c.executemany("INSERT INTO deps VALUES (?, ?, ?, ?)", deps_data)
                     if report:
                         self._insert_report(c, report_data)
@@ -432,50 +484,60 @@ DELETE FROM entries
             except apsw.ConstraintError as e:
                 logger.debug(e)
                 return False
+
         assert executor_id is not None
         return self._run(_helper)
 
     def unannounce_entries(self, executor_id, ref_keys):
+
         def _helper():
             data = [(r.collection_name, r.key, executor_id) for r in ref_keys]
             with self.conn:
                 c = self.conn.cursor()
                 self._cleanup_lost_entries(c)
-                c.executemany("DELETE FROM entries WHERE collection = ? AND key = ? AND executor = ? AND value is null", data)
+                c.executemany(
+                    "DELETE FROM entries WHERE collection = ? AND key = ? AND executor = ? AND value is null",
+                    data)
+
         return self._run(_helper)
 
     def entry_summaries(self, collection_name):
+
         def _helper():
             c = self.conn.cursor()
-            r = c.execute("SELECT key, config, length(value), value_repr, created, comp_time FROM entries WHERE collection = ?", [collection_name])
-            return [
-                {"key": key,
-                 "config": pickle.loads(config),
-                 "size": value_size + len(config) if value_size else len(config),
-                 "value_repr": value_repr,
-                 "created": created,
-                 "comp_time": comp_time}
-                for key, config, value_size, value_repr, created, comp_time in r.fetchall()
-            ]
+            r = c.execute(
+                "SELECT key, config, length(value), value_repr, created, comp_time FROM entries WHERE collection = ?",
+                [collection_name])
+            return [{
+                "key": key,
+                "config": pickle.loads(config),
+                "size": value_size + len(config) if value_size else len(config),
+                "value_repr": value_repr,
+                "created": created,
+                "comp_time": comp_time
+            } for key, config, value_size, value_repr, created, comp_time in r.fetchall()]
+
         return self._run(_helper)
 
     def register_executor(self, executor):
         assert executor.id is None
+
         def _helper():
             stats = json.dumps(executor.get_stats())
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("INSERT INTO executors(created, heartbeat, heartbeat_interval, stats, type, version, resources) VALUES (?, DATETIME('now'), ?, ?, ?, ?, ?)",
-                        [executor.created.isoformat(),
-                        executor.heartbeat_interval,
-                        stats,
-                        executor.executor_type,
-                        executor.version,
-                        executor.resources])
+                c.execute(
+                    "INSERT INTO executors(created, heartbeat, heartbeat_interval, stats, type, version, resources) VALUES (?, DATETIME('now'), ?, ?, ?, ?, ?)",
+                    [
+                        executor.created.isoformat(), executor.heartbeat_interval, stats,
+                        executor.executor_type, executor.version, executor.resources
+                    ])
                 executor.id = self.conn.last_insert_rowid()
+
         self._run(_helper)
 
     def executor_summaries(self):
+
         def get_status(is_dead, stats):
             if stats is None:
                 return "stopped"
@@ -486,50 +548,66 @@ DELETE FROM entries
 
         def _helper():
             c = self.conn.cursor()
-            r = c.execute("SELECT id, created, {}, stats, type, version, resources FROM executors".format(self.DEAD_EXECUTOR_QUERY))
+            r = c.execute(
+                "SELECT id, created, {}, stats, type, version, resources FROM executors".format(
+                    self.DEAD_EXECUTOR_QUERY))
             #r = c.execute("SELECT uuid, created, , stats, type, version, resources FROM executors")
 
-            return [
-                {"id": id,
-                 "created": created,
-                 "status": get_status(is_dead, stats),
-                 "stats": json.loads(stats) if stats else None,
-                 "type": executor_type,
-                 "version": version,
-                 "resources": resources,
-                } for id, created, is_dead, stats, executor_type, version, resources in r.fetchall()
-            ]
+            return [{
+                "id": id,
+                "created": created,
+                "status": get_status(is_dead, stats),
+                "stats": json.loads(stats) if stats else None,
+                "type": executor_type,
+                "version": version,
+                "resources": resources,
+            } for id, created, is_dead, stats, executor_type, version, resources in r.fetchall()]
+
         return self._run(_helper)
 
     def get_run_stats(self, collection_name):
+
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("""SELECT AVG(comp_time), COUNT(comp_time) FROM entries WHERE collection = ? AND comp_time is not null""", [collection_name])
+                c.execute(
+                    """SELECT AVG(comp_time), COUNT(comp_time) FROM entries WHERE collection = ? AND comp_time is not null""",
+                    [collection_name])
                 avg, count = c.fetchone()
                 if avg and count > 2:
-                    c.execute("""SELECT SUM((comp_time - ?2) * (comp_time - ?2)) FROM entries WHERE collection = ?1 AND comp_time is not null""", [collection_name, avg])
+                    c.execute(
+                        """SELECT SUM((comp_time - ?2) * (comp_time - ?2)) FROM entries WHERE collection = ?1 AND comp_time is not null""",
+                        [collection_name, avg])
                     stdev = math.sqrt(c.fetchone()[0] / (count - 1))
                 elif avg:
                     stdev = 0
                 else:
                     stdev = None
                 return {"avg": avg, "stdev": stdev, "count": count}
+
         return self._run(_helper)
 
     def update_heartbeat(self, id):
+
         def _helper():
             id_list = [id]
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("""UPDATE executors SET heartbeat = DATETIME('now') WHERE id = ? AND stats is not null""", id_list)
+                c.execute(
+                    """UPDATE executors SET heartbeat = DATETIME('now') WHERE id = ? AND stats is not null""",
+                    id_list)
+
         self._run(_helper)
 
     def update_stats(self, id, stats):
+
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("""UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""", stats_data)
+                c.execute(
+                    """UPDATE executors SET stats = ?, heartbeat = DATETIME('now') WHERE id = ?""",
+                    stats_data)
+
         stats_data = [json.dumps(stats), id]
         self._run(_helper)
 
@@ -538,39 +616,40 @@ DELETE FROM entries
         raise NotImplementedError
 
     def stop_executor(self, id):
+
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                c.execute("""UPDATE executors SET heartbeat = DATETIME('now'), stats = null WHERE id = ?""", [id])
+                c.execute(
+                    """UPDATE executors SET heartbeat = DATETIME('now'), stats = null WHERE id = ?""",
+                    [id])
                 c.execute("""DELETE FROM entries WHERE executor == ? AND value is null""", [id])
+
         self._run(_helper)
 
     def get_all_entries(self, collection_name):
+
         def _helper():
             c = self.conn.cursor()
             r = c.execute(
                 "SELECT config, value, comp_time, created FROM entries WHERE collection = ?",
                 [collection_name])
             return list(r.fetchall())
+
         return [
-            Entry(pickle.loads(config),
-                  pickle.loads(value),
-                  created,
-                  comp_time)
+            Entry(pickle.loads(config), pickle.loads(value), created, comp_time)
             for (config, value, comp_time, created) in self._run(_helper)
         ]
 
     def get_all_configs(self, collection_name):
+
         def _helper():
             c = self.conn.cursor()
-            r = c.execute(
-                "SELECT config FROM entries WHERE collection = ? AND value is not null",
-                [collection_name])
+            r = c.execute("SELECT config FROM entries WHERE collection = ? AND value is not null",
+                          [collection_name])
             return list(r.fetchall())
-        return [
-            pickle.loads(row[0])
-            for row in self._run(_helper)
-        ]
+
+        return [pickle.loads(row[0]) for row in self._run(_helper)]
 
     def upgrade_collection(self, collection_name, data):
         # Data has to be [(collection_name, old_key, new_key, config)]
@@ -580,8 +659,12 @@ DELETE FROM entries
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                c.executemany("UPDATE deps SET key_s = ?3 WHERE collection_s = ?1 AND key_s = ?2;", shorter_data)
-                c.executemany("UPDATE deps SET key_t = ?3 WHERE collection_t = ?1 AND key_t = ?2;", shorter_data)
-                c.executemany("UPDATE entries SET key = ?3, config = ?4 WHERE collection = ?1 AND key = ?2;", data)
+                c.executemany("UPDATE deps SET key_s = ?3 WHERE collection_s = ?1 AND key_s = ?2;",
+                              shorter_data)
+                c.executemany("UPDATE deps SET key_t = ?3 WHERE collection_t = ?1 AND key_t = ?2;",
+                              shorter_data)
+                c.executemany(
+                    "UPDATE entries SET key = ?3, config = ?4 WHERE collection = ?1 AND key = ?2;",
+                    data)
 
         self._run(_helper)

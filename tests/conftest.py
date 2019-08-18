@@ -45,6 +45,7 @@ def env(tmpdir):
 
 
 class FileStorage:
+
     def __init__(self, path, init_value):
         self.path = path
         self.write(init_value)

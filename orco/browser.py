@@ -1,5 +1,3 @@
-
-
 from flask import Flask, request, current_app, Response
 from flask_restful import Resource, Api
 from flask_cors import CORS
@@ -16,6 +14,7 @@ class Collections(Resource):
 
     def get(self):
         return current_app.runtime.collection_summaries()
+
 
 api.add_resource(Collections, '/collections')
 
@@ -42,13 +41,10 @@ class Reports(Resource):
 
     def get(self):
         reports = current_app.runtime.get_reports()
-        return [
-            report.to_dict() for report in reports
-        ]
+        return [report.to_dict() for report in reports]
 
 
 api.add_resource(Reports, '/reports')
-
 
 
 def from_gzipped_file(filename):
@@ -56,20 +52,15 @@ def from_gzipped_file(filename):
     filename = os.path.join(STATIC_ROOT, filename)
     with open(filename, "rb") as f:
         data = f.read()
-    headers = {
-        'Content-Encoding': 'gzip',
-        'Content-Length': len(data)
-    }
+    headers = {'Content-Encoding': 'gzip', 'Content-Length': len(data)}
     if filename.endswith("css.gz"):
         headers["Content-Type"] = "text/css"
-    return Response(
-        data,
-        headers=headers
-    )
+    return Response(data, headers=headers)
 
 
 #    filename = os.path.join(STATIC_ROOT, "main.js.gz")
 #    return from_gzipped_file(filename)
+
 
 @app.route('/static/<path:path>')
 def static_serve(path):

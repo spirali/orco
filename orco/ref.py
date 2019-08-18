@@ -40,7 +40,8 @@ def _make_key_helper(obj, stream):
         stream.append("{")
         for key, value in sorted(obj.items()):
             if not isinstance(key, str):
-                raise Exception("Invalid key in config: '{}', type: {}".format(repr(key), type(key)))
+                raise Exception("Invalid key in config: '{}', type: {}".format(
+                    repr(key), type(key)))
             if key.startswith("_"):
                 continue
             stream.append(repr(key))
@@ -59,7 +60,6 @@ def make_key(config):
 
 
 RefKey = namedtuple("RefKey", ("collection_name", "key"))
-
 """
 class RefKey:
     __slots__ = ["collection_name", "key"]
@@ -130,9 +130,7 @@ def walk_map(value, target_type, final_fn):
     elif isinstance(value, target_type):
         return final_fn(value)
     elif isinstance(value, dict):
-        return {
-            key: walk_map(v, target_type, final_fn) for (key, v) in value.items()
-        }
+        return {key: walk_map(v, target_type, final_fn) for (key, v) in value.items()}
     elif isinstance(value, Iterable):
         return [walk_map(v, target_type, final_fn) for v in value]
     else:

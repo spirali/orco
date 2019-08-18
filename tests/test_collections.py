@@ -20,7 +20,8 @@ def test_fixed_collection(env):
     runtime.register_executor(LocalExecutor())
 
     fix1 = runtime.register_collection("fix1")
-    col2 = runtime.register_collection("col2", lambda c, d: d[0].value * 10, lambda c: [fix1.ref(c)])
+    col2 = runtime.register_collection("col2", lambda c, d: d[0].value * 10,
+                                       lambda c: [fix1.ref(c)])
 
     runtime.insert(fix1.ref("a"), 11)
 
@@ -58,9 +59,7 @@ def test_collection_upgrade(env):
     col2 = runtime.register_collection("col2", adder, adder_deps)
 
     runtime.compute(col1.ref(123))
-    runtime.compute(col2.refs([{"a": 10, "b": 12},
-                               {"a": 14, "b": 11},
-                               {"a": 17, "b": 12}]))
+    runtime.compute(col2.refs([{"a": 10, "b": 12}, {"a": 14, "b": 11}, {"a": 17, "b": 12}]))
 
     assert runtime.get_entry(col2.ref({"a": 10, "b": 12})).value == 220
 
@@ -177,12 +176,7 @@ def test_collection_deps_complex(env):
         return sum(e.value for e in deps[0].values()) + deps[1]
 
     def make_deps(config):
-        return [{
-            "a": col1.ref(1),
-            "b": col1.ref(1),
-            "c": col1.ref(3),
-            "d": col1.ref(4)
-        }, 5]
+        return [{"a": col1.ref(1), "b": col1.ref(1), "c": col1.ref(3), "d": col1.ref(4)}, 5]
 
     col1 = runtime.register_collection("col1", builder1)
     col2 = runtime.register_collection("col2", builder2, make_deps)
@@ -196,9 +190,9 @@ def test_collection_double_ref(env):
     runtime.register_executor(LocalExecutor())
 
     col1 = runtime.register_collection("col1", lambda c, d: c * 10)
-    col2 = runtime.register_collection("col2",
-                                       (lambda c, d: sum(x.value for x in d)),
-                                       (lambda c: [col1.ref(10), col1.ref(10), col1.ref(10)]))
+    col2 = runtime.register_collection(
+        "col2", (lambda c, d: sum(x.value for x in d)),
+        (lambda c: [col1.ref(10), col1.ref(10), col1.ref(10)]))
     assert runtime.compute(col2.ref("abc")).value == 300
 
 
@@ -207,12 +201,21 @@ def test_collection_stored_deps(env):
     runtime.register_executor(LocalExecutor())
 
     col1 = runtime.register_collection("col1", lambda c, d: c * 10)
-    col2 = runtime.register_collection("col2",
-                                       (lambda c, d: sum(x.value for x in d)),
-                                       lambda c: [col1.ref(i) for i in range(c["start"], c["end"], c["step"])])
-    col3 = runtime.register_collection("col3",
-                                       (lambda c, d: sum(x.value for x in d)),
-                                       lambda c: [col2.ref({"start": 0, "end": c, "step": 2}), col2.ref({"start": 0, "end": c, "step": 3})])
+    col2 = runtime.register_collection(
+        "col2", (lambda c, d: sum(x.value for x in d)),
+        lambda c: [col1.ref(i) for i in range(c["start"], c["end"], c["step"])])
+    col3 = runtime.register_collection(
+        "col3", (lambda c, d: sum(x.value for x in d)), lambda c:
+        [col2.ref({
+            "start": 0,
+            "end": c,
+            "step": 2
+        }),
+         col2.ref({
+             "start": 0,
+             "end": c,
+             "step": 3
+         })])
     assert runtime.compute(col3.ref(10)).value == 380
 
     cc2_2 = {"end": 10, "start": 0, "step": 2}
@@ -230,21 +233,19 @@ def test_collection_stored_deps(env):
         ("col1", "2"), ('col2', "{'end':10,'start':0,'step':2,}"), ('col3', "10")
     }
 
-    assert set(runtime.db.get_recursive_consumers(col1.name, "6")) == {
-        ("col1", "6"), ('col2', c2_2.key), ("col2", c2_3.key), ('col3', "10")
-    }
+    assert set(runtime.db.get_recursive_consumers(col1.name, "6")) == {("col1", "6"),
+                                                                       ('col2', c2_2.key),
+                                                                       ("col2", c2_3.key),
+                                                                       ('col3', "10")}
 
-    assert set(runtime.db.get_recursive_consumers(col1.name, "9")) == {
-            ("col1", "9"), ("col2", c2_3.key), ('col3', "10")
-    }
+    assert set(runtime.db.get_recursive_consumers(col1.name, "9")) == {("col1", "9"),
+                                                                       ("col2", c2_3.key),
+                                                                       ('col3', "10")}
 
-    assert set(runtime.db.get_recursive_consumers(col2.name, c2_3.key)) == {
-        ("col2", c2_3.key),  ('col3', "10")
-    }
+    assert set(runtime.db.get_recursive_consumers(col2.name, c2_3.key)) == {("col2", c2_3.key),
+                                                                            ('col3', "10")}
 
-    assert set(runtime.db.get_recursive_consumers(col3.name, col3.ref(10).key)) == {
-        ('col3', '10')
-    }
+    assert set(runtime.db.get_recursive_consumers(col3.name, col3.ref(10).key)) == {('col3', '10')}
 
     runtime.remove(col1.ref(6))
     assert runtime.get_entry_state(col3.ref(10)) is None
@@ -329,5 +330,9 @@ def test_collection_computed(env):
 
     runtime.compute(refs)
     assert [e.value for e in runtime.get_entries(refs)] == [20, 30, 40, 0, 50]
-    assert [e.value if e else "missing" for e in runtime.get_entries(refs + [collection.ref(123)])] == [20, 30, 40, 0, 50, "missing"]
-    assert [e.value if e else "missing" for e in runtime.get_entries(refs + [collection.ref(123)], drop_missing=True)] == [20, 30, 40, 0, 50]
+    assert [e.value if e else "missing" for e in runtime.get_entries(refs + [collection.ref(123)])
+            ] == [20, 30, 40, 0, 50, "missing"]
+    assert [
+        e.value if e else "missing"
+        for e in runtime.get_entries(refs + [collection.ref(123)], drop_missing=True)
+    ] == [20, 30, 40, 0, 50]

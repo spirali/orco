@@ -1,8 +1,6 @@
-
 from collections import namedtuple
 from datetime import datetime
 import pickle
-
 
 from .entry import Entry, RawEntry
 from .task import Task

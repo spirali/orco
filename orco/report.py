@@ -1,10 +1,14 @@
-
-
 class Report:
 
     __slots__ = ("report_type", "executor_id", "message", "collection_name", "config", "timestamp")
 
-    def __init__(self, report_type, executor_id, message, collection_name=None, config=None, timestamp=None):
+    def __init__(self,
+                 report_type,
+                 executor_id,
+                 message,
+                 collection_name=None,
+                 config=None,
+                 timestamp=None):
         self.executor_id = executor_id
         self.timestamp = timestamp
         self.report_type = report_type
