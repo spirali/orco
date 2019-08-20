@@ -1,10 +1,10 @@
 import pytest
 
-from orco.config import parse_config
+from orco.cfgbuild import build_config
 
 
 def test_config_simple():
-    config = parse_config({
+    config = build_config({
         "a": 5,
         "b": "hello",
         "c": ["hello", "world"],
@@ -21,7 +21,7 @@ def test_config_simple():
 
 
 def test_config_ref():
-    config = parse_config({
+    config = build_config({
         "a": [{
             "$ref": "b"
         }, {
@@ -34,8 +34,8 @@ def test_config_ref():
 
 
 def test_config_ref_cycle():
-    with pytest.raises(AssertionError):
-        parse_config({
+    with pytest.raises(Exception, match=".*cycle.*"):
+        build_config({
             "a": [{
                 "$ref": "b"
             }, {
@@ -49,17 +49,17 @@ def test_config_ref_cycle():
 
 
 def test_config_range():
-    assert parse_config({"a": {"$range": 5}})["a"] == list(range(5))
+    assert build_config({"a": {"$range": 5}})["a"] == list(range(5))
 
-    assert parse_config({"a": {"$range": [2, 5]}})["a"] == list(range(2, 5))
+    assert build_config({"a": {"$range": [2, 5]}})["a"] == list(range(2, 5))
 
-    assert parse_config({"a": {"$range": [3, 40, 5]}})["a"] == list(range(3, 40, 5))
+    assert build_config({"a": {"$range": [3, 40, 5]}})["a"] == list(range(3, 40, 5))
 
 
 def test_config_concat():
-    assert parse_config({"a": {"$+": [[1, 2], [3, 4]]}})["a"] == [1, 2, 3, 4]
+    assert build_config({"a": {"$+": [[1, 2], [3, 4]]}})["a"] == [1, 2, 3, 4]
 
-    assert parse_config({
+    assert build_config({
         "a": {
             "$+": [{
                 "$ref": "b"
@@ -75,13 +75,13 @@ def test_config_concat():
 
 
 def test_config_product():
-    assert parse_config({"a": {
+    assert build_config({"a": {
         "$product": [{
             "$range": 2
         }, [3, 4]]
     }})["a"] == [(0, 3), (0, 4), (1, 3), (1, 4)]
 
-    assert parse_config({
+    assert build_config({
         "b": 1,
         "a": {
             "$product": {
@@ -137,7 +137,7 @@ def test_config_product():
 
 
 def test_config_product_nested_unwrapped():
-    assert parse_config(
+    assert build_config(
         {"a": {
             "$product": {
                 "a": {
@@ -200,7 +200,7 @@ def test_config_product_nested_unwrapped():
 
 
 def test_config_product_nested_wrapped():
-    assert parse_config(
+    assert build_config(
         {"a": {
             "$product": {
                 "a": [{
@@ -245,7 +245,7 @@ def test_config_product_nested_wrapped():
 
 
 def test_config_zip():
-    assert parse_config(
+    assert build_config(
         {"a": {
             "$product": {
                 "a": {
@@ -272,3 +272,27 @@ def test_config_zip():
             'a': ('c', 3),
             'b': 'b'
         }]
+
+
+def test_config_top_level_product():
+    configurations = build_config({
+        "$product": {
+            "train_iterations": [100, 200, 300],
+            "batch_size": [128, 256],
+            "architecture": ["model1", "model2"]
+        }
+    })
+    assert configurations == [
+        {'train_iterations': 100, 'batch_size': 128, 'architecture': 'model1'},
+        {'train_iterations': 100, 'batch_size': 128, 'architecture': 'model2'},
+        {'train_iterations': 100, 'batch_size': 256, 'architecture': 'model1'},
+        {'train_iterations': 100, 'batch_size': 256, 'architecture': 'model2'},
+        {'train_iterations': 200, 'batch_size': 128, 'architecture': 'model1'},
+        {'train_iterations': 200, 'batch_size': 128, 'architecture': 'model2'},
+        {'train_iterations': 200, 'batch_size': 256, 'architecture': 'model1'},
+        {'train_iterations': 200, 'batch_size': 256, 'architecture': 'model2'},
+        {'train_iterations': 300, 'batch_size': 128, 'architecture': 'model1'},
+        {'train_iterations': 300, 'batch_size': 128, 'architecture': 'model2'},
+        {'train_iterations': 300, 'batch_size': 256, 'architecture': 'model1'},
+        {'train_iterations': 300, 'batch_size': 256, 'architecture': 'model2'}
+    ]
