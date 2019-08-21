@@ -9,9 +9,9 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="87.976341mm"
+   width="78.404541mm"
    height="29.860125mm"
-   viewBox="0 0 87.976341 29.860125"
+   viewBox="0 0 78.404541 29.860125"
    version="1.1"
    id="svg8"
    inkscape:version="0.92.4 (unknown)"
@@ -26,8 +26,8 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.7"
-     inkscape:cx="-22.199773"
-     inkscape:cy="219.30541"
+     inkscape:cx="-272.91406"
+     inkscape:cy="219.3054"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -100,9 +100,7 @@
          style="fill:#502d16;stroke-width:0.45461601px"
          y="147.76065"
          x="71.592003"
-         sodipodi:role="line">OMPUTING<tspan
-   id="tspan845"
-   style="fill:#502d16" /></tspan><tspan
+         sodipodi:role="line">MPUTING</tspan><tspan
          style="fill:#502d16;stroke-width:0.45461601px"
          y="163.67221"
          x="71.592003"
