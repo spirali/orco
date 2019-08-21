@@ -6,10 +6,6 @@
 ORCO (Organized Computing) is a Python package for running computational
 experiments and storing results.
 
-ORCO ensures that already computed parts of the computation is not repeated and
-every computation is run exactly even more instances of ORCO is concurently
-running.
-
 ## Installation
 
 TODO
