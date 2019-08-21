@@ -106,7 +106,7 @@ def test_executor_timeout(env):
 
     col0 = runtime.register_collection("col0", compute)
 
-    config0 = {"time": 1, "_metadata": {"timeout": 0.2}}
+    config0 = {"time": 1, "_task": {"timeout": 0.2}}
     with pytest.raises(TaskFailException, match=".*timeout.*"):
         assert runtime.compute(col0.ref(config0))
 
@@ -118,6 +118,7 @@ def test_executor_timeout(env):
     assert "timeout" in reports[0].message
 
     assert runtime.compute(col0.ref({"time": 1})).value == 1
+    assert runtime.compute(col0.ref({"time": 0.2, "_task": {"timeout": 5}})).value == 0.2
 
 
 def test_executor_conflict(env, tmpdir):

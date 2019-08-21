@@ -11,7 +11,7 @@ import cloudpickle
 import tqdm
 import traceback
 
-from orco.metadata import parse_metadata
+from orco.taskoptions import TaskOptions
 from orco.ref import resolve_ref_keys, ref_to_refkey, RefKey, collect_ref_keys
 from .db import DB
 from .task import Task
@@ -275,14 +275,14 @@ def _run_task(db_path, fns, ref_key, config, dep_value):
                 finalize_fn(ref_key.collection_name, ref_key.key, None, value,
                             end_time - start_time))
 
-        metadata = parse_metadata(config)
-        if metadata.timeout:
+        options = TaskOptions.parse_from_config(config)
+        if options.timeout:
             thread = threading.Thread(target=run)
             thread.daemon = True
             thread.start()
-            thread.join(metadata.timeout)
+            thread.join(options.timeout)
             if thread.is_alive():
-                return TaskTimeout(ref_key, metadata.timeout)
+                return TaskTimeout(ref_key, options.timeout)
         else:
             run()
         return result[0]
