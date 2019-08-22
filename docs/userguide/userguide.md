@@ -8,7 +8,15 @@ experiments and storing results.
 
 ## Installation
 
-TODO
+### Requirements
+
+ORCO needs Python 3.6+.
+
+### Installation via pip
+
+```
+pip3 install orco
+```
 
 ## Getting started
 
