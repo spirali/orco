@@ -2,6 +2,13 @@ from collections import Iterable, namedtuple
 
 
 class Ref:
+    """
+    Reference to a collection.
+
+    Public interface for creating references are methods "ref" and "refs" on CollectionRef
+
+    >>> collection.ref(config)
+    """
 
     __slots__ = ["collection_name", "config", "key"]
 

@@ -1,4 +1,15 @@
 class Report:
+    """
+    Report of an event in ORCO. It can be viewed via ORCO browser.
+
+    Attributes:
+    * report_type - "info" / "error" / "timeout"
+    * executor_id - Id of executor where even comes from
+    * message - string representation of message
+    * collection_name - name of collection where event occurs (or None if not related)
+    * config - config related to the event (or None if not related)
+    * timestamp - datetime when event was created
+    """
 
     __slots__ = ("report_type", "executor_id", "message", "collection_name", "config", "timestamp")
 

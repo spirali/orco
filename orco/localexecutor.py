@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class TaskFailException(Exception):
+    """Exception thrown when task in an executor failed"""
     pass
 
 
@@ -74,6 +75,22 @@ def _heartbeat(runtime, id, event, heartbeat_interval):
 
 
 class LocalExecutor(Executor):
+    """
+    Executor that performs computations locally.
+
+    Executor spawns build functions in parallel. By default it spawns at most N
+    build functions where N is number of cpus of the local machine. This can be
+    configured via argument `n_processes` in the constructor.
+
+    All methods of executor are considered internal. Users should use it only
+    via Runtime by method `register_executor`.
+
+    User may decreate heatbeat_interval (in seconds) if faster detection of
+    hard-crash of executor is desired. But it should not be lesser than 1s
+    otherwise performance issues may raises because of hammering DB. Note that
+    it serves only for detecting crashes when whole Python interpreter is lost,
+    it is not needed for normal exceptions.
+    """
 
     _debug_do_not_start_heartbeat = False
 

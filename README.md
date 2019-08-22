@@ -16,4 +16,5 @@ experiments and storing results.
 
 ## Links
 
-[User guide](docs/userguide/userguide.md)
+* [User guide](https://spirali.github.io/orco.pages/userguide/userguide)
+* [API reference](https://spirali.github.io/orco.pages/api/)

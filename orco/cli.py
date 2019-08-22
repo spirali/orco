@@ -48,6 +48,11 @@ def _parse_args(runtime):
 
 
 def run_cli(runtime):
+    """
+    Start command-line interface over runtime.
+
+    The function always closes runtime on return, even in case of an exception.
+    """
     try:
         args = _parse_args(runtime)
         if args.command is None:

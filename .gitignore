@@ -3,3 +3,7 @@ __pycache__
 *.swp
 .vscode
 *.db
+docs/nedoc/html
+dist/
+build/
+*egg-info
