@@ -1,6 +1,6 @@
 import pandas as pd
 
-from orco.utils import format_time, unpack_frame
+from orco.internals.utils import format_time, unpack_frame
 
 
 def test_format_time():

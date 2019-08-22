@@ -1,6 +1,6 @@
 from typing import Iterable
 
-from .ref import Ref
+from ..ref import Ref
 
 
 class Task:

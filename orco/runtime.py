@@ -1,21 +1,50 @@
 import collections
 import logging
 import threading
-import time
 import pickle
+import time
 
-from orco.ref import collect_refs
-from .collection import Collection, CollectionRef
-from .db import DB
-from .executor import Executor, Task
-from .utils import format_time
-from .ref import collect_refs, resolve_refs, make_key
+
+from .collection import CollectionRef
+from .internals.db import DB
+from .internals.executor import Executor
+from .internals.task import Task
+from .internals.rawentry import RawEntry
+from .ref import make_key
 from .report import Report
+from .internals.reftools import collect_refs, resolve_refs
+from .internals.utils import format_time
 
 logger = logging.getLogger(__name__)
 
 
+def _default_make_raw_entry(collection_name, key, config, value, comp_time):
+    value_repr = repr(value)
+    if len(value_repr) > 85:
+        value_repr = value_repr[:80] + " ..."
+    if config is not None:
+        config = pickle.dumps(config)
+    return RawEntry(collection_name, key, config, pickle.dumps(value), value_repr, comp_time)
+
+
+class _Collection:
+
+    def __init__(self, name: str, build_fn, dep_fn):
+        self.name = name
+        self.build_fn = build_fn
+        self.make_raw_entry = _default_make_raw_entry
+        self.dep_fn = dep_fn
+
+
+
 class Runtime:
+    """
+    Core class of ORCO.
+
+    It manages database with results and starts computations
+
+    >>> runtime = Runtime("/path/to/dbfile.db")
+    """
 
     def __init__(self, db_path, executor: Executor = None):
         self.db = DB(db_path)
@@ -67,12 +96,12 @@ class Runtime:
             if name in self._collections:
                 raise Exception("Collection already registered")
             self.db.ensure_collection(name)
-            collection = Collection(name, build_fn=build_fn, dep_fn=dep_fn)
+            collection = _Collection(name, build_fn=build_fn, dep_fn=dep_fn)
             self._collections[name] = collection
         return CollectionRef(name)
 
     def serve(self, port=8550, debug=False, testing=False, nonblocking=False):
-        from .browser import init_service
+        from .internals.browser import init_service
         app = init_service(self)
         if testing:
             app.testing = True

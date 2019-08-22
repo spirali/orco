@@ -1,5 +1,3 @@
-import collections
-
 
 class Entry:
     __slots__ = ("config", "value", "created", "comp_time")
@@ -16,8 +14,3 @@ class Entry:
 
     def __repr__(self):
         return "<Entry {}>".format(self.config)
-
-
-# Value is serialized
-RawEntry = collections.namedtuple(
-    "RawEntry", ["collection_name", "key", "config", "value", "value_repr", "comp_time"])

@@ -3,7 +3,8 @@ import pickle
 import pytest
 
 from orco import LocalExecutor
-from orco.entry import Entry, RawEntry
+from orco.entry import Entry
+from orco.internals.rawentry import RawEntry
 from orco.ref import make_key
 
 

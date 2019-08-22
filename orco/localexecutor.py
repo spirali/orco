@@ -11,11 +11,15 @@ import cloudpickle
 import tqdm
 import traceback
 
-from orco.taskoptions import TaskOptions
-from orco.ref import resolve_ref_keys, ref_to_refkey, RefKey, collect_ref_keys
-from .db import DB
-from .task import Task
+from .internals.taskoptions import TaskOptions
+from .internals.reftools import resolve_ref_keys, ref_to_refkey, collect_ref_keys
+from .internals.db import DB
+from .internals.task import Task
+from .internals.executor import Executor
+
+from .ref import RefKey
 from .report import Report
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +28,7 @@ class TaskFailException(Exception):
     pass
 
 
-class TaskFailure:
+class _TaskFailure:
 
     def __init__(self, ref_key):
         self.ref_key = ref_key
@@ -36,7 +40,7 @@ class TaskFailure:
         raise NotImplementedError()
 
 
-class TaskError(TaskFailure):
+class _TaskError(_TaskFailure):
 
     def __init__(self, ref_key, exception_str, traceback):
         super().__init__(ref_key)
@@ -50,7 +54,7 @@ class TaskError(TaskFailure):
         return "error"
 
 
-class TaskTimeout(TaskFailure):
+class _TaskTimeout(_TaskFailure):
 
     def __init__(self, ref_key, timeout):
         super().__init__(ref_key)
@@ -63,45 +67,10 @@ class TaskTimeout(TaskFailure):
         return "timeout"
 
 
-class Executor:
-
-    def __init__(self, executor_type, version, resources, heartbeat_interval):
-        self.executor_type = executor_type
-        self.version = version
-        self.created = datetime.now()
-        self.id = None
-        self.runtime = None
-        self.resources = resources
-        self.stats = {}
-        assert heartbeat_interval >= 1
-        self.heartbeat_interval = heartbeat_interval
-
-    def get_stats(self):
-        raise NotImplementedError
-
-    def run(self, tasks: [Task]):
-        raise NotImplementedError
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
-
-
-def heartbeat(runtime, id, event, heartbeat_interval):
+def _heartbeat(runtime, id, event, heartbeat_interval):
     while not event.is_set():
         runtime.update_heartbeat(id)
         time.sleep(heartbeat_interval)
-
-
-def compute_task(args):
-    build_fn, config, has_input, input_entries = args
-
-    if has_input:
-        return build_fn(config, input_entries)
-    else:
-        return build_fn(config)
 
 
 class LocalExecutor(Executor):
@@ -133,7 +102,7 @@ class LocalExecutor(Executor):
         if not self._debug_do_not_start_heartbeat:
             self.heartbeat_stop_event = threading.Event()
             self.heartbeat_thread = threading.Thread(
-                target=heartbeat,
+                target=_heartbeat,
                 args=(self.runtime, self.id, self.heartbeat_stop_event, self.heartbeat_interval))
             self.heartbeat_thread.daemon = True
             self.heartbeat_thread.start()
@@ -217,7 +186,7 @@ class LocalExecutor(Executor):
                     self.stats["n_completed"] += 1
                     progressbar.update()
                     result = f.result()
-                    if isinstance(result, TaskFailure):
+                    if isinstance(result, _TaskFailure):
                         ref_key = result.ref_key
                         config = db.get_config(ref_key[0], ref_key[1])
                         message = result.message()
@@ -282,9 +251,9 @@ def _run_task(db_path, fns, ref_key, config, dep_value):
             thread.start()
             thread.join(options.timeout)
             if thread.is_alive():
-                return TaskTimeout(ref_key, options.timeout)
+                return _TaskTimeout(ref_key, options.timeout)
         else:
             run()
         return result[0]
     except Exception as exception:
-        return TaskError(ref_key, str(exception), traceback.format_exc())
+        return _TaskError(ref_key, str(exception), traceback.format_exc())

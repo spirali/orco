@@ -2,7 +2,7 @@ import argparse
 import json
 import sys
 
-from .executor import LocalExecutor
+from .localexecutor import LocalExecutor
 from .collection import CollectionRef
 
 

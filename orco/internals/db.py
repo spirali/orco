@@ -7,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 import apsw
 import pandas as pd
 
-from .entry import Entry
-from .report import Report
+from ..entry import Entry
+from ..report import Report
 
 logger = logging.getLogger(__name__)
 
