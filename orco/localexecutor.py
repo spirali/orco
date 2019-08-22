@@ -20,7 +20,6 @@ from .internals.executor import Executor
 from .ref import RefKey
 from .report import Report
 
-
 logger = logging.getLogger(__name__)
 
 

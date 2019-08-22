@@ -1,6 +1,7 @@
 from datetime import datetime
 from .task import Task
 
+
 class Executor:
 
     def __init__(self, executor_type, version, resources, heartbeat_interval):

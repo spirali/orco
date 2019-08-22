@@ -282,17 +282,52 @@ def test_config_top_level_product():
             "architecture": ["model1", "model2"]
         }
     })
-    assert configurations == [
-        {'train_iterations': 100, 'batch_size': 128, 'architecture': 'model1'},
-        {'train_iterations': 100, 'batch_size': 128, 'architecture': 'model2'},
-        {'train_iterations': 100, 'batch_size': 256, 'architecture': 'model1'},
-        {'train_iterations': 100, 'batch_size': 256, 'architecture': 'model2'},
-        {'train_iterations': 200, 'batch_size': 128, 'architecture': 'model1'},
-        {'train_iterations': 200, 'batch_size': 128, 'architecture': 'model2'},
-        {'train_iterations': 200, 'batch_size': 256, 'architecture': 'model1'},
-        {'train_iterations': 200, 'batch_size': 256, 'architecture': 'model2'},
-        {'train_iterations': 300, 'batch_size': 128, 'architecture': 'model1'},
-        {'train_iterations': 300, 'batch_size': 128, 'architecture': 'model2'},
-        {'train_iterations': 300, 'batch_size': 256, 'architecture': 'model1'},
-        {'train_iterations': 300, 'batch_size': 256, 'architecture': 'model2'}
-    ]
+    assert configurations == [{
+        'train_iterations': 100,
+        'batch_size': 128,
+        'architecture': 'model1'
+    }, {
+        'train_iterations': 100,
+        'batch_size': 128,
+        'architecture': 'model2'
+    }, {
+        'train_iterations': 100,
+        'batch_size': 256,
+        'architecture': 'model1'
+    }, {
+        'train_iterations': 100,
+        'batch_size': 256,
+        'architecture': 'model2'
+    }, {
+        'train_iterations': 200,
+        'batch_size': 128,
+        'architecture': 'model1'
+    }, {
+        'train_iterations': 200,
+        'batch_size': 128,
+        'architecture': 'model2'
+    }, {
+        'train_iterations': 200,
+        'batch_size': 256,
+        'architecture': 'model1'
+    }, {
+        'train_iterations': 200,
+        'batch_size': 256,
+        'architecture': 'model2'
+    }, {
+        'train_iterations': 300,
+        'batch_size': 128,
+        'architecture': 'model1'
+    }, {
+        'train_iterations': 300,
+        'batch_size': 128,
+        'architecture': 'model2'
+    }, {
+        'train_iterations': 300,
+        'batch_size': 256,
+        'architecture': 'model1'
+    }, {
+        'train_iterations': 300,
+        'batch_size': 256,
+        'architecture': 'model2'
+    }]

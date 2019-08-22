@@ -3,7 +3,6 @@ class TaskOptions:
     def __init__(self, timeout=None):
         self.timeout = timeout
 
-
     @staticmethod
     def parse_from_config(config):
         if isinstance(config, dict):

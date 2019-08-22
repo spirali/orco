@@ -4,7 +4,6 @@ import threading
 import pickle
 import time
 
-
 from .collection import CollectionRef
 from .internals.db import DB
 from .internals.executor import Executor
@@ -34,7 +33,6 @@ class _Collection:
         self.build_fn = build_fn
         self.make_raw_entry = _default_make_raw_entry
         self.dep_fn = dep_fn
-
 
 
 class Runtime:
