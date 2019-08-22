@@ -4,7 +4,7 @@ from flask_cors import CORS
 import json
 import os
 
-STATIC_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+STATIC_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 app = Flask(__name__, static_url_path=STATIC_ROOT)
 cors = CORS(app)
 api = Api(app, prefix="/rest")

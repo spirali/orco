@@ -15,12 +15,13 @@ with open('requirements.txt') as reqs:
 
 
 setup(name='orco',
-      version="0.0.1",
-      description='Organized computing',
+      version="0.1.1",
+      description='Organized Computing',
       author='Stanislav Bohm',
       url='http://github.com/spirali/orco',
-      packages=['orco'],
+      packages=["orco", "orco.internals"],
       install_requires=requirements,
+      package_data={'orco': ['static/*.gz', "static/js/*.gz", "static/css/*.gz"]},
       classifiers=("Programming Language :: Python :: 3",
                    "License :: OSI Approved :: MIT License",
                    "Operating System :: OS Independent"))
