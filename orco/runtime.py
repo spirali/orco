@@ -175,17 +175,14 @@ class Runtime:
             keys.add(new_key)
         self.db.upgrade_collection(collection.name, to_update)
 
-    def collection_summaries(self):
+    def _collection_summaries(self):
         return self.db.collection_summaries()
 
-    def entry_summaries(self, collection_name):
+    def _entry_summaries(self, collection_name):
         return self.db.entry_summaries(collection_name)
 
-    def executor_summaries(self):
+    def _executor_summaries(self):
         return self.db.executor_summaries()
-
-    def update_heartbeat(self, id):
-        self.db.update_heartbeat(id)
 
     def _get_collection(self, ref):
         return self._collections[ref.collection_name]

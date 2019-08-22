@@ -70,7 +70,7 @@ class _TaskTimeout(_TaskFailure):
 
 def _heartbeat(runtime, id, event, heartbeat_interval):
     while not event.is_set():
-        runtime.update_heartbeat(id)
+        runtime.db.update_heartbeat(id)
         time.sleep(heartbeat_interval)
 
 

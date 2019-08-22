@@ -13,7 +13,7 @@ def test_executor(env, n_processes):
         return {x["id"]: x for x in lst}
 
     runtime = env.test_runtime()
-    r = runtime.executor_summaries()
+    r = runtime._executor_summaries()
     assert len(r) == 0
 
     executor = LocalExecutor(heartbeat_interval=1, n_processes=n_processes)
@@ -31,7 +31,7 @@ def test_executor(env, n_processes):
     executor3.stop()
     assert runtime.db.get_entry_state(c.name, make_key("x")) is None
 
-    r = to_dict(runtime.executor_summaries())
+    r = to_dict(runtime._executor_summaries())
     assert len(r) == 3
     assert r[executor.id]["status"] == "running"
     assert r[executor2.id]["status"] == "running"
@@ -39,7 +39,7 @@ def test_executor(env, n_processes):
 
     time.sleep(3)
 
-    r = to_dict(runtime.executor_summaries())
+    r = to_dict(runtime._executor_summaries())
     assert len(r) == 3
     assert r[executor.id]["status"] == "running"
     assert r[executor2.id]["status"] == "lost"

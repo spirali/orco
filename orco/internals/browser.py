@@ -13,7 +13,7 @@ api = Api(app, prefix="/rest")
 class Collections(Resource):
 
     def get(self):
-        return current_app.runtime.collection_summaries()
+        return current_app.runtime._collection_summaries()
 
 
 api.add_resource(Collections, '/collections')
@@ -22,7 +22,7 @@ api.add_resource(Collections, '/collections')
 class Entries(Resource):
 
     def get(self, collection_name):
-        return current_app.runtime.entry_summaries(collection_name)
+        return current_app.runtime._entry_summaries(collection_name)
 
 
 api.add_resource(Entries, '/entries/<string:collection_name>')
@@ -31,7 +31,7 @@ api.add_resource(Entries, '/entries/<string:collection_name>')
 class Executors(Resource):
 
     def get(self):
-        return current_app.runtime.executor_summaries()
+        return current_app.runtime._executor_summaries()
 
 
 api.add_resource(Executors, '/executors')
