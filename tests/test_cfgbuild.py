@@ -49,15 +49,15 @@ def test_config_ref_cycle():
 
 
 def test_config_range():
-    assert build_config({"a": {"$range": 5}})["a"] == list(range(5))
+    assert build_config({"$range": 5}) == list(range(5))
 
-    assert build_config({"a": {"$range": [2, 5]}})["a"] == list(range(2, 5))
+    assert build_config({"$range": [2, 5]}) == list(range(2, 5))
 
-    assert build_config({"a": {"$range": [3, 40, 5]}})["a"] == list(range(3, 40, 5))
+    assert build_config({"$range": [3, 40, 5]}) == list(range(3, 40, 5))
 
 
 def test_config_concat():
-    assert build_config({"a": {"$+": [[1, 2], [3, 4]]}})["a"] == [1, 2, 3, 4]
+    assert build_config({"$+": [[1, 2], [3, 4]]}) == [1, 2, 3, 4]
 
     assert build_config({
         "a": {
@@ -75,11 +75,11 @@ def test_config_concat():
 
 
 def test_config_product():
-    assert build_config({"a": {
+    assert build_config({
         "$product": [{
             "$range": 2
         }, [3, 4]]
-    }})["a"] == [(0, 3), (0, 4), (1, 3), (1, 4)]
+    }) == [(0, 3), (0, 4), (1, 3), (1, 4)]
 
     assert build_config({
         "b": 1,
@@ -137,8 +137,7 @@ def test_config_product():
 
 
 def test_config_product_nested_unwrapped():
-    assert build_config(
-        {"a": {
+    assert build_config({
             "$product": {
                 "a": {
                     "$product": {
@@ -148,7 +147,7 @@ def test_config_product_nested_unwrapped():
                 },
                 "b": ["a", "b"],
             }
-        }})["a"] == [{
+        }) == [{
             'a': {
                 'x': 1,
                 'y': 3
@@ -200,8 +199,7 @@ def test_config_product_nested_unwrapped():
 
 
 def test_config_product_nested_wrapped():
-    assert build_config(
-        {"a": {
+    assert build_config({
             "$product": {
                 "a": [{
                     "$product": {
@@ -211,7 +209,7 @@ def test_config_product_nested_wrapped():
                 }],
                 "b": ["a", "b"],
             }
-        }})["a"] == [{
+        }) == [{
             'a': [{
                 'x': 1,
                 'y': 3
@@ -245,15 +243,14 @@ def test_config_product_nested_wrapped():
 
 
 def test_config_zip():
-    assert build_config(
-        {"a": {
+    assert build_config({
             "$product": {
                 "a": {
                     "$zip": [["a", "b", "c"], [1, 2, 3]]
                 },
                 "b": ["a", "b"],
             }
-        }})["a"] == [{
+        }) == [{
             'a': ('a', 1),
             'b': 'a'
         }, {
