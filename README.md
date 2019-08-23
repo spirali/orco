@@ -1,4 +1,4 @@
-![Screenshot of ORCO browser](./docs/userguide/imgs/orco.svg)
+![Screenshot of ORCO browser](./docs/userguide/imgs/orco.png)
 
 # ORCO
 

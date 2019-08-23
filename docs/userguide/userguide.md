@@ -1,5 +1,5 @@
 
-![Screenshot of ORCO browser](./imgs/orco.svg)
+![Screenshot of ORCO browser](./imgs/orco.png)
 
 # ORCO
 
