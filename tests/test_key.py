@@ -6,6 +6,7 @@ def test_make_key_basics():
     assert make_key(10) == "10"
     assert make_key("Hello!") == "'Hello!'"
     assert make_key(3.14) == "3.14"
+    assert make_key([True, False, 2]) == "[True,False,2,]"
 
     assert make_key({"x": 10, "y": 20}) == make_key({"y": 20, "x": 10})
     assert make_key({"x": 10, "y": 20}) != make_key({"y": 10, "x": 20})
