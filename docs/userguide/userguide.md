@@ -15,7 +15,7 @@ verbose, but facilitates reproducibility of your experiments.
 
 ### Requirements
 
-ORCO needs Python 3.6+.
+ORCO needs Python 3.5+.
 
 ### Installation via pip
 
@@ -25,7 +25,6 @@ pip3 install orco
 
 ## User guide
 * [Getting started](getting-started.md)
+* [CLI interface](cli.md)
 * [Advanced usage](advanced.md)
-* [Best practices](best-practices.md) 
-* [CLI usage](cli.md)
-* [ORCO browser](browser.md)
+* [Best practices](best-practices.md)

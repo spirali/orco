@@ -44,3 +44,5 @@ Help for other commands may be obtained by:
 ```
 $ python3 adder_cli.py --help
 ```
+
+Continue to [Advanced usage](advanced.md)

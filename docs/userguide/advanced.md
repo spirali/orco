@@ -2,7 +2,6 @@
 
 In this guide we show additional functionality offered by ORCO.
 
-* [Specifying dependencies](#dependencies)
 * [Removing computed results](#removing-entries)
 * [Upgrading collections](#upgrading-collections)
 * [Generating configurations](#configuration-generators)
@@ -13,119 +12,6 @@ In this guide we show additional functionality offered by ORCO.
 * [How are configurations compared](#configuration-equivalence)
 * [Using references in configurations](#references-in-configurations)
 
-## Dependencies
-
-ORCO allows you to define dependencies between computations. When a computation `A` depends 
-on a computation `B`, `A` will be executed only after `B` has been completed and the result of
-`B` will be passed as an additional input to `A`.
-
-Besides the `build function`, a collection might have a `dependency function`, which receives
-a single configuration and returns the dependencies that must be completed before this
-configuration can be executed. The build function will then receive the result value of the specified
-dependencies in its `inputs` parameter.
-
-### Example: Tournament
-
-As a demonstration, we use an example of training and evaluating AI players
-(e.g. AlphaZero players) for a two player game. Training a player takes time, so
-we do not want recompute an already trained player. Playing a game with two players for
-evaluating their strength can also take considerable time, so we do not want to recompute games between
-the same pairs of players.
-
-We will use three collections:
-
-* **players** contains trained players, configurations are just names of players
-* **games** contains results of a game between two players, configurations have
-  the form `{"player1": <PLAYER1>, "player2": <PLAYER2>}`.
-* **tournaments** defines a tournament between a set of players. Configurations
-  have the form `{"players": [<PLAYER-1>, <PLAYER-2>, ...]}`.
-
-For the sake of simplicity, we replace actual Machine Learning functions by dummy calculations.
-
-```python
-from orco import Runtime, run_cli
-import random
-import itertools
-
-runtime = Runtime("mydb.db")
-
-
-# Build function for "players"
-def train_player(config, inputs):
-    # We will simulate trained players by a dictionary with a "strength" key
-    return {"strength": random.randint(0, 10)}
-
-
-# Dependency function for "games"
-# To play a game we need both of its players computed
-def game_deps(config):
-    return [players.ref(config["player1"]), players.ref(config["player2"])]
-
-
-# Build function for "games"
-# Because of "game_deps", in the "inputs" we find the two computed players
-def play_game(config, inputs):
-    # Simulation of playing a game between two players,
-    # They just throw k-sided dices, where k is trength of the player
-    # The difference of throw is the result
-
-    # 'inputs' is a list of two instances of Entry, hence we use the value getter
-    # to obtain the actual player
-    r1 = random.randint(0, inputs[0].value["strength"] * 2)
-    r2 = random.randint(0, inputs[1].value["strength"] * 2)
-    return r1 - r2
-
-
-# Dependency function for "tournaments"
-# For evaluating a tournament, we need to know the results of games between
-# each pair of its players.
-def tournament_deps(config):
-    return [
-        games.ref({
-            "player1": p1,
-            "player2": p2
-        }) for (p1, p2) in itertools.product(config["players"], config["players"])
-    ]
-
-
-# Build function for a tournament, return score for each player
-def play_tournament(config, inputs):
-    score = {}
-    for play in inputs:
-        player1 = play.config["player1"]
-        player2 = play.config["player2"]
-        score.setdefault(player1, 0)
-        score.setdefault(player2, 0)
-        score[player1] += play.value
-        score[player2] -= play.value
-    return score
-
-
-players = runtime.register_collection("players", build_fn=train_player)
-games = runtime.register_collection("games", build_fn=play_game, dep_fn=game_deps)
-tournaments = runtime.register_collection(
-    "tournaments", build_fn=play_tournament, dep_fn=tournament_deps)
-
-run_cli(runtime)
-```
-
-Let us assume that the script is saved as `tournament.py`. Then we can run:
-
-```
-$ python3 tournament.py compute tournaments '{"players": ["A", "B", "C"]}}'
-```
-
-This trains the players "A", "B", and "C" and executes games between each pair of players.
-
-If we now execute the following command:
-
-```
-$ python3 tournament.py compute tournaments '{"players": ["A", "B", "C", "D"]}}'
-```
-
-ORCO will only train player "D" and perform games where "D" is involved to evaluate the tournament,
-because the other games were already computed before and are loaded from the database.
-
 ## Removing entries
 
 You can remove already computed entries using `runtime.remove(<reference>)` or
@@ -133,15 +19,15 @@ You can remove already computed entries using `runtime.remove(<reference>)` or
 compute a value are stored in the database. Therefore, if you remove an entry from a collection,
 all its "downstream" dependencies will also be removed.
 
-Let's have the following example with three players who were used to generate
+Let's have the following example with four players who were used to generate
 games G1, G2, and G3 and a tournament T1 that used G1, G2 and G3 and T2 that
 used just G2:
 
 ```
 
-players:   A    B    C
-          / \  / \  / \
-          \--\/---\/--\\
+players:   A    B    C    D
+            \  / \  / \  /
+             \/   \/   \/
 games:       G1   G2   G3
                \  /___/ \
                 \//      \
@@ -165,7 +51,7 @@ results.
 
 For such situations, there is an `upgrade_collection` function which will allow you to change the
 configurations of already computed results in the database "in-place". Using this function, you can
-change already computed configurations without recomputing them again. 
+change already computed configurations without recomputing them again.
 
 ```python
 collection = runtime.register_collection(...)
@@ -232,7 +118,7 @@ evaluates to {
         "graphs": ["a", "b", "c"]
     }
 }
-""" 
+"""
 ```
 * `$+: list[iterable]`:
 Evaluates to a list with the concatenation of its input parameters (i.e. behaves like
@@ -271,7 +157,7 @@ build_config({
     "$product": [[1, 2], ["a", "b"]]
 })
 # evaluates to [(1, "a"), (1, "b"), (2, "a"), (2, "b")]
-``` 
+```
 If the input parameter is a dictionary, it will evaluate to a list of dictionaries with the same
 keys, with the values forming the cartesian product:
 ```python
@@ -460,3 +346,5 @@ def build_fn(config, inputs):
     # When this function is called, its inputs will look like:
     # {"abc": [<Entry from 'c'>, <Entry from 'd'>, <Entry from 'c'>], "xyz": <Entry from 'c'>}
 ```
+
+Continue to [Best practices](best-practices.md)
