@@ -1,4 +1,4 @@
-from orco.ref import make_key
+from orco.task import make_key
 import pytest
 
 

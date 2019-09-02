@@ -7,6 +7,6 @@ def build_fn(config, inputs):
     return config["a"] + config["b"]
 
 
-add = runtime.register_collection("add", build_fn=build_fn)
+add = runtime.register_builder("add", build_fn=build_fn)
 
 run_cli(runtime)

@@ -1,5 +1,5 @@
 from datetime import datetime
-from .task import Task
+from .job import Job
 
 
 class Executor:
@@ -18,7 +18,7 @@ class Executor:
     def get_stats(self):
         raise NotImplementedError
 
-    def run(self, tasks: [Task]):
+    def run(self, jobs: [Job]):
         raise NotImplementedError
 
     def start(self):

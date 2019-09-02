@@ -22,33 +22,33 @@ executor3 = LocalExecutor(heartbeat_interval=1)
 rt.register_executor(executor3)
 executor3.stop()
 
-c_sleepers = rt.register_collection("sleepers", lambda c, d: time.sleep(c))
-c_bedrooms = rt.register_collection("bedrooms", lambda c, d: None,
-                                    lambda c: [c_sleepers.ref(x) for x in c["sleepers"]])
+c_sleepers = rt.register_builder("sleepers", lambda c, d: time.sleep(c))
+c_bedrooms = rt.register_builder("bedrooms", lambda c, d: None,
+                                    lambda c: [c_sleepers.task(x) for x in c["sleepers"]])
 
 
 def failer(config, deps):
     raise Exception("Here!")
 
 
-c_failers = rt.register_collection("failers", failer)
+c_failers = rt.register_builder("failers", failer)
 try:
-    rt.compute(c_failers.ref({"type": "fail1"}))
+    rt.compute(c_failers.task({"type": "fail1"}))
 except Exception as e:
     print(e)
 print("Failer failed (and it is ok")
 
-rt.compute(c_bedrooms.ref({"sleepers": [0.1]}))
-t = threading.Thread(target=(lambda: rt.compute(c_bedrooms.ref({"sleepers": list(range(10))}))))
+rt.compute(c_bedrooms.task({"sleepers": [0.1]}))
+t = threading.Thread(target=(lambda: rt.compute(c_bedrooms.task({"sleepers": list(range(10))}))))
 t.start()
 
 time.sleep(0.5)  # To solve a problem with ProcessPool, fix waits for Python3.7
 
-c = rt.register_collection("hello")
-rt.insert(c.ref("e1"), "ABC")
-rt.insert(c.ref("e2"), "A" * (7 * 1024 * 1024 + 200000))
+c = rt.register_builder("hello")
+rt.insert(c.task("e1"), "ABC")
+rt.insert(c.task("e2"), "A" * (7 * 1024 * 1024 + 200000))
 
-c = rt.register_collection("estee")
+c = rt.register_builder("estee")
 graphs = ["crossv", "fastcrossv", "gridcat"]
 models = ["simple", "maxmin"]
 scheduler = [
@@ -61,8 +61,8 @@ scheduler = [
     }
 ]
 for g, m, s in itertools.product(graphs, models, scheduler):
-    rt.insert(c.ref({"graph": g, "model": m, "scheduler": s}), random.randint(1, 30000))
+    rt.insert(c.task({"graph": g, "model": m, "scheduler": s}), random.randint(1, 30000))
 
-c = rt.register_collection("collection with space in name")
+c = rt.register_builder("builder with space in name")
 
 rt.serve()

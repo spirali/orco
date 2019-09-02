@@ -10,22 +10,22 @@ cors = CORS(app)
 api = Api(app, prefix="/rest")
 
 
-class Collections(Resource):
+class Builders(Resource):
 
     def get(self):
-        return current_app.runtime._collection_summaries()
+        return current_app.runtime._builder_summaries()
 
 
-api.add_resource(Collections, '/collections')
+api.add_resource(Builders, '/builders')
 
 
 class Entries(Resource):
 
-    def get(self, collection_name):
-        return current_app.runtime._entry_summaries(collection_name)
+    def get(self, builder_name):
+        return current_app.runtime._entry_summaries(builder_name)
 
 
-api.add_resource(Entries, '/entries/<string:collection_name>')
+api.add_resource(Entries, '/entries/<string:builder_name>')
 
 
 class Executors(Resource):

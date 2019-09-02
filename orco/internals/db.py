@@ -19,10 +19,10 @@ class DB:
     LIVE_EXECUTOR_QUERY = "((STRFTIME('%s', heartbeat) + heartbeat_interval * 2) - STRFTIME('%s', 'now') >= 0)"
     RECURSIVE_CONSUMERS = """
             WITH RECURSIVE
-            selected(collection, key) AS (
+            selected(builder, key) AS (
                 VALUES(?, ?)
                 UNION
-                SELECT collection_t,  cast(key_t as TEXT) FROM selected, deps WHERE selected.collection == deps.collection_s AND selected.key == deps.key_s
+                SELECT builder_t,  cast(key_t as TEXT) FROM selected, deps WHERE selected.builder == deps.builder_s AND selected.key == deps.key_s
             )"""
 
     def __init__(self, path, threading=True):
@@ -57,7 +57,7 @@ class DB:
             with self.conn:
                 cursor = self.conn.cursor()
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS collections (
+                    CREATE TABLE IF NOT EXISTS builders (
                         name TEXT NOT NULL PRIMARY KEY
                     );
                 """)
@@ -76,7 +76,7 @@ class DB:
 
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS entries (
-                        collection STRING NOT NULL,
+                        builder STRING NOT NULL,
                         key TEXT NOT NULL,
                         executor INTEGER,
                         value BLOB,
@@ -85,12 +85,12 @@ class DB:
                         created TEXT,
                         comp_time FLOAT,
 
-                        PRIMARY KEY (collection, key)
-                        CONSTRAINT collection_ref
-                            FOREIGN KEY (collection)
-                            REFERENCES collections(name)
+                        PRIMARY KEY (builder, key)
+                        CONSTRAINT builder_task
+                            FOREIGN KEY (builder)
+                            REFERENCES builders(name)
                             ON DELETE CASCADE
-                        CONSTRAINT executor_ref
+                        CONSTRAINT executor_task
                             FOREIGN KEY (executor)
                             REFERENCES executors(id)
                             ON DELETE CASCADE
@@ -99,21 +99,21 @@ class DB:
 
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS deps (
-                        collection_s STRING NOT NULL,
+                        builder_s STRING NOT NULL,
                         key_s STRING NOT NULL,
-                        collection_t STRING NOT NULL,
+                        builder_t STRING NOT NULL,
                         key_t STRING NOT NULL,
 
-                        UNIQUE(collection_s, key_s, collection_t, key_t),
+                        UNIQUE(builder_s, key_s, builder_t, key_t),
 
-                        CONSTRAINT entry_s_ref
-                            FOREIGN KEY (collection_s, key_s)
-                            REFERENCES entries(collection, key)
+                        CONSTRAINT entry_s_task
+                            FOREIGN KEY (builder_s, key_s)
+                            REFERENCES entries(builder, key)
                             ON DELETE CASCADE
                             DEFERRABLE INITIALLY DEFERRED,
-                        CONSTRAINT entry_t_ref
-                            FOREIGN KEY (collection_t, key_t)
-                            REFERENCES entries(collection, key)
+                        CONSTRAINT entry_t_task
+                            FOREIGN KEY (builder_t, key_t)
+                            REFERENCES entries(builder, key)
                             ON DELETE CASCADE
                             DEFERRABLE INITIALLY DEFERRED
                     );
@@ -125,7 +125,7 @@ class DB:
                         timestamp TEXT NOT NULL,
                         type TEXT NOT NULL,
                         executor INTEGER,
-                        collection TEXT,
+                        builder TEXT,
                         message TEXT,
                         config BLOB
                     );
@@ -149,19 +149,19 @@ class DB:
 
         self._run(_helper)
 
-    def _ensure_collection_query(self, cursor, name):
-        cursor.execute("INSERT OR IGNORE INTO collections VALUES (?)", [name])
+    def _ensure_builder_query(self, cursor, name):
+        cursor.execute("INSERT OR IGNORE INTO builders VALUES (?)", [name])
 
-    def ensure_collection(self, name):
+    def ensure_builder(self, name):
 
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                self._ensure_collection_query(c, name)
+                self._ensure_builder_query(c, name)
 
         self._run(_helper)
 
-    def clean_collection(self, name):
+    def clean_builder(self, name):
 
         def _helper():
             with self.conn:
@@ -169,20 +169,20 @@ class DB:
                 c.execute(
                     """
 WITH RECURSIVE
-    selected(collection, key) AS (
-        SELECT collection, key
+    selected(builder, key) AS (
+        SELECT builder, key
         FROM entries
-        WHERE collection = (?)
+        WHERE builder = (?)
         UNION
-        SELECT collection_t,  cast(key_t as TEXT)
+        SELECT builder_t,  cast(key_t as TEXT)
         FROM selected
-        JOIN deps ON selected.collection == deps.collection_s AND selected.key == deps.key_s
+        JOIN deps ON selected.builder == deps.builder_s AND selected.key == deps.key_s
     )
 DELETE FROM entries
 WHERE rowid IN
     (SELECT entries.rowid
     FROM selected
-    LEFT JOIN entries ON entries.collection == selected.collection AND entries.key == selected.key)
+    LEFT JOIN entries ON entries.builder == selected.builder AND entries.key == selected.key)
     """, [name])
 
         self._run(_helper)
@@ -190,7 +190,7 @@ WHERE rowid IN
     def create_entries(self, raw_entries):
 
         def _helper():
-            data = [(e.collection_name, e.key, e.value, e.config, e.value_repr)
+            data = [(e.builder_name, e.key, e.value, e.config, e.value_repr)
                     for e in raw_entries]
             with self.conn:
                 c = self.conn.cursor()
@@ -209,14 +209,14 @@ WHERE rowid IN
             reports_data = [self._unfold_report(report) for report in reports]
 
         def _helper():
-            data = [(e.value, e.value_repr, e.comp_time, e.collection_name, e.key, executor_id)
+            data = [(e.value, e.value_repr, e.comp_time, e.builder_name, e.key, executor_id)
                     for e in raw_entries]
             changes = 0
             with self.conn:
                 c = self.conn.cursor()
                 for d in data:
                     c.execute(
-                        "UPDATE entries SET value = ?, value_repr = ?, created = DATETIME('now'), comp_time = ? WHERE collection = ? AND key = ? AND executor = ? AND value is null",
+                        "UPDATE entries SET value = ?, value_repr = ?, created = DATETIME('now'), comp_time = ? WHERE builder = ? AND key = ? AND executor = ? AND value is null",
                         d)
                     changes += self.conn.changes()
                 if stats_data:
@@ -230,40 +230,40 @@ WHERE rowid IN
 
         if self._run(_helper) != len(raw_entries):
             raise Exception("Setting value to unannouced config (all configs: {})",
-                            ["{}/{}".format(c.collection_name, c.key) for c in raw_entries])
+                            ["{}/{}".format(c.builder_name, c.key) for c in raw_entries])
 
-    def get_recursive_consumers(self, collection_name, key):
-        #WHERE EXISTS(SELECT null FROM selected AS s WHERE deps.collection_s == selected.collection AND deps.key_s == selected.key
+    def get_recursive_consumers(self, builder_name, key):
+        #WHERE EXISTS(SELECT null FROM selected AS s WHERE deps.builder_s == selected.builder AND deps.key_s == selected.key
         query = """
             {}
-            SELECT collection, key FROM selected
+            SELECT builder, key FROM selected
         """.format(self.RECURSIVE_CONSUMERS)
 
         def _helper():
             c = self.conn.cursor()
-            rs = c.execute(query, [collection_name, key])
+            rs = c.execute(query, [builder_name, key])
             return [(r[0], r[1]) for r in rs]
 
         return self._run(_helper)
 
-    def has_entry_by_key(self, collection_name, key):
+    def has_entry_by_key(self, builder_name, key):
 
         def _helper():
             c = self.conn.cursor()
             c.execute(
-                "SELECT COUNT(*) FROM entries WHERE collection = ? AND key = ? AND value is not null",
-                [collection_name, key])
+                "SELECT COUNT(*) FROM entries WHERE builder = ? AND key = ? AND value is not null",
+                [builder_name, key])
             return bool(c.fetchone()[0])
 
         return self._run(_helper)
 
-    def get_entry_state(self, collection_name, key):
+    def get_entry_state(self, builder_name, key):
 
         def _helper():
             c = self.conn.cursor()
             c.execute(
-                "SELECT value is not null FROM entries WHERE collection = ? AND key = ? AND (value is not null OR executor is null OR executor in (SELECT id FROM executors WHERE {}))"
-                .format(self.LIVE_EXECUTOR_QUERY), [collection_name, key])
+                "SELECT value is not null FROM entries WHERE builder = ? AND key = ? AND (value is not null OR executor is null OR executor in (SELECT id FROM executors WHERE {}))"
+                .format(self.LIVE_EXECUTOR_QUERY), [builder_name, key])
             v = c.fetchone()
             if v is None:
                 return None
@@ -274,7 +274,7 @@ WHERE rowid IN
 
         return self._run(_helper)
 
-    def get_entry_no_config(self, collection_name, key, include_announced=False):
+    def get_entry_no_config(self, builder_name, key, include_announced=False):
 
         def _helper():
             c = self.conn.cursor()
@@ -283,17 +283,17 @@ WHERE rowid IN
                     """
                     SELECT value, created, comp_time
                     FROM entries
-                    WHERE collection = ? AND key = ? AND
+                    WHERE builder = ? AND key = ? AND
                         (value is not null OR executor is null OR executor in
                         (SELECT id FROM executors WHERE {}))""".format(self.LIVE_EXECUTOR_QUERY),
-                    [collection_name, key])
+                    [builder_name, key])
             else:
                 c.execute(
                     """
                     SELECT value, created, comp_time
                     FROM entries
-                    WHERE collection = ? AND key = ? AND value is not null""",
-                    [collection_name, key])
+                    WHERE builder = ? AND key = ? AND value is not null""",
+                    [builder_name, key])
             return c.fetchone()
 
         result = self._run(_helper)
@@ -303,7 +303,7 @@ WHERE rowid IN
                      pickle.loads(result[0]) if result[0] is not None else None, result[1],
                      result[2])
 
-    def get_entry(self, collection_name, key):
+    def get_entry(self, builder_name, key):
 
         def _helper():
             c = self.conn.cursor()
@@ -311,7 +311,7 @@ WHERE rowid IN
                 """
                 SELECT config, value, created, comp_time
                 FROM entries
-                WHERE collection = ? AND key = ? AND value is not null""", [collection_name, key])
+                WHERE builder = ? AND key = ? AND value is not null""", [builder_name, key])
             return c.fetchone()
 
         result = self._run(_helper)
@@ -322,7 +322,7 @@ WHERE rowid IN
             pickle.loads(config),
             pickle.loads(value) if value is not None else None, created, comp_time)
 
-    def get_config(self, collection_name, key):
+    def get_config(self, builder_name, key):
 
         def _helper():
             c = self.conn.cursor()
@@ -330,7 +330,7 @@ WHERE rowid IN
                 """
                 SELECT config
                 FROM entries
-                WHERE collection = ? AND key = ?""", [collection_name, key])
+                WHERE builder = ? AND key = ?""", [builder_name, key])
             return c.fetchone()
 
         result = self._run(_helper)
@@ -339,8 +339,8 @@ WHERE rowid IN
         config = result[0]
         return pickle.loads(config)
 
-    def remove_entries_by_key(self, ref_keys):
-        data = [(r.collection_name, r.key) for r in ref_keys]
+    def remove_entries_by_key(self, task_keys):
+        data = [(r.builder_name, r.key) for r in task_keys]
 
         def _helper():
             with self.conn:
@@ -350,53 +350,53 @@ WHERE rowid IN
                 WHERE rowid IN
                     (SELECT entries.rowid
                      FROM selected LEFT JOIN entries ON
-                     entries.collection == selected.collection AND entries.key == selected.key)
+                     entries.builder == selected.builder AND entries.key == selected.key)
                 """.format(self.RECURSIVE_CONSUMERS), data)
 
         self._run(_helper)
 
-    def invalidate_entries_by_key(self, ref_keys):
-        data = [(r.collection_name, r.key) for r in ref_keys]
+    def invalidate_entries_by_key(self, task_keys):
+        data = [(r.builder_name, r.key) for r in task_keys]
 
         def _helper():
             with self.conn:
                 self.conn.cursor().executemany(
                     """
 WITH RECURSIVE
-children(collection, key) AS (
+children(builder, key) AS (
     WITH RECURSIVE
-    parents(collection, key) AS (
+    parents(builder, key) AS (
         VALUES(?, ?)
         UNION
-        SELECT collection_s,  cast(key_s as TEXT) FROM parents, deps WHERE parents.collection == deps.collection_t AND parents.key == deps.key_t
+        SELECT builder_s,  cast(key_s as TEXT) FROM parents, deps WHERE parents.builder == deps.builder_t AND parents.key == deps.key_t
     )
     SELECT *
     FROM parents
     UNION
-    SELECT collection_t,  cast(key_t as TEXT) FROM children, deps WHERE children.collection == deps.collection_s AND children.key == deps.key_s
+    SELECT builder_t,  cast(key_t as TEXT) FROM children, deps WHERE children.builder == deps.builder_s AND children.key == deps.key_s
 )
 DELETE FROM entries
     WHERE rowid IN
         (SELECT entries.rowid
          FROM children LEFT JOIN entries ON
-         entries.collection == children.collection AND entries.key == children.key)
+         entries.builder == children.builder AND entries.key == children.key)
                 """.format(self.RECURSIVE_CONSUMERS), data)
 
         self._run(_helper)
 
     """
-    def remove_entries(self, collection_key_pairs):
+    def remove_entries(self, builder_key_pairs):
         def _helper():
-            self.conn.executemany("DELETE FROM entries WHERE collection = ? AND key = ?", collection_key_pairs)
+            self.conn.executemany("DELETE FROM entries WHERE builder = ? AND key = ?", builder_key_pairs)
         self.executor.submit(_helper).result()
     """
 
-    def collection_summaries(self):
+    def builder_summaries(self):
 
         def _helper():
             c = self.conn.cursor()
             r = c.execute(
-                "SELECT collection, COUNT(key), TOTAL(length(value)), TOTAL(length(config)) FROM entries GROUP BY collection ORDER BY collection"
+                "SELECT builder, COUNT(key), TOTAL(length(value)), TOTAL(length(config)) FROM entries GROUP BY builder ORDER BY builder"
             )
             result = []
             found = set()
@@ -404,7 +404,7 @@ DELETE FROM entries
                 found.add(name)
                 result.append({"name": name, "count": count, "size": size_value + size_config})
 
-            c.execute("SELECT name FROM collections")
+            c.execute("SELECT name FROM builders")
             for x in r.fetchall():
                 name = x[0]
                 if name in found:
@@ -422,12 +422,12 @@ DELETE FROM entries
             .format(self.DEAD_EXECUTOR_QUERY))
 
     def _unfold_report(self, report):
-        return (report.report_type, report.executor_id, report.collection_name, report.message,
+        return (report.report_type, report.executor_id, report.builder_name, report.message,
                 pickle.dumps(report.config) if report.config is not None else None)
 
     def _insert_report(self, cursor, unfolded_report):
         cursor.execute(
-            "INSERT INTO reports (timestamp, type, executor, collection, message, config)"
+            "INSERT INTO reports (timestamp, type, executor, builder, message, config)"
             "VALUES (DATETIME('now'), ?, ?, ?, ?, ?)", unfolded_report)
 
     def insert_report(self, report):
@@ -445,7 +445,7 @@ DELETE FROM entries
         def _helper():
             c = self.conn.cursor()
             c.execute(
-                "SELECT timestamp, type, executor, collection, message, config "
+                "SELECT timestamp, type, executor, builder, message, config "
                 "FROM reports ORDER BY id DESC LIMIT ?", (count, ))
             return list(c.fetchall())
 
@@ -454,27 +454,27 @@ DELETE FROM entries
                 report_type,
                 executor_id,
                 message,
-                collection_name=collection_name,
+                builder_name=builder_name,
                 config=pickle.loads(config) if config else None,
-                timestamp=timestamp) for timestamp, report_type, executor_id, collection_name,
+                timestamp=timestamp) for timestamp, report_type, executor_id, builder_name,
             message, config in self._run(_helper)
         ]
 
-    def announce_entries(self, executor_id, refs, deps, report=None):
+    def announce_entries(self, executor_id, tasks, deps, report=None):
 
         def _helper():
             if report:
                 report_data = self._unfold_report(report)
-            entry_data = [(r.collection_name, r.key, pickle.dumps(r.config), executor_id)
-                          for r in refs]
-            deps_data = [(r1.collection_name, r1.key, r2.collection_name, r2.key)
+            entry_data = [(r.builder_name, r.key, pickle.dumps(r.config), executor_id)
+                          for r in tasks]
+            deps_data = [(r1.builder_name, r1.key, r2.builder_name, r2.key)
                          for r1, r2 in deps]
             try:
                 with self.conn:
                     c = self.conn.cursor()
                     self._cleanup_lost_entries(c)
                     c.executemany(
-                        "INSERT INTO entries(collection, key, config, executor) VALUES (?, ?, ?, ?)",
+                        "INSERT INTO entries(builder, key, config, executor) VALUES (?, ?, ?, ?)",
                         entry_data)
                     c.executemany("INSERT INTO deps VALUES (?, ?, ?, ?)", deps_data)
                     if report:
@@ -487,26 +487,26 @@ DELETE FROM entries
         assert executor_id is not None
         return self._run(_helper)
 
-    def unannounce_entries(self, executor_id, ref_keys):
+    def unannounce_entries(self, executor_id, task_keys):
 
         def _helper():
-            data = [(r.collection_name, r.key, executor_id) for r in ref_keys]
+            data = [(r.builder_name, r.key, executor_id) for r in task_keys]
             with self.conn:
                 c = self.conn.cursor()
                 self._cleanup_lost_entries(c)
                 c.executemany(
-                    "DELETE FROM entries WHERE collection = ? AND key = ? AND executor = ? AND value is null",
+                    "DELETE FROM entries WHERE builder = ? AND key = ? AND executor = ? AND value is null",
                     data)
 
         return self._run(_helper)
 
-    def entry_summaries(self, collection_name):
+    def entry_summaries(self, builder_name):
 
         def _helper():
             c = self.conn.cursor()
             r = c.execute(
-                "SELECT key, config, length(value), value_repr, created, comp_time FROM entries WHERE collection = ?",
-                [collection_name])
+                "SELECT key, config, length(value), value_repr, created, comp_time FROM entries WHERE builder = ?",
+                [builder_name])
             return [{
                 "key": key,
                 "config": pickle.loads(config),
@@ -564,19 +564,19 @@ DELETE FROM entries
 
         return self._run(_helper)
 
-    def get_run_stats(self, collection_name):
+    def get_run_stats(self, builder_name):
 
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
                 c.execute(
-                    """SELECT AVG(comp_time), COUNT(comp_time) FROM entries WHERE collection = ? AND comp_time is not null""",
-                    [collection_name])
+                    """SELECT AVG(comp_time), COUNT(comp_time) FROM entries WHERE builder = ? AND comp_time is not null""",
+                    [builder_name])
                 avg, count = c.fetchone()
                 if avg and count > 2:
                     c.execute(
-                        """SELECT SUM((comp_time - ?2) * (comp_time - ?2)) FROM entries WHERE collection = ?1 AND comp_time is not null""",
-                        [collection_name, avg])
+                        """SELECT SUM((comp_time - ?2) * (comp_time - ?2)) FROM entries WHERE builder = ?1 AND comp_time is not null""",
+                        [builder_name, avg])
                     stdev = math.sqrt(c.fetchone()[0] / (count - 1))
                 elif avg:
                     stdev = 0
@@ -626,13 +626,13 @@ DELETE FROM entries
 
         self._run(_helper)
 
-    def get_all_entries(self, collection_name):
+    def get_all_entries(self, builder_name):
 
         def _helper():
             c = self.conn.cursor()
             r = c.execute(
-                "SELECT config, value, comp_time, created FROM entries WHERE collection = ?",
-                [collection_name])
+                "SELECT config, value, comp_time, created FROM entries WHERE builder = ?",
+                [builder_name])
             return list(r.fetchall())
 
         return [
@@ -640,30 +640,30 @@ DELETE FROM entries
             for (config, value, comp_time, created) in self._run(_helper)
         ]
 
-    def get_all_configs(self, collection_name):
+    def get_all_configs(self, builder_name):
 
         def _helper():
             c = self.conn.cursor()
-            r = c.execute("SELECT config FROM entries WHERE collection = ? AND value is not null",
-                          [collection_name])
+            r = c.execute("SELECT config FROM entries WHERE builder = ? AND value is not null",
+                          [builder_name])
             return list(r.fetchall())
 
         return [pickle.loads(row[0]) for row in self._run(_helper)]
 
-    def upgrade_collection(self, collection_name, data):
-        # Data has to be [(collection_name, old_key, new_key, config)]
-        # UPDATE deps SET key_t = ?3 WHERE collection_t = ?1 AND key_t = ?2;
+    def upgrade_builder(self, builder_name, data):
+        # Data has to be [(builder_name, old_key, new_key, config)]
+        # UPDATE deps SET key_t = ?3 WHERE builder_t = ?1 AND key_t = ?2;
         shorter_data = [d[:3] for d in data]
 
         def _helper():
             with self.conn:
                 c = self.conn.cursor()
-                c.executemany("UPDATE deps SET key_s = ?3 WHERE collection_s = ?1 AND key_s = ?2;",
+                c.executemany("UPDATE deps SET key_s = ?3 WHERE builder_s = ?1 AND key_s = ?2;",
                               shorter_data)
-                c.executemany("UPDATE deps SET key_t = ?3 WHERE collection_t = ?1 AND key_t = ?2;",
+                c.executemany("UPDATE deps SET key_t = ?3 WHERE builder_t = ?1 AND key_t = ?2;",
                               shorter_data)
                 c.executemany(
-                    "UPDATE entries SET key = ?3, config = ?4 WHERE collection = ?1 AND key = ?2;",
+                    "UPDATE entries SET key = ?3, config = ?4 WHERE builder = ?1 AND key = ?2;",
                     data)
 
         self._run(_helper)

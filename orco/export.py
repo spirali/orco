@@ -1,10 +1,10 @@
 import pandas as pd
 
 
-def export_collection_to_pandas(runtime, collection_name):
+def export_builder_to_pandas(runtime, builder_name):
     """
-    Export collection into pandas  DataFrame
+    Export builder into pandas  DataFrame
     """
     data = [(entry.config, entry.value, entry.comp_time)
-            for entry in runtime.db.get_all_entries(collection_name)]
+            for entry in runtime.db.get_all_entries(builder_name)]
     return pd.DataFrame(data, columns=["config", "value", "comp_time"])

@@ -7,8 +7,8 @@ import {
   Switch
 } from "react-router-dom";
 import { Nav, Navbar, NavbarBrand, NavItem, NavLink } from "reactstrap";
-import Collections from "./Collections";
-import Collection from "./Collection";
+import Builders from "./Builders";
+import Builder from "./Builder";
 import Executors from "./Executors";
 import Reports from "./Reports";
 import { ErrorDisplay, ErrorContainer } from "./Error";
@@ -29,8 +29,8 @@ class App extends React.Component {
         <Navbar color="light">
           <Nav>
             <NavItem>
-              <NavLink tag={Link} to="/collections">
-                Collections
+              <NavLink tag={Link} to="/builders">
+                Builders
               </NavLink>
             </NavItem>
             <NavItem>
@@ -54,10 +54,10 @@ class App extends React.Component {
           <div className="container">
             <Switch>
               <Route path="/executors" component={(p: any) => <Executors err={err} {...p} />}/>
-              <Route path="/collection/:name" component={(p: any) => <Collection err={err} {...p} />}/>
-              <Route path="/collections" component={(p: any) => <Collections err={err} {...p} />} />
+              <Route path="/builder/:name" component={(p: any) => <Builder err={err} {...p} />}/>
+              <Route path="/builders" component={(p: any) => <Builders err={err} {...p} />} />
               <Route path="/reports" component={(p: any) => <Reports err={err} {...p} />} />
-              <Route path="/" component={(p: any) => <Collections err={err} {...p} />} />
+              <Route path="/" component={(p: any) => <Builders err={err} {...p} />} />
             </Switch>
             </div>
             </div>)

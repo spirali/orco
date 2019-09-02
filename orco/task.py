@@ -1,37 +1,37 @@
 from collections import Iterable, namedtuple
 
 
-class Ref:
+class Task:
     """
-    Reference to a collection.
+    Task is a pair Builder + a configuration
 
-    Public interface for creating references are methods "ref" and "refs" on CollectionRef
+    Public interface for creating tasks are methods "task" and "tasks" on Builder
 
-    >>> collection.ref(config)
+    >>> builder.task(config)
     """
 
-    __slots__ = ["collection_name", "config", "key"]
+    __slots__ = ["builder_name", "config", "key"]
 
-    def __init__(self, collection_name, config):
-        self.collection_name = collection_name
+    def __init__(self, builder_name, config):
+        self.builder_name = builder_name
         self.config = config
         self.key = make_key(config)
 
     def __eq__(self, other):
-        if not isinstance(other, Ref):
+        if not isinstance(other, Task):
             return False
         if self.key != other.key:
             return False
-        return self.collection_name == other.collection_name
+        return self.builder_name == other.builder_name
 
     def __hash__(self):
-        return hash((self.collection_name, self.key))
+        return hash((self.builder_name, self.key))
 
     def __repr__(self):
-        return "<{}/{}>".format(self.collection_name, repr(self.config))
+        return "<{}/{}>".format(self.builder_name, repr(self.config))
 
-    def ref_key(self):
-        return RefKey(self.collection_name, self.key)
+    def task_key(self):
+        return TaskKey(self.builder_name, self.key)
 
 
 def _make_key_helper(obj, stream):
@@ -66,4 +66,4 @@ def make_key(config):
     return "".join(stream)
 
 
-RefKey = namedtuple("RefKey", ("collection_name", "key"))
+TaskKey = namedtuple("TaskKey", ("builder_name", "key"))

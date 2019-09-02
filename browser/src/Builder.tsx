@@ -24,7 +24,7 @@ interface State {
     loading: boolean,
 }
 
-class Collection extends React.Component<Props, State> {
+class Builder extends React.Component<Props, State> {
 
     constructor(props : Props) {
         super(props);
@@ -158,7 +158,7 @@ class Collection extends React.Component<Props, State> {
     render() {
         return (
             <div>
-                <h1>Collection '{this.name}'</h1>
+                <h1>Builder '{this.name}'</h1>
                 <ReactTable
                     data={this.state.data}
                     loading={this.state.loading}
@@ -169,4 +169,4 @@ class Collection extends React.Component<Props, State> {
     }
 }
 
-export default Collection;
+export default Builder;

@@ -6,25 +6,25 @@ class Report:
     * report_type - "info" / "error" / "timeout"
     * executor_id - Id of executor where even comes from
     * message - string representation of message
-    * collection_name - name of collection where event occurs (or None if not related)
+    * builder_name - name of builder where event occurs (or None if not related)
     * config - config related to the event (or None if not related)
     * timestamp - datetime when event was created
     """
 
-    __slots__ = ("report_type", "executor_id", "message", "collection_name", "config", "timestamp")
+    __slots__ = ("report_type", "executor_id", "message", "builder_name", "config", "timestamp")
 
     def __init__(self,
                  report_type,
                  executor_id,
                  message,
-                 collection_name=None,
+                 builder_name=None,
                  config=None,
                  timestamp=None):
         self.executor_id = executor_id
         self.timestamp = timestamp
         self.report_type = report_type
         self.message = message
-        self.collection_name = collection_name
+        self.builder_name = builder_name
         self.config = config
 
     def to_dict(self):
@@ -33,7 +33,7 @@ class Report:
             "timestamp": self.timestamp,
             "type": self.report_type,
             "message": self.message,
-            "collection": self.collection_name,
+            "builder": self.builder_name,
             "config": self.config
         }
 

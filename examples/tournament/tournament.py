@@ -14,7 +14,7 @@ def train_player(config, inputs):
 # Dependency function for "games"
 # To play a game we need both of its players computed
 def game_deps(config):
-    return [players.ref(config["player1"]), players.ref(config["player2"])]
+    return [players.task(config["player1"]), players.task(config["player2"])]
 
 
 # Build function for "games"
@@ -36,7 +36,7 @@ def play_game(config, inputs):
 # each pair of its players.
 def tournament_deps(config):
     return [
-        games.ref({
+        games.task({
             "player1": p1,
             "player2": p2
         }) for (p1, p2) in itertools.product(config["players"], config["players"])

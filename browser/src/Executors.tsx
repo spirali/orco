@@ -53,8 +53,8 @@ class Executors extends React.Component<Props, State> {
 
     _cellStats = (cellInfo: CellInfo) => {
         let v = cellInfo.value;
-        if (v && v.n_tasks > 0) {
-            return (<Progress value={v.n_completed} max={v.n_tasks}>{v.n_completed}/{v.n_tasks}</Progress>);
+        if (v && v.n_jobs > 0) {
+            return (<Progress value={v.n_completed} max={v.n_jobs}>{v.n_completed}/{v.n_jobs}</Progress>);
         } else {
             return "";
         }
@@ -88,7 +88,7 @@ class Executors extends React.Component<Props, State> {
                 "accessor": "resources"
             },
             {
-                "Header": "Tasks",
+                "Header": "Jobs",
                 "accessor": "stats",
                 "Cell": this._cellStats
             },

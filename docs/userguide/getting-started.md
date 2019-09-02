@@ -24,53 +24,54 @@ the actual computations.
 runtime.register_executor(LocalExecutor())
 ```
 
-Now you can start defining your computations. Computations in ORCO are stored in **collection**s.
-A collection stores the results of a single type of computation (preparing a dataset,
-training a neural network, benchmarking or compiling a program, ...). To define a collection,
+Now you can start defining your computations. Computations in ORCO are stored in **builder**s.
+A builder stores the results of a single type of computation (preparing a dataset,
+training a neural network, benchmarking or compiling a program, ...). To define a builder,
 you have to specify three things:
 - Name
 - **Build function**, which produces a result from an input
 - **Dependency function**, which specifies other computations on which the build function depends (if any)
 
-Let's define a trivial collection that will store results of a computation which simply adds two numbers
-from its input. It does not depend on any other collections, so the dependency function does not have
+Let's define a trivial builder that will store results of a computation which simply adds two numbers
+from its input. It does not depend on any other builders, so the dependency function does not have
 to be specified.
 ```python
 # You can ignore `inputs` for now, it is explained in the Advanced usage guide
 def build_fn(config, inputs):
     return config["a"] + config["b"]
 
-# Create a collection with a build function
-add = runtime.register_collection("add", build_fn=build_fn)
+# Create a builder with a build function
+adder = runtime.register_builder("adder", build_fn=build_fn)
 ```
 
-You can think of a collection as a persistent cache on top of its build function. If you give an input
-to the collection, it will either return an already computed result stored in the database or invoke
+You can think of a builder as a persistent cache on top of its build function. If you give an input
+to the builder, it will either return an already computed result stored in the database or invoke
 the build function if the result was not computed for the specified input yet.
 
-Inputs for collections in ORCO are called **configuration**s. A configuration has to be a Python value
+Inputs for builders in ORCO are called **configuration**s. A configuration has to be a Python value
 that is easily serializable (i.e. JSON-like - numbers, strings, booleans, lists, tuples or dictionaries).
-The configuration should contain everything that is necessary to produce a result of the collection.
+The configuration should contain everything that is necessary to produce a result of the builder.
 
-In our simple case, let's represent the configurations for our `add` collection as
+In our simple case, let's represent the configurations for our `adder` builder as
 a dictionary containing two numbers "a" and "b". Here we create two different configurations:
 ```python
 config_1 = { "a": 1, "b": 2 }
 config_2 = { "a": 3, "b": 4 }
 ```
 
-We have now defined a database for storing computation results, an executor for running the computations,
-a collection that defines a simple `add` computation and two configurations for `add` that we want to compute.
+We have now defined a database for storing computation results, an executor for
+running the computations, a builder that defines a simple `adder` computation
+and two configurations for `adder` that we want to compute.
 
-To compute a result, we have to give a **reference** to the runtime. Reference is an object specifying
-what type of computation you want to perform (the collection) and with what input you want to compute it
-(the configuration). Giving a reference to the runtime will produce the desired result. The returned
+To compute a result, we have to give a **task** to the runtime. Task is an object specifying
+what type of computation you want to perform (the builder) and with what input you want to compute it
+(the configuration). Giving a task to the runtime will produce the desired result. The returned
 object will always be an instance of the `Entry` class, which contains both the input configuration
-(`config`) and mainly the result value (`field`).
+(`config`) and mainly the result value (`value`).
 
 ```python
 # Compute the result of `add` with the input `config_1`
-result = runtime.compute(add.ref(config_1))
+result = runtime.compute(adder.task(config_1))
 print(result.value)  # prints: 3
 ```
 
@@ -78,20 +79,20 @@ Because this was the first time we asked for this specific computation, the buil
 with the given configuration and its return value was stored into the database.
 When we run the same computation again, the result will be provided directly from the database.
 ```python
-result = runtime.compute(add.ref(config_1)) # build_fn is not called again here
+result = runtime.compute(adder.task(config_1))  # build_fn is not called again here
 ```
 
 So far we have computed only one configuration, usually you want to compute many of them
 ```python
-result = runtime.compute(add.refs([{"a": 1, "b": 2},
-                                   {"a": 2, "b": 3},
-                                   {"a": 4, "b": 5}]))
+result = runtime.compute(adder.tasks([{"a": 1, "b": 2},
+                                      {"a": 2, "b": 3},
+                                      {"a": 4, "b": 5}]))
 print([r.value for r in result])  # prints: [3, 5, 9]
 
-# add.refs([A, B, C]) is just shortcut for [add.ref(A), add.ref(B), add.ref(C)]
+# adds([A, B, C]) is just shortcut for [add(A), add(B), add(C)]
 ```
 
-This concludes basic ORCO usage. You define a collection with a build function and ask the collection
+This concludes basic ORCO usage. You define a builder with a build function and ask the builder
 to give you results for your desired configurations.
 
 The whole code example is listed here:
@@ -105,34 +106,33 @@ from orco import Runtime, LocalExecutor
 runtime = Runtime("./mydb")
 
 
-# Registering executor for running tasks
+# Registering executor for running jobs
 # By default, it will use all local cores
 runtime.register_executor(LocalExecutor())
 
 
-# Build function for our collection
+# Build function for our builder
 # The 'inputs' parameter is explained in the example below.
 def build_fn(config, inputs):
     return config["a"] + config["b"]
 
 
-# Create a collection and register build_fn
-add = runtime.register_collection("add", build_fn=build_fn)
+# Create a builder and register build_fn
+adder = runtime.register_builder("adder", build_fn=build_fn)
 
 
-# Invoke computations, collection.ref(...) creates a "reference into a collection",
-# basically a pair (collection, config)
-# When reference is provided, compute returns instance of Entry that
-# contains attribute 'value' with the result of build function
-result = runtime.compute(add.ref({"a": 1, "b": 2}))
+# When a task is provided, compute returns instance of Entry that
+# contains attribute 'value' with the result of the build function
+result = runtime.compute(adder.task({"a": 1, "b": 2}))
 print(result.value)  # prints: 3
 
 # Invoke more compututations at once
-result = runtime.compute([add.ref({"a": 1, "b": 2}),
-                          add.ref({"a": 2, "b": 3}),
-                          add.ref({"a": 4, "b": 5})])
+result = runtime.compute(adder.tasks([{"a": 1, "b": 2},
+                                      {"a": 2, "b": 3},
+                                      {"a": 4, "b": 5}]))
 print([r.value for r in result])  # prints: [3, 5, 9]
 ```
+
 
 ## Example 2: Dependencies
 
@@ -140,7 +140,7 @@ ORCO allows you to define dependencies between computations. When a computation
 `A` depends on a computation `B`, `A` will be executed only after `B` has been
 completed and the result of `B` will be passed as an additional input to `A`.
 
-Besides the `build function`, a collection might have a `dependency function`,
+Besides the `build function`, a builder might have a `dependency function`,
 which receives a single configuration and returns the dependencies that must be
 completed before this configuration can be executed. The build function will
 then receive the result value of the specified dependencies in its `inputs`
@@ -150,7 +150,7 @@ In the example, assume that we have an expensive simulation. For the sake of
 simplicity, we will parametrize it by one parameter. Configurations for it will
 look like `{"p": <PARAMETER-OF-SIMULATION>}`.
 
-We define collection of simulations as follows:
+We define builder of simulations as follows:
 
 ```python
 from orco import Runtime, LocalExecutor
@@ -165,7 +165,7 @@ def simulation_run(config, inputs):
     time.sleep(1)
     return result
 
-sims = runtime.register_collection("simulations", build_fn=simulation_run)
+sims = runtime.register_builder("simulations", build_fn=simulation_run)
 ```
 
 Now we define an "experiment" that includes a range of simulations that has to
@@ -174,21 +174,21 @@ will be as follows `{"from": <P-START>, "upto": <P-END>}` where `<P-START>`
 and `<P-END>` defines a range in which we want to run simulations.
 
 Because we want share simulations between experiments, experiment itself will
-not perform the computation, but establish an dependency on "sims" collection.
+not perform the computation, but establish an dependency on "sims" builder.
 
 ```python
 # Create dependencies for experiment
 def experiment_deps(config):
-    # Create refereces into "sims" with configurations:
+    # Create tasks of "simulations" with configurations:
     # {p: config["from"]}, {p: config["from"] + 1} .. {p: config["upto"]}
-    return sims.refs([{"p": p} for p in range(config["from"], config["upto"])])
+    return sims.tasks([{"p": p} for p in range(config["from"], config["upto"])])
 
 # Run experiment, sum resulting values as demonstration of a postprocessing
 # of simulation
 def experiment_run(config, inputs):
     return [s.value for s in inputs]
 
-experiments = runtime.register_collection(
+experiments = runtime.register_builder(
     "exeperiments", build_fn=experiment_run, dep_fn=experiment_deps)
 ```
 
@@ -196,13 +196,13 @@ Now if we run:
 
 ```python
 # Run experiment with with simulation between [0, 10).
-runtime.compute(experiments.ref({"from": 0, "upto": 10}))
+runtime.compute(experiments.tasks({"from": 0, "upto": 10}))
 ```
 
 The output will be as follows:
 
 ```
-Scheduled tasks  |     # | Expected comp. time (per entry)
+Scheduled jobs   |     # | Expected comp. time (per entry)
 -----------------+-------+--------------------------------
 exeperiments     |     1 | N/A
 simulations      |    10 | N/A
@@ -210,20 +210,20 @@ simulations      |    10 | N/A
 100%|██████████████████████████████████| 11/11 [00:03<00:00,  3.63it/s]
 ```
 
-We see, that system performs one computation from collection "experiments" and ten from "simulations".
+We see, that system performs one computation from builder "experiments" and ten from "simulations".
 Simulations are automatically scheduled as result of experiment dependency.
 Since our DB is empty, we have no prior information about previous run, the expected computation is not available (third column in the output).
 
 
 ```python
 # Run experiment with with simulation between [7, 15).
-runtime.compute(experiments.ref({"from": 7, "upto": 15}))
+runtime.compute(experiments.task({"from": 7, "upto": 15}))
 ```
 
 The output will be following:
 
 ```
-Scheduled tasks  |     # | Expected comp. time (per entry)
+Scheduled jobs   |     # | Expected comp. time (per entry)
 -----------------+-------+--------------------------------
 exeperiments     |     1 |      1ms +- 0ms
 simulations      |     5 |     1.0s +- 1ms
@@ -244,12 +244,11 @@ runtime.serve()
 ```
 
 `serve` starts a local HTTP server (by default on port 8550) that allows inspecting
-stored data in the database and observing tasks running in executors. It is completely safe to run computation(s) simultaneously with the server.
+stored data in the database and observing jobs running in executors. It is completely safe to run computation(s) simultaneously with the server.
 
-![Screenshot of ORCO browser](./imgs/browser-collection.png)
+![Screenshot of ORCO browser](./imgs/browser-builder.png)
 
 (The `serve` method is blocking. If you want to start the browser and run computations in the same script,
 you can call `serve(nonblocking=True)` before calling `compute` on the `Runtime`.)
 
 Continue to [CLI interface](cli.md)
-

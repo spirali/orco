@@ -16,21 +16,21 @@ Now when you want to run the computations again because of some external change,
 in your input configurations and the results will be computed from scratch. Later you can get the old results
 from the database by using an older value of the `version` key.
 
-In the case of collections with dependencies, you may need to propagate the version to all upstream
-collections.
+In the case of builders with dependencies, you may need to propagate the version to all upstream
+builders.
 
 ```python
 # Original version
 def make_deps(config):
-    return col1.ref(config["dep_parameters"])
+    return builder1.task(config["dep_parameters"])
 
 # Version propagating
 def make_deps(config):
-    return col1.ref({**config["dep_parameters"], "version": config["version"]})
+    return builder1.task({**config["dep_parameters"], "version": config["version"]})
 ```
 
 If you already have some results computed without a `version` key, you can
-[upgrade your collection](advanced.md#upgrading-collections) to add a `version` key with some default
+[upgrade your builder](advanced.md#upgrading-builders) to add a `version` key with some default
 value to the existing results.
 
 ## Computing multiple samples
@@ -58,10 +58,10 @@ def run_sampler(config, inputs):
     # In the configration we ignore the 'sample' key
     return doSomethingNondeterministic(config)
 
-samples = runtime.register_collection("samples", build_fn=run_sampler)
+samples = runtime.register_builder("samples", build_fn=run_sampler)
 
 config = {...}
-results = runtime.compute(samples.refs(
+results = runtime.compute(samples.tasks(
         [{**config, "sample": i}
          for i in range(20)])
 ```
@@ -71,7 +71,7 @@ Only the new samples will be computed (the first 20 ones are already stored in t
 
 ```python
 # only the 10 new samples will be computed
-results = runtime.compute(samples.refs(
+results = runtime.compute(samples.tasks(
         [{**config, "sample": i}
          for i in range(30)])
 ```

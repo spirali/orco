@@ -21,7 +21,7 @@ def _resolve_ref(state, key):
     value = state.computed.get(key)
     if value is None:
         if key in state.resolving:
-            raise Exception("Reference cycle detected: {}".format(key))
+            raise Exception("Task cycle detected: {}".format(key))
         state.resolving.add(key)
         value = _resolve(state, state.toplevel[key])
         state.resolving.remove(key)

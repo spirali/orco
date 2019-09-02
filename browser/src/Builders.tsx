@@ -9,18 +9,18 @@ interface Props {
     err: ErrorContainer
 }
 
-interface CollectionSummary {
+interface BuilderSummary {
     name: string,
     count: number,
     size: number,
 }
 
 interface State {
-    data: CollectionSummary[],
+    data: BuilderSummary[],
     loading: boolean,
 }
 
-class Collections extends React.Component<Props, State> {
+class Builders extends React.Component<Props, State> {
 
     constructor(props : Props) {
         super(props);
@@ -29,7 +29,7 @@ class Collections extends React.Component<Props, State> {
 
     componentDidMount() {
         if (this.props.err.isOk) {
-            fetchJsonFromServer("collections", null, "GET").then((data) => {
+            fetchJsonFromServer("builders", null, "GET").then((data) => {
                 this.setState({
                     data: data,
                     loading: false
@@ -41,17 +41,17 @@ class Collections extends React.Component<Props, State> {
         }
     }
 
-    _formatSize = (collection : CollectionSummary) => formatSize(collection.size)
-    _collectionCell = (cellInfo: CellInfo) => {
-        const row: CollectionSummary = cellInfo.row;
-        return (<Link to={"/collection/" + row.name}>{row.name}</Link>);
+    _formatSize = (builder : BuilderSummary) => formatSize(builder.size)
+    _builderCell = (cellInfo: CellInfo) => {
+        const row: BuilderSummary = cellInfo.row;
+        return (<Link to={"/builder/" + row.name}>{row.name}</Link>);
     }
 
     render() {
         const columns = [{
-            Header: "Collection name",
+            Header: "Builder name",
             accessor: "name",
-            Cell: this._collectionCell,
+            Cell: this._builderCell,
         },
         {
             Header: "Entries",
@@ -68,11 +68,11 @@ class Collections extends React.Component<Props, State> {
 
         return (
             <div>
-            <h1>Collections</h1>
+            <h1>Builders</h1>
             <ReactTable data={this.state.data} loading={this.state.loading} columns={columns}/>
             </div>
         );
     }
 }
 
-export default Collections;
+export default Builders;

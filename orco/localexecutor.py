@@ -11,27 +11,27 @@ import cloudpickle
 import tqdm
 import traceback
 
-from .internals.taskoptions import TaskOptions
-from .internals.reftools import resolve_ref_keys, ref_to_refkey, collect_ref_keys
+from .internals.joboptions import JobOptions
+from .internals.tasktools import resolve_task_keys, task_to_taskkey, collect_task_keys
 from .internals.db import DB
-from .internals.task import Task
+from .internals.job import Job
 from .internals.executor import Executor
 
-from .ref import RefKey
+from .task import TaskKey
 from .report import Report
 
 logger = logging.getLogger(__name__)
 
 
-class TaskFailException(Exception):
-    """Exception thrown when task in an executor failed"""
+class JobFailedException(Exception):
+    """Exception thrown when job in an executor failed"""
     pass
 
 
-class _TaskFailure:
+class _JobFailure:
 
-    def __init__(self, ref_key):
-        self.ref_key = ref_key
+    def __init__(self, task_key):
+        self.task_key = task_key
 
     def message(self):
         raise NotImplementedError()
@@ -40,28 +40,28 @@ class _TaskFailure:
         raise NotImplementedError()
 
 
-class _TaskError(_TaskFailure):
+class _JobError(_JobFailure):
 
-    def __init__(self, ref_key, exception_str, traceback):
-        super().__init__(ref_key)
+    def __init__(self, task_key, exception_str, traceback):
+        super().__init__(task_key)
         self.exception_str = exception_str
         self.traceback = traceback
 
     def message(self):
-        return "Task failed: {}\n{}".format(self.exception_str, self.traceback)
+        return "Job failed: {}\n{}".format(self.exception_str, self.traceback)
 
     def report_type(self):
         return "error"
 
 
-class _TaskTimeout(_TaskFailure):
+class _JobTimeout(_JobFailure):
 
-    def __init__(self, ref_key, timeout):
-        super().__init__(ref_key)
+    def __init__(self, task_key, timeout):
+        super().__init__(task_key)
         self.timeout = timeout
 
     def message(self):
-        return "Task timeouted after {} seconds".format(self.timeout)
+        return "Job timeouted after {} seconds".format(self.timeout)
 
     def report_type(self):
         return "timeout"
@@ -125,27 +125,27 @@ class LocalExecutor(Executor):
 
         self.pool = ProcessPoolExecutor(max_workers=self.n_processes)
 
-    def _init(self, tasks):
+    def _init(self, jobs):
         consumers = {}
         waiting_deps = {}
         ready = []
 
-        for task in tasks:
+        for job in jobs:
             count = 0
-            for inp in task.inputs:
-                if isinstance(inp, Task):
+            for inp in job.inputs:
+                if isinstance(inp, Job):
                     count += 1
                     c = consumers.get(inp)
                     if c is None:
                         c = []
                         consumers[inp] = c
-                    c.append(task)
+                    c.append(job)
             if count == 0:
-                ready.append(task)
-            waiting_deps[task] = count
+                ready.append(job)
+            waiting_deps[job] = count
         return consumers, waiting_deps, ready
 
-    def run(self, all_tasks, continue_on_error):
+    def run(self, all_jobs, continue_on_error):
 
         def process_unprocessed():
             logging.debug("Writing into db: %s", unprocessed)
@@ -153,43 +153,43 @@ class LocalExecutor(Executor):
             if pending_reports:
                 del pending_reports[:]
             for raw_entry in unprocessed:
-                ref_key = RefKey(raw_entry.collection_name, raw_entry.key)
-                task = all_tasks[ref_key]
-                #col_progressbars[ref_key[0]].update()
-                for c in consumers.get(task, ()):
+                task_key = TaskKey(raw_entry.builder_name, raw_entry.key)
+                job = all_jobs[task_key]
+                #col_progressbars[task_key[0]].update()
+                for c in consumers.get(job, ()):
                     waiting_deps[c] -= 1
                     w = waiting_deps[c]
                     if w <= 0:
                         assert w == 0
                         waiting.add(submit(c))
 
-        def submit(task):
-            ref = task.ref
-            pickled_fns = pickle_cache.get(ref.collection_name)
+        def submit(job):
+            task = job.task
+            pickled_fns = pickle_cache.get(task.builder_name)
             if pickled_fns is None:
-                collection = self.runtime._get_collection(task.ref)
-                pickled_fns = cloudpickle.dumps((collection.build_fn, collection.make_raw_entry))
-                pickle_cache[ref.collection_name] = pickled_fns
-            return pool.submit(_run_task, db.path, pickled_fns, task.ref.ref_key(), task.ref.config,
-                               ref_to_refkey(task.dep_value))
+                builder = self.runtime._get_builder(job.task)
+                pickled_fns = cloudpickle.dumps((builder.build_fn, builder.make_raw_entry))
+                pickle_cache[task.builder_name] = pickled_fns
+            return pool.submit(_run_job, db.path, pickled_fns, job.task.task_key(), job.task.config,
+                               task_to_taskkey(job.dep_value))
 
-        self.stats = {"n_tasks": len(all_tasks), "n_completed": 0}
+        self.stats = {"n_jobs": len(all_jobs), "n_completed": 0}
 
         pending_reports = []
-        all_tasks = {ref.ref_key(): task for (ref, task) in all_tasks.items()}
+        all_jobs = {task.task_key(): job for (task, job) in all_jobs.items()}
         pickle_cache = {}
         pool = self.pool
         db = self.runtime.db
         db.update_stats(self.id, self.stats)
-        consumers, waiting_deps, ready = self._init(all_tasks.values())
-        waiting = [submit(task) for task in ready]
+        consumers, waiting_deps, ready = self._init(all_jobs.values())
+        waiting = [submit(job) for job in ready]
         del ready
 
         #col_progressbars = {}
-        #for i, (col, count) in enumerate(tasks_per_collection.items()):
+        #for i, (col, count) in enumerate(jobs_per_builder.items()):
         #    col_progressbars[col] = tqdm.tqdm(desc=col, total=count, position=i)
 
-        progressbar = tqdm.tqdm(total=len(all_tasks))  #  , position=i+1)
+        progressbar = tqdm.tqdm(total=len(all_jobs))  #  , position=i+1)
         unprocessed = []
         last_write = time.time()
         errors = []
@@ -202,26 +202,26 @@ class LocalExecutor(Executor):
                     self.stats["n_completed"] += 1
                     progressbar.update()
                     result = f.result()
-                    if isinstance(result, _TaskFailure):
-                        ref_key = result.ref_key
-                        config = db.get_config(ref_key[0], ref_key[1])
+                    if isinstance(result, _JobFailure):
+                        task_key = result.task_key
+                        config = db.get_config(task_key[0], task_key[1])
                         message = result.message()
                         report = Report(
                             result.report_type(),
                             self.id,
                             message,
-                            collection_name=ref_key[0],
+                            builder_name=task_key[0],
                             config=config)
                         if continue_on_error:
-                            errors.append(ref_key)
+                            errors.append(task_key)
                             pending_reports.append(report)
                         else:
                             db.insert_report(report)
 
-                            raise TaskFailException("{} ({}/{})".format(
-                                message, result.ref_key[0], repr(result.ref_key[1])))
+                            raise JobFailedException("{} ({}/{})".format(
+                                message, result.task_key[0], repr(result.task_key[1])))
                         continue
-                    logger.debug("Task finished: %s/%s", result.collection_name, result.key)
+                    logger.debug("Job finished: %s/%s", result.builder_name, result.key)
                     unprocessed.append(result)
                 if unprocessed and (not waiting or time.time() - last_write > 1):
                     process_unprocessed()
@@ -241,7 +241,7 @@ class LocalExecutor(Executor):
 _per_process_db = None
 
 
-def _run_task(db_path, fns, ref_key, config, dep_value):
+def _run_job(db_path, fns, task_key, config, dep_value):
     global _per_process_db
     try:
         if _per_process_db is None:
@@ -252,24 +252,24 @@ def _run_task(db_path, fns, ref_key, config, dep_value):
 
         def run():
             start_time = time.time()
-            deps = collect_ref_keys(dep_value)
-            ref_map = {ref: _per_process_db.get_entry(ref.collection_name, ref.key) for ref in deps}
-            value = build_fn(config, resolve_ref_keys(dep_value, ref_map))
+            deps = collect_task_keys(dep_value)
+            task_map = {task: _per_process_db.get_entry(task.builder_name, task.key) for task in deps}
+            value = build_fn(config, resolve_task_keys(dep_value, task_map))
             end_time = time.time()
             result.append(
-                finalize_fn(ref_key.collection_name, ref_key.key, None, value,
+                finalize_fn(task_key.builder_name, task_key.key, None, value,
                             end_time - start_time))
 
-        options = TaskOptions.parse_from_config(config)
+        options = JobOptions.parse_from_config(config)
         if options.timeout:
             thread = threading.Thread(target=run)
             thread.daemon = True
             thread.start()
             thread.join(options.timeout)
             if thread.is_alive():
-                return _TaskTimeout(ref_key, options.timeout)
+                return _JobTimeout(task_key, options.timeout)
         else:
             run()
         return result[0]
     except Exception as exception:
-        return _TaskError(ref_key, str(exception), traceback.format_exc())
+        return _JobError(task_key, str(exception), traceback.format_exc())

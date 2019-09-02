@@ -13,7 +13,7 @@ interface Report {
     message: string,
     executor: number,
     config: any,
-    collection: string | null,
+    builder: string | null,
 }
 
 interface State {
@@ -42,9 +42,9 @@ class Reports extends React.Component<Props, State> {
         }
     }
 
-    /*_collectionCell = (cellInfo: CellInfo) => {
-        const row: CollectionSummary = cellInfo.row;
-        return (<Link to={"/collection/" + row.name}>{row.name}</Link>);
+    /*_builderCell = (cellInfo: CellInfo) => {
+        const row: BuilderSummary = cellInfo.row;
+        return (<Link to={"/builder/" + row.name}>{row.name}</Link>);
     }*/
 
     _cellType = (cellInfo : CellInfo) => {
@@ -74,7 +74,7 @@ class Reports extends React.Component<Props, State> {
             Header: "Timestamp",
             accessor: "timestamp",
             maxWidth: 200,
-            //Cell: this._collectionCell,
+            //Cell: this._builderCell,
         },
         {
             Header: "Type",
@@ -98,9 +98,9 @@ class Reports extends React.Component<Props, State> {
             maxWidth: 100
         },
         {
-            id: "Collection",
-            Header: "Collection",
-            accessor: "collection",
+            id: "Builder",
+            Header: "Builder",
+            accessor: "builder",
             maxWidth: 200
         },
         {

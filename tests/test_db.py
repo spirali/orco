@@ -5,7 +5,7 @@ import pytest
 from orco import LocalExecutor
 from orco.entry import Entry
 from orco.internals.rawentry import RawEntry
-from orco.ref import make_key
+from orco.task import make_key
 
 
 def test_db_announce(env):
@@ -16,22 +16,22 @@ def test_db_announce(env):
     e2 = LocalExecutor(heartbeat_interval=1)
     r.register_executor(e2)
 
-    c = r.register_collection("col1")
-    assert r.db.announce_entries(e1.id, [c.ref("test1"), c.ref("test2")], [])
-    assert not r.db.announce_entries(e2.id, [c.ref("test2"), c.ref("test3")], [])
-    assert not r.db.announce_entries(e1.id, [c.ref("test2"), c.ref("test3")], [])
-    assert r.db.announce_entries(e2.id, [c.ref("test3")], [])
+    c = r.register_builder("col1")
+    assert r.db.announce_entries(e1.id, [c.task("test1"), c.task("test2")], [])
+    assert not r.db.announce_entries(e2.id, [c.task("test2"), c.task("test3")], [])
+    assert not r.db.announce_entries(e1.id, [c.task("test2"), c.task("test3")], [])
+    assert r.db.announce_entries(e2.id, [c.task("test3")], [])
     assert r.db.get_entry_state(c.name, make_key("test1")) == "announced"
     time.sleep(3)
     assert r.db.get_entry_state(c.name, make_key("test1")) is None
-    assert not r.db.announce_entries(e2.id, [c.ref("test2"), c.ref("test3")], [])
-    assert r.db.announce_entries(e2.id, [c.ref("test2")], [])
-    assert not r.db.announce_entries(e2.id, [c.ref("test2")], [])
+    assert not r.db.announce_entries(e2.id, [c.task("test2"), c.task("test3")], [])
+    assert r.db.announce_entries(e2.id, [c.task("test2")], [])
+    assert not r.db.announce_entries(e2.id, [c.task("test2")], [])
 
 
 def make_raw_entry(runtime, c, cfg, value, comp_time=1):
-    collection = runtime._collections[c.name]
-    return collection.make_raw_entry(c.name, make_key(cfg), cfg, pickle.dumps("value1"), comp_time)
+    builder = runtime._builders[c.name]
+    return builder.make_raw_entry(c.name, make_key(cfg), cfg, pickle.dumps("value1"), comp_time)
 
 
 def test_db_set_value(env):
@@ -39,21 +39,21 @@ def test_db_set_value(env):
     e1 = LocalExecutor(heartbeat_interval=1)
     r.register_executor(e1)
 
-    c = r.register_collection("col1")
+    c = r.register_builder("col1")
     assert r.db.get_entry_state(c.name, make_key("cfg1")) is None
 
-    r.db.announce_entries(e1.id, [c.ref("cfg1")], [])
+    r.db.announce_entries(e1.id, [c.task("cfg1")], [])
     assert r.db.get_entry_state(c.name, make_key("cfg1")) == "announced"
 
-    assert r.get_entry(c.ref("cfg1")) is None
-    assert r.get_entry(c.ref("cfg1"), include_announced=True) is not None
+    assert r.get_entry(c.task("cfg1")) is None
+    assert r.get_entry(c.task("cfg1"), include_announced=True) is not None
 
     e = make_raw_entry(r, c, "cfg1", "value1")
     r.db.set_entry_values(e1.id, [e])
     assert r.db.get_entry_state(c.name, make_key("cfg1")) == "finished"
 
-    assert r.get_entry(c.ref("cfg1")) is not None
-    assert r.get_entry(c.ref("cfg1"), include_announced=True) is not None
+    assert r.get_entry(c.task("cfg1")) is not None
+    assert r.get_entry(c.task("cfg1"), include_announced=True) is not None
 
     with pytest.raises(Exception):
         r.db.set_entry_values(e1.id, [e])
@@ -61,7 +61,7 @@ def test_db_set_value(env):
     e2 = make_raw_entry(r, c, "cfg2", "value2")
     with pytest.raises(Exception):
         r.db.set_entry_values(e1.id, [e2])
-    r.db.announce_entries(e1.id, [c.ref("cfg2")], [])
+    r.db.announce_entries(e1.id, [c.task("cfg2")], [])
     r.db.set_entry_values(e1.id, [e2])
 
     with pytest.raises(Exception):
@@ -75,12 +75,12 @@ def test_db_run_stats(env):
     runtime = env.test_runtime()
     e1 = LocalExecutor(heartbeat_interval=1)
     runtime.register_executor(e1)
-    c = runtime.register_collection("col1")
-    _ = runtime.register_collection("col2")
+    c = runtime.register_builder("col1")
+    _ = runtime.register_builder("col2")
 
     assert runtime.db.announce_entries(
-        e1.id, [c.ref("a"), c.ref("b"), c.ref("c"),
-                c.ref("d"), c.ref("e")], [])
+        e1.id, [c.task("a"), c.task("b"), c.task("c"),
+                c.task("d"), c.task("e")], [])
     assert runtime.db.get_entry_state(c.name, make_key("a")) == "announced"
     runtime.db._dump()
     entry = make_raw_entry(runtime, c, "a", "value", comp_time=1)

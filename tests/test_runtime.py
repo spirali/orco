@@ -28,8 +28,8 @@ def test_reports(env):
     executor = LocalExecutor()
     runtime = env.test_runtime()
     runtime.register_executor(executor)
-    collection = runtime.register_collection("col1", adder)
-    entry = runtime.compute(collection.ref({"a": 10, "b": 30}))
+    builder = runtime.register_builder("col1", adder)
+    entry = runtime.compute(builder.task({"a": 10, "b": 30}))
 
     reports = runtime.get_reports()
     assert len(reports) == 1

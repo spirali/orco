@@ -1,6 +1,6 @@
 import pytest
 
-from orco.cfgbuild import build_config
+from orco.cfggen import build_config
 
 
 def test_config_simple():
@@ -20,7 +20,7 @@ def test_config_simple():
     assert config["d"] == {"key": {"orco": ["organized", "computing"]}}
 
 
-def test_config_ref():
+def test_config_task():
     config = build_config({
         "a": [{
             "$ref": "b"
@@ -33,7 +33,7 @@ def test_config_ref():
     assert config["a"] == ["hello", ["hello", "world"]]
 
 
-def test_config_ref_cycle():
+def test_config_task_cycle():
     with pytest.raises(Exception, match=".*cycle.*"):
         build_config({
             "a": [{

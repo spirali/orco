@@ -1,23 +1,23 @@
 from orco import Runtime, LocalExecutor
 
 
-def test_rest_collections():
+def test_rest_builders():
     rt = Runtime(":memory:")
     with rt.serve(testing=True).test_client() as client:
-        r = client.get("rest/collections")
+        r = client.get("rest/builders")
         assert r.get_json() == []
 
-        r = client.get("rest/collections")
+        r = client.get("rest/builders")
         assert r.get_json() == []
 
-        c = rt.register_collection("hello")
+        c = rt.register_builder("hello")
 
-        rt.insert(c.ref({"x": 1, "y": [1, 2, 3]}), "ABC")
-        rt.insert(c.ref("e2"), "A" * (1024 * 1024))
+        rt.insert(c.task({"x": 1, "y": [1, 2, 3]}), "ABC")
+        rt.insert(c.task("e2"), "A" * (1024 * 1024))
 
-        rt.register_collection("hello2")
+        rt.register_builder("hello2")
 
-        r = client.get("rest/collections")
+        r = client.get("rest/builders")
         rr = r.get_json()
         assert len(rr) == 2
 
@@ -51,10 +51,10 @@ def test_rest_executors(env):
 def test_rest_reports(env):
     rt = env.test_runtime()
     rt.register_executor(LocalExecutor())
-    col1 = rt.register_collection("col1", lambda c, d: c * 10)
-    rt.compute([col1.ref(20), col1.ref(30)])
+    col1 = rt.register_builder("col1", lambda c, d: c * 10)
+    rt.compute([col1.task(20), col1.task(30)])
     with rt.serve(testing=True).test_client() as client:
         r = client.get("rest/reports").get_json()
         assert len(r) == 1
         assert r[0]["type"] == "info"
-        assert r[0]["collection"] is None
+        assert r[0]["builder"] is None

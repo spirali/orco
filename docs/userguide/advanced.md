@@ -3,20 +3,20 @@
 In this guide we show additional functionality offered by ORCO.
 
 * [Removing computed results](#removing-entries)
-* [Upgrading collections](#upgrading-collections)
+* [Upgrading builders](#upgrading-builders)
 * [Generating configurations](#configuration-generators)
-* [Collection references](#collection-reference)
+* [Builder references](#builder-reference)
 * [Retrieving results without computation](#retrieving-entries-without-computation)
-* [Fixed collections](#fixed-collections)
+* [Fixed builders](#fixed-builders)
 * [Export to Pandas](#exporting-results)
 * [How are configurations compared](#configuration-equivalence)
-* [Using references in configurations](#references-in-configurations)
+* [Using tasks in configurations](#tasks-in-configurations)
 
 ## Removing entries
 
 You can remove already computed entries using `runtime.remove(<reference>)` or
 `runtime.remove_many(<list of refences>)`. ORCO maintains an invariant that all dependencies used to
-compute a value are stored in the database. Therefore, if you remove an entry from a collection,
+compute a value are stored in the database. Therefore, if you remove an entry from a builder,
 all its "downstream" dependencies will also be removed.
 
 Let's have the following example with four players who were used to generate
@@ -38,30 +38,30 @@ If we remove G3, then also T1 and T2 will be removed because they depended on it
 If we remove player B then G1, G2 and T1 will be removed. If we remove T1 then only T1 will removed because
 nothing depends on it.
 
-All entries of a collection can be removed using `runtime.clear(<collection-refence>)`.
-The invariant is also maintained in this case, so any entries that depended on this collection will
+All entries of a builder can be removed using `runtime.clear(<builder-refence>)`.
+The invariant is also maintained in this case, so any entries that depended on this builder will
 be removed too.
 
-## Upgrading collections
+## Upgrading builders
 
 Sometimes you have already computed some results, only to find out that you need to introduce a new
 key to your configurations. By default, this would invalidate the old results, because ORCO would
 observe a new configuration and it wouldn't know that it should be equivalent with the already computed
 results.
 
-For such situations, there is an `upgrade_collection` function which will allow you to change the
+For such situations, there is an `upgrade_builder` function which will allow you to change the
 configurations of already computed results in the database "in-place". Using this function, you can
 change already computed configurations without recomputing them again.
 
 ```python
-collection = runtime.register_collection(...)
+builder = runtime.register_builder(...)
 
-# Introduce a "version" key to all computed configurations of a collection
+# Introduce a "version" key to all computed configurations of a builder
 def uprage_config(config):
     config.setdefault("version", 1)
     return config
 
-runtime.upgrade_collection(collection, upgrade_config)
+runtime.upgrade_builder(builder, upgrade_config)
 ```
 
 Note that the upgrade is atomic, i.e. if an exception happens during the upgrade, the changes made so far
@@ -77,7 +77,7 @@ The builder is used via the `build_config` function. It expects a dictionary con
 JSON-like objects (numbers, strings, bools, lists, tuples and dictionaries are allowed). By default,
 it will simply return the input dictionary:
 ```python
-from orco.cfgbuild import build_config
+from orco.cfggen import build_config
 
 configurations = build_config({
     "batch_size": 128,
@@ -230,23 +230,23 @@ evaluates to [
 There is also a `build_config_from_file` function, which parses configurations from a path to a JSON file
 containing the configuration description.
 
-## Collection reference
+## Builder reference
 
-Sometimes you do not have access to the `collection` object, but you still want to create
-a `reference` to it (for example if you create these references in a different module than where
-the collection is defined).
+Sometimes you do not have access to the _builder_ object, but you still want to create
+_tasks_ to it (for example if you create these tasks in a different module than where
+the builder is defined).
 
-You can use the `CollectionRef` class to create references to a collection simply by knowing
-the name of the collection:
+You can use the `Builder` class to create a builder simply by knowing
+the name of the builder:
 
 ```python
-from orco import CollectionRef
+from orco import Builder
 
-col1 = CollectionRef("col1")
-col1.ref(config)
+builder1 = Builder("builder1")
+builder1.task(config)
 ```
 
-The only limitation is that the collection with the specified name has to be registered in
+The only limitation is that the builder with the specified name has to be registered in
 the runtime by the point that you try to `compute` the created references.
 
 ## Retrieving entries without computation
@@ -257,42 +257,42 @@ for configurations that are not yet computed, you can use the `get_entry` functi
 If no computed entry is stored in the database for a given configuration, `None` will be returned.
 
 ```python
-# Returns None if config is not in the collection
-entry = runtime.get_entry(collection.ref(config))
+# Returns None if config is not in the builder
+entry = runtime.get_entry(builder.task(config))
 ```
 
-## Fixed collections
+## Fixed builders
 
-Collections do not need to have an associated build function. Such collections are called *fixed*.
+Builders do not need to have an associated build function. Such builders are called *fixed*.
 You can insert values into them method using the `insert` function, which receives a configuration
 and its result value:
 
 ```python
-# Register a fixed collection
-collection = runtime.register_collection("my_collection")
+# Register a fixed builder
+builder = runtime.register_builder("my_builder")
 
 # Insert two values
-runtime.insert(collection.ref({"something": 1}), 123)
-runtime.insert(collection.ref("abc"), "xyz")
+runtime.insert(builder.task({"something": 1}), 123)
+runtime.insert(builder.task("abc"), "xyz")
 ```
 
-When a reference into a fixed collection occurs in a computation, the value for
+When a reference into a fixed builder occurs in a computation, the value for
 the given configuration has to be present in the database, otherwise the computation is
 cancelled (because the runtime doesn't know how to produce a result value from a configuration
 without the build function).
 
-> Values can be inserted also for collections with a build function, but usually you want to run
+> Values can be inserted also for builders with a build function, but usually you want to run
 > `compute` rather than `insert` for this.
 
 ## Exporting results
 
-A collection can be easily exported into a Pandas `DataFrame`:
+A builder can be easily exported into a Pandas `DataFrame`:
 
 ```python
-from orco.export import export_collection_to_pandas
+from orco.export import export_builder_to_pandas
 
-# Exporting collection with name "collection1"
-df = export_collection_to_pandas(runtime, "collection1")
+# Exporting builder with name "builder1"
+df = export_builder_to_pandas(runtime, "builder1")
 ```
 
 ## Configuration equivalence
@@ -311,35 +311,36 @@ with some exceptions:
 * Dictionary keys starting with an underscore are ignored:
   `{"iterations": 100, "_note": "Foo!"}` and `{"iterations": 100}` are equivalent.
 
-## References in configurations
 
-Even though you usually only use `references` as parameters for `compute` and as a return value
+## Tasks in configurations
+
+Even though you usually only use `task` as parameters for `compute` and as a return value
 from a `dependency function`, you can in fact pass an arbitrary JSON-like Python object.
 
-The `compute` function computes all `references` in the object and evaluates them to an `entry`.
-All `references` contained in the return value of `dependency function` are evaluated to a computed
+The `compute` function computes all `tasks` in the object and evaluates them to an `entry`.
+All `tasks` contained in the return value of `dependency function` are evaluated to a computed
 `entry` and the final value is provided as the `inputs` parameter to a `build function`.
 
 Example with `compute`:
 ```python
 # Result is a single entry
-runtime.compute(add.ref({"a": 1, "b": 2}))
+runtime.compute(adder.tasks({"a": 1, "b": 2}))
 
 # Result is a list of two entries
-runtime.compute([add.ref({"a": 1, "b": 2}), add.ref({"a": 4, "b": 5})])
+runtime.compute([adder.task({"a": 1, "b": 2}), adder.task({"a": 4, "b": 5})])
 
 # Result is a dictionary {"x": <Entry>, "y": <Entry>}
-runtime.compute({"x": add.ref({"a": 1, "b": 2}),
-                 "y": add.ref({"a": 4, "b": 5})})
+runtime.compute({"x": adder.task({"a": 1, "b": 2}),
+                 "y": adder.task({"a": 4, "b": 5})})
 ```
 
 Example with a `dependency function`:
 ```python
-# In this example, we assume that 'c' and 'd' are collections
+# In this example, we assume that 'c' and 'd' are builders
 
 # Dependency function
 def dep_fn(config):
-    return {"abc": [c.ref(...), d.ref(...), c.ref(...)], "xyz": c.ref(...)}
+    return {"abc": [c.task(...), d.task(...), c.task(...)], "xyz": c.task(...)}
 
 # Build function, that is used for
 def build_fn(config, inputs):

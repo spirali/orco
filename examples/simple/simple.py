@@ -16,11 +16,11 @@ def make_experiment(config, deps):
 
 def make_experiment_deps(config):
     d = config["difficulty"]
-    return [preprocessing.ref(d - 2), preprocessing.ref(d - 1)]
+    return [preprocessing.task(d - 2), preprocessing.task(d - 1)]
 
 
-preprocessing = runtime.register_collection("preprocessing", build_fn=do_preprocessing)
-experiments = runtime.register_collection(
+preprocessing = runtime.register_builder("preprocessing", build_fn=do_preprocessing)
+experiments = runtime.register_builder(
     "experiments", build_fn=make_experiment, dep_fn=make_experiment_deps)
 
 run_cli(runtime)

@@ -1,4 +1,4 @@
-class TaskOptions:
+class JobOptions:
 
     def __init__(self, timeout=None):
         self.timeout = timeout
@@ -6,12 +6,12 @@ class TaskOptions:
     @staticmethod
     def parse_from_config(config):
         if isinstance(config, dict):
-            task_dict = config.get("_task")
-            if isinstance(task_dict, dict):
-                timeout = task_dict.get("timeout")
+            job_dict = config.get("_job")
+            if isinstance(job_dict, dict):
+                timeout = job_dict.get("timeout")
                 if timeout is not None \
                         and not isinstance(timeout, int) \
                         and not isinstance(timeout, float):
                     raise Exception("Timeout has to be a number")
-                return TaskOptions(timeout=timeout)
-        return TaskOptions()
+                return JobOptions(timeout=timeout)
+        return JobOptions()
