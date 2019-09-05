@@ -15,7 +15,7 @@ with open('requirements.txt') as reqs:
 
 
 setup(name='orco',
-      version="0.1.1",
+      version="0.2.0",
       description='Organized Computing',
       author='Stanislav Bohm',
       url='http://github.com/spirali/orco',
