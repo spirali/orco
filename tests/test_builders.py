@@ -1,7 +1,5 @@
 import pytest
 
-from orco import LocalExecutor
-
 
 def adder(config):
     return config["a"] + config["b"]
@@ -17,7 +15,6 @@ def test_reopen_builder(env):
 
 def test_fixed_builder(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor())
 
     fix1 = runtime.register_builder("fix1")
     col2 = runtime.register_builder("col2", lambda c, d: d[0].value * 10,
@@ -36,7 +33,7 @@ def test_fixed_builder(env):
 
 def test_builder_upgrade(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor(n_processes=1))
+    runtime.configure_executor(n_processes=1)
 
     def creator(config, deps):
         return config * 10
@@ -78,7 +75,7 @@ def test_builder_upgrade(env):
 
 def test_builder_compute(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor(n_processes=1))
+    runtime.configure_executor(n_processes=1)
 
     counter = env.file_storage("counter", 0)
 
@@ -108,7 +105,7 @@ def test_builder_compute(env):
 
 def test_builder_deps(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor(n_processes=1))
+    runtime.configure_executor(n_processes=1)
 
     counter_file = env.file_storage("counter", [0, 0])
 
@@ -167,7 +164,7 @@ def test_builder_deps(env):
 
 def test_builder_deps_complex(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor(n_processes=1))
+    runtime.configure_executor(n_processes=1)
 
     def builder1(config, input):
         return config * 10
@@ -187,7 +184,6 @@ def test_builder_deps_complex(env):
 
 def test_builder_double_task(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor())
 
     col1 = runtime.register_builder("col1", lambda c, d: c * 10)
     col2 = runtime.register_builder(
@@ -198,7 +194,6 @@ def test_builder_double_task(env):
 
 def test_builder_stored_deps(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor())
 
     col1 = runtime.register_builder("col1", lambda c, d: c * 10)
     col2 = runtime.register_builder(
@@ -285,7 +280,6 @@ def test_builder_stored_deps(env):
 
 def test_builder_clean(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor())
 
     col1 = runtime.register_builder("col1", lambda c, d: c)
     col2 = runtime.register_builder("col2", lambda c, d: c, lambda c: [col1.task(c)])
@@ -299,7 +293,6 @@ def test_builder_clean(env):
 
 def test_builder_remove_inputs(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor())
 
     col1 = runtime.register_builder("col1", lambda c, d: c)
     col2 = runtime.register_builder("col2", lambda c, d: c, lambda c: [col1.task(c)])
@@ -317,7 +310,7 @@ def test_builder_remove_inputs(env):
 
 def test_builder_computed(env):
     runtime = env.test_runtime()
-    runtime.register_executor(LocalExecutor(n_processes=1))
+    runtime.configure_executor(n_processes=1)
 
     def build_fn(x, deps):
         return x * 10

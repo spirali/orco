@@ -44,21 +44,18 @@ class Runtime:
     >>> runtime = Runtime("/path/to/dbfile.db")
     """
 
-    def __init__(self, db_path, executor: Executor = None):
+    def __init__(self, db_path: str):
         self.db = DB(db_path)
         self.db.init()
 
-        self._executor = executor
         self._builders = {}
         self._lock = threading.Lock()
 
-        self.executors = []
+        self.executor = None
         self.stopped = False
+        self.executor_args = {}
 
         logging.debug("Starting runtime %s (db=%s)", self, db_path)
-
-        if executor:
-            self.register_executor(executor)
 
     def __enter__(self):
         self._check_stopped()
@@ -68,26 +65,34 @@ class Runtime:
         if not self.stopped:
             self.stop()
 
+    def configure_executor(self, name=None, n_processes=None, heartbeat_interval=7):
+        self.executor_args = {
+            "name": name,
+            "n_processes": n_processes,
+            "heartbeat_interval": heartbeat_interval,
+        }
+
     def stop(self):
         self._check_stopped()
 
         logger.debug("Stopping runtime %s", self)
-        for executor in self.executors:
-            logger.debug("Stopping executor %s", executor)
-            executor.stop()
+        self.stop_executor()
         self.stopped = True
 
-    def register_executor(self, executor):
-        logger.debug("Registering executor %s", executor)
-        executor.runtime = self
-        self.db.register_executor(executor)
+    def start_executor(self):
+        if self.executor:
+            raise Exception("Executor is already dunning")
+        logger.debug("Registering executor %s")
+        executor = Executor(self, **self.executor_args)
         executor.start()
-        self.executors.append(executor)
+        self.executor = executor
+        return executor
 
-    def unregister_executor(self, executor):
-        logger.debug("Unregistering executor %s", executor)
-        self.executors.remove(executor)
-        self.db.stop_executor(executor.id)
+    def stop_executor(self):
+        if self.executor is not None:
+            logger.debug("Unregistering executor %s", self.executor)
+            self.executor.stop()
+            self.executor = None
 
     def register_builder(self, name, build_fn=None, dep_fn=None):
         with self._lock:
@@ -150,8 +155,8 @@ class Runtime:
     def clean(self, builder_task):
         self.db.clean_builder(builder_task.name)
 
-    def compute(self, obj, executor=None, continue_on_error=False):
-        results = self._compute_tasks(collect_tasks(obj), executor, continue_on_error)
+    def compute(self, obj, continue_on_error=False):
+        results = self._compute_tasks(collect_tasks(obj), continue_on_error)
         return resolve_tasks(obj, results)
 
     def get_reports(self, count=100):
@@ -247,7 +252,8 @@ class Runtime:
                                                            format_time(stats["stdev"])))
         print("-----------------+-------+--------------------------------")
 
-    def _run_computation(self, tasks, executor, exists, errors):
+    def _run_computation(self, tasks, exists, errors):
+        executor = self.executor
         jobs, global_deps, n_conflicts = self._create_compute_tree(tasks, exists, errors)
         if not jobs and n_conflicts == 0:
             return "finished"
@@ -282,19 +288,18 @@ class Runtime:
             self.db.unannounce_entries(executor.id, list(jobs))
             raise
 
-    def _compute_tasks(self, tasks, executor=None, continue_on_error=False):
+    def _compute_tasks(self, tasks, continue_on_error=False):
         exists = set()
         if continue_on_error:
             errors = set()
         else:
             errors = None
-        if executor is None:
-            if len(self.executors) == 0:
-                raise Exception("No executors registered")
-            executor = self.executors[0]
+
+        if self.executor is None:
+            self.start_executor()
 
         while True:
-            status = self._run_computation(tasks, executor, exists, errors)
+            status = self._run_computation(tasks, exists, errors)
             if status == "finished":
                 break
             elif status == "next":

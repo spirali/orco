@@ -18,6 +18,7 @@ class TestEnv:
 
     def __init__(self, tmpdir):
         self.runtimes = []
+        self.executors = []
         self.tmpdir = tmpdir
 
     def test_runtime(self):
@@ -27,6 +28,11 @@ class TestEnv:
         self.runtimes.append(r)
         return r
 
+    def executor(self, *args, **kwargs):
+        executor = orco.internals.executor.Executor(*args, **kwargs)
+        self.executors.append(executor)
+        return executor
+
     def file_storage(self, name, init_value):
         return FileStorage(self.tmpdir.join(name), init_value)
 
@@ -34,7 +40,11 @@ class TestEnv:
         for r in self.runtimes:
             if not r.stopped:
                 r.stop()
+        for e in self.executors:
+            if e.runtime:
+                e.stop()
         self.runtimes = []
+        self.executors = []
 
 
 @pytest.fixture()

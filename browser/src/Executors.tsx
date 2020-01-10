@@ -72,16 +72,22 @@ class Executors extends React.Component<Props, State> {
                     let values = ["running", "stopped", "lost"];
                     return values.indexOf(a) < values.indexOf(b) ? 1 : -1;
                 },
-                maxWidth: 200
+                maxWidth: 150
             },
             {
                 "Header": "Id",
                 "accessor": "id",
-                maxWidth: 100
+                maxWidth: 80
             },
             {
-                "Header": "Type",
-                "accessor": "type"
+                "Header": "Name",
+                "accessor": "name"
+                maxWidth: 150
+            },
+            {
+                "Header": "Hostname",
+                "accessor": "hostname",
+                maxWidth: 150
             },
             {
                 "Header": "Resources",

@@ -68,8 +68,8 @@ class DB:
                         heartbeat_interval FLOAT NOT NULL,
                         stats TEXT,
                         created TEXT NOT NULL,
-                        type STRING NOT NULL,
-                        version STRING NOT NULL,
+                        name STRING NOT NULL,
+                        hostname STRING NOT NULL,
                         resources STRING NOT NULL
                     );
                 """)
@@ -526,10 +526,10 @@ DELETE FROM entries
             with self.conn:
                 c = self.conn.cursor()
                 c.execute(
-                    "INSERT INTO executors(created, heartbeat, heartbeat_interval, stats, type, version, resources) VALUES (?, DATETIME('now'), ?, ?, ?, ?, ?)",
+                    "INSERT INTO executors(created, heartbeat, heartbeat_interval, stats, name, hostname, resources) VALUES (?, DATETIME('now'), ?, ?, ?, ?, ?)",
                     [
                         executor.created.isoformat(), executor.heartbeat_interval, stats,
-                        executor.executor_type, executor.version, executor.resources
+                        executor.name, executor.hostname, executor.resources
                     ])
                 executor.id = self.conn.last_insert_rowid()
 
@@ -548,7 +548,7 @@ DELETE FROM entries
         def _helper():
             c = self.conn.cursor()
             r = c.execute(
-                "SELECT id, created, {}, stats, type, version, resources FROM executors".format(
+                "SELECT id, created, {}, stats, name, hostname, resources FROM executors".format(
                     self.DEAD_EXECUTOR_QUERY))
             #r = c.execute("SELECT uuid, created, , stats, type, version, resources FROM executors")
 
@@ -557,10 +557,10 @@ DELETE FROM entries
                 "created": created,
                 "status": get_status(is_dead, stats),
                 "stats": json.loads(stats) if stats else None,
-                "type": executor_type,
-                "version": version,
+                "name": name,
+                "hostname": hostname,
                 "resources": resources,
-            } for id, created, is_dead, stats, executor_type, version, resources in r.fetchall()]
+            } for id, created, is_dead, stats, name, hostname, resources in r.fetchall()]
 
         return self._run(_helper)
 

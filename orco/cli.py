@@ -2,7 +2,6 @@ import argparse
 import json
 import sys
 
-from .localexecutor import LocalExecutor
 from .builder import Builder
 
 
@@ -11,7 +10,6 @@ def _command_serve(runtime, args):
 
 
 def _command_compute(runtime, args):
-    runtime.register_executor(LocalExecutor(n_processes=1))
     task = Builder(args.builder).task(json.loads(args.config))
     print(runtime.compute(task).value)
 

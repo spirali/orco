@@ -1,4 +1,4 @@
-from orco import Runtime, LocalExecutor
+from orco import Runtime
 
 
 def test_rest_builders():
@@ -41,8 +41,10 @@ def test_rest_builders():
 
 def test_rest_executors(env):
     rt = env.test_runtime()
-    rt.register_executor(LocalExecutor())
     with rt.serve(testing=True).test_client() as client:
+        r = client.get("rest/executors").get_json()
+        assert len(r) == 0
+        rt.start_executor()
         r = client.get("rest/executors").get_json()
         assert len(r) == 1
         assert r[0]["status"] == "running"
@@ -50,7 +52,6 @@ def test_rest_executors(env):
 
 def test_rest_reports(env):
     rt = env.test_runtime()
-    rt.register_executor(LocalExecutor())
     col1 = rt.register_builder("col1", lambda c, d: c * 10)
     rt.compute([col1.task(20), col1.task(30)])
     with rt.serve(testing=True).test_client() as client:

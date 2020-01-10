@@ -2,7 +2,7 @@ import time
 import threading
 import pytest
 
-from orco import LocalExecutor, Builder, JobFailedException
+from orco import Builder, JobFailedException
 from orco.task import make_key
 
 
@@ -16,15 +16,16 @@ def test_executor(env, n_processes):
     r = runtime._executor_summaries()
     assert len(r) == 0
 
-    executor = LocalExecutor(heartbeat_interval=1, n_processes=n_processes)
-    runtime.register_executor(executor)
+    executor = env.executor(runtime, heartbeat_interval=1, n_processes=n_processes)
+    executor.start()
 
-    executor2 = LocalExecutor(heartbeat_interval=1, n_processes=n_processes)
+    executor2 = env.executor(runtime, heartbeat_interval=1, n_processes=n_processes)
     executor2._debug_do_not_start_heartbeat = True
-    runtime.register_executor(executor2)
+    executor2.start()
 
-    executor3 = LocalExecutor(heartbeat_interval=1, n_processes=n_processes)
-    runtime.register_executor(executor3)
+    executor3 = env.executor(runtime, heartbeat_interval=1, n_processes=n_processes)
+    executor3.start()
+
     c = runtime.register_builder("abc")
     runtime.db.announce_entries(executor3.id, [c.task("x")], [])
     assert runtime.db.get_entry_state(c.name, make_key("x")) == "announced"
@@ -48,8 +49,8 @@ def test_executor(env, n_processes):
 
 def test_executor_error(env):
     runtime = env.test_runtime()
-    executor = LocalExecutor(heartbeat_interval=1, n_processes=2)
-    runtime.register_executor(executor)
+    executor = env.executor(runtime, heartbeat_interval=1, n_processes=2)
+    executor.start()
 
     col0 = runtime.register_builder("col0", lambda c, d: c)
     col1 = runtime.register_builder("col1", lambda c, d: 100 // d[0].value,
@@ -97,8 +98,8 @@ def test_executor_error(env):
 
 def test_executor_timeout(env):
     runtime = env.test_runtime()
-    executor = LocalExecutor(heartbeat_interval=1, n_processes=2)
-    runtime.register_executor(executor)
+    executor = env.executor(runtime, heartbeat_interval=1, n_processes=2)
+    executor.start()
 
     def compute(c, d):
         time.sleep(c["time"])
@@ -135,8 +136,6 @@ def test_executor_conflict(env, tmpdir):
 
     def init():
         runtime = env.test_runtime()
-        executor = LocalExecutor(heartbeat_interval=1, n_processes=1)
-        runtime.register_executor(executor)
         col0 = runtime.register_builder("col0", compute_0)
         col1 = runtime.register_builder("col1", compute_1, lambda c: [col0.task(x) for x in c])
         return runtime, col0, col1

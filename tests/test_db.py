@@ -2,19 +2,18 @@ import time
 import pickle
 import pytest
 
-from orco import LocalExecutor
-from orco.entry import Entry
-from orco.internals.rawentry import RawEntry
 from orco.task import make_key
 
 
 def test_db_announce(env):
     r = env.test_runtime()
-    e1 = LocalExecutor(heartbeat_interval=1)
+    e1 = env.executor(r, heartbeat_interval=1)
     e1._debug_do_not_start_heartbeat = True
-    r.register_executor(e1)
-    e2 = LocalExecutor(heartbeat_interval=1)
-    r.register_executor(e2)
+    e1.start()
+
+    e2 = env.executor(r, heartbeat_interval=1)
+    e2.runtime = r
+    e2.start()
 
     c = r.register_builder("col1")
     assert r.db.announce_entries(e1.id, [c.task("test1"), c.task("test2")], [])
@@ -36,8 +35,8 @@ def make_raw_entry(runtime, c, cfg, value, comp_time=1):
 
 def test_db_set_value(env):
     r = env.test_runtime()
-    e1 = LocalExecutor(heartbeat_interval=1)
-    r.register_executor(e1)
+    r.configure_executor(heartbeat_interval=1)
+    e1 = r.start_executor()
 
     c = r.register_builder("col1")
     assert r.db.get_entry_state(c.name, make_key("cfg1")) is None
@@ -73,8 +72,9 @@ def test_db_set_value(env):
 
 def test_db_run_stats(env):
     runtime = env.test_runtime()
-    e1 = LocalExecutor(heartbeat_interval=1)
-    runtime.register_executor(e1)
+    runtime.configure_executor(heartbeat_interval=1)
+    e1 = runtime.start_executor()
+
     c = runtime.register_builder("col1")
     _ = runtime.register_builder("col2")
 
