@@ -82,6 +82,7 @@ class DB:
                         value BLOB,
                         config BLOB NOT NULL,
                         value_repr STRING,
+                        job_setup BLOB,
                         created TEXT,
                         comp_time FLOAT,
 
@@ -190,12 +191,12 @@ WHERE rowid IN
     def create_entries(self, raw_entries):
 
         def _helper():
-            data = [(e.builder_name, e.key, e.value, e.config, e.value_repr)
+            data = [(e.builder_name, e.key, e.value, e.config, e.value_repr, e.job_setup)
                     for e in raw_entries]
             with self.conn:
                 c = self.conn.cursor()
                 c.executemany(
-                    "INSERT INTO entries VALUES (?, ?, null, ?, ?, ?, DATETIME('now'), null)", data)
+                    "INSERT INTO entries VALUES (?, ?, null, ?, ?, ?, ?, DATETIME('now'), null)", data)
 
         self._run(_helper)
 
@@ -209,14 +210,14 @@ WHERE rowid IN
             reports_data = [self._unfold_report(report) for report in reports]
 
         def _helper():
-            data = [(e.value, e.value_repr, e.comp_time, e.builder_name, e.key, executor_id)
+            data = [(e.value, e.value_repr, e.job_setup, e.comp_time, e.builder_name, e.key, executor_id)
                     for e in raw_entries]
             changes = 0
             with self.conn:
                 c = self.conn.cursor()
                 for d in data:
                     c.execute(
-                        "UPDATE entries SET value = ?, value_repr = ?, created = DATETIME('now'), comp_time = ? WHERE builder = ? AND key = ? AND executor = ? AND value is null",
+                        "UPDATE entries SET value = ?, value_repr = ?, job_setup = ?, created = DATETIME('now'), comp_time = ? WHERE builder = ? AND key = ? AND executor = ? AND value is null",
                         d)
                     changes += self.conn.changes()
                 if stats_data:
@@ -281,7 +282,7 @@ WHERE rowid IN
             if include_announced:
                 c.execute(
                     """
-                    SELECT value, created, comp_time
+                    SELECT value, job_setup, created, comp_time
                     FROM entries
                     WHERE builder = ? AND key = ? AND
                         (value is not null OR executor is null OR executor in
@@ -290,7 +291,7 @@ WHERE rowid IN
             else:
                 c.execute(
                     """
-                    SELECT value, created, comp_time
+                    SELECT value, job_setup, created, comp_time
                     FROM entries
                     WHERE builder = ? AND key = ? AND value is not null""",
                     [builder_name, key])
@@ -299,9 +300,12 @@ WHERE rowid IN
         result = self._run(_helper)
         if result is None:
             return None
+        value, job_setup, created, comp_time = result
         return Entry(None,
-                     pickle.loads(result[0]) if result[0] is not None else None, result[1],
-                     result[2])
+                     pickle.loads(value) if value is not None else None,
+                     pickle.loads(job_setup) if job_setup is not None else None,
+                     created,
+                     comp_time)
 
     def get_entry(self, builder_name, key):
 
@@ -309,7 +313,7 @@ WHERE rowid IN
             c = self.conn.cursor()
             c.execute(
                 """
-                SELECT config, value, created, comp_time
+                SELECT config, value, job_setup, created, comp_time
                 FROM entries
                 WHERE builder = ? AND key = ? AND value is not null""", [builder_name, key])
             return c.fetchone()
@@ -317,10 +321,12 @@ WHERE rowid IN
         result = self._run(_helper)
         if result is None:
             return None
-        config, value, created, comp_time = result
+        config, value, job_setup, created, comp_time = result
         return Entry(
             pickle.loads(config),
-            pickle.loads(value) if value is not None else None, created, comp_time)
+            pickle.loads(value) if value is not None else None,
+            pickle.loads(job_setup) if job_setup is not None else None,
+            created, comp_time)
 
     def get_config(self, builder_name, key):
 
@@ -631,13 +637,16 @@ DELETE FROM entries
         def _helper():
             c = self.conn.cursor()
             r = c.execute(
-                "SELECT config, value, comp_time, created FROM entries WHERE builder = ?",
+                "SELECT config, value, comp_time, job_setup, created FROM entries WHERE builder = ?",
                 [builder_name])
             return list(r.fetchall())
 
         return [
-            Entry(pickle.loads(config), pickle.loads(value), created, comp_time)
-            for (config, value, comp_time, created) in self._run(_helper)
+            Entry(pickle.loads(config),
+                  pickle.loads(value),
+                  pickle.loads(job_setup) if job_setup is not None else None,
+                  created, comp_time)
+            for (config, value, comp_time, job_setup, created) in self._run(_helper)
         ]
 
     def get_all_configs(self, builder_name):

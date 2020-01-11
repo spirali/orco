@@ -105,9 +105,12 @@ def test_executor_timeout(env):
         time.sleep(c["time"])
         return c["time"]
 
-    col0 = runtime.register_builder("col0", compute)
+    def job_setup(c):
+        return {"timeout": c.get("timeout")}
 
-    config0 = {"time": 1, "_job": {"timeout": 0.2}}
+    col0 = runtime.register_builder("col0", compute, job_setup=job_setup)
+
+    config0 = {"time": 1, "timeout": 0.2}
     with pytest.raises(JobFailedException, match=".*timeout.*"):
         assert runtime.compute(col0.task(config0))
 
@@ -119,7 +122,7 @@ def test_executor_timeout(env):
     assert "timeout" in reports[0].message
 
     assert runtime.compute(col0.task({"time": 1})).value == 1
-    assert runtime.compute(col0.task({"time": 0.2, "_job": {"timeout": 5}})).value == 0.2
+    assert runtime.compute(col0.task({"time": 0.2, "timeout": 5})).value == 0.2
 
 
 def test_executor_conflict(env, tmpdir):

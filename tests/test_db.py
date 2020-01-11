@@ -30,7 +30,7 @@ def test_db_announce(env):
 
 def make_raw_entry(runtime, c, cfg, value, comp_time=1):
     builder = runtime._builders[c.name]
-    return builder.make_raw_entry(c.name, make_key(cfg), cfg, pickle.dumps("value1"), comp_time)
+    return builder.make_raw_entry(c.name, make_key(cfg), cfg, pickle.dumps(value), None, comp_time)
 
 
 def test_db_set_value(env):

@@ -49,6 +49,7 @@ class TestEnv:
 
 @pytest.fixture()
 def env(tmpdir):
+    print("Test temp dir", tmpdir)
     test_env = TestEnv(tmpdir)
     yield test_env
     test_env.stop()

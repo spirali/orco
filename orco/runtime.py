@@ -9,6 +9,7 @@ from .internals.db import DB
 from .internals.executor import Executor
 from .internals.job import Job
 from .internals.rawentry import RawEntry
+from .internals.runner import JobRunner
 from .task import make_key
 from .report import Report
 from .internals.tasktools import collect_tasks, resolve_tasks
@@ -17,22 +18,39 @@ from .internals.utils import format_time
 logger = logging.getLogger(__name__)
 
 
-def _default_make_raw_entry(builder_name, key, config, value, comp_time):
+def _default_make_raw_entry(builder_name, key, config, value, job_setup, comp_time):
     value_repr = repr(value)
     if len(value_repr) > 85:
         value_repr = value_repr[:80] + " ..."
     if config is not None:
         config = pickle.dumps(config)
-    return RawEntry(builder_name, key, config, pickle.dumps(value), value_repr, comp_time)
+    if job_setup is not None:
+        job_setup = pickle.dumps(job_setup)
+    return RawEntry(builder_name, key, config, pickle.dumps(value), value_repr, job_setup, comp_time)
 
 
 class _Builder:
 
-    def __init__(self, name: str, build_fn, dep_fn):
+    def __init__(self, name: str, build_fn, dep_fn, job_setup):
         self.name = name
         self.build_fn = build_fn
         self.make_raw_entry = _default_make_raw_entry
         self.dep_fn = dep_fn
+        self.job_setup = job_setup
+
+    def create_job_setup(self, config):
+        job_setup = self.job_setup
+        if callable(job_setup):
+            job_setup = job_setup(config)
+
+        if job_setup is None:
+            return {}
+        elif isinstance(job_setup, str):
+            return {"runner": job_setup}
+        elif isinstance(job_setup, dict):
+            return job_setup
+        else:
+            raise Exception("Invalid object as job_setup")
 
 
 class Runtime:
@@ -54,6 +72,7 @@ class Runtime:
         self.executor = None
         self.stopped = False
         self.executor_args = {}
+        self.runners = {}
 
         logging.debug("Starting runtime %s (db=%s)", self, db_path)
 
@@ -64,6 +83,15 @@ class Runtime:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.stopped:
             self.stop()
+
+    def add_runner(self, name, runner):
+        if self.executor:
+            raise Exception("Runners cannot be added when the executor is started")
+        assert isinstance(runner, JobRunner)
+        assert isinstance(name, str)
+        if name in self.runners:
+            raise Exception("Runner under name '{}' is already registered".format(name))
+        self.runners[name] = runner
 
     def configure_executor(self, name=None, n_processes=None, heartbeat_interval=7):
         self.executor_args = {
@@ -83,7 +111,7 @@ class Runtime:
         if self.executor:
             raise Exception("Executor is already dunning")
         logger.debug("Registering executor %s")
-        executor = Executor(self, **self.executor_args)
+        executor = Executor(self, self.runners, **self.executor_args)
         executor.start()
         self.executor = executor
         return executor
@@ -94,12 +122,12 @@ class Runtime:
             self.executor.stop()
             self.executor = None
 
-    def register_builder(self, name, build_fn=None, dep_fn=None):
+    def register_builder(self, name, build_fn=None, dep_fn=None, job_setup=None):
         with self._lock:
             if name in self._builders:
                 raise Exception("Builder already registered")
             self.db.ensure_builder(name)
-            builder = _Builder(name, build_fn=build_fn, dep_fn=dep_fn)
+            builder = _Builder(name, build_fn, dep_fn, job_setup)
             self._builders[name] = builder
         return Builder(name)
 
@@ -148,9 +176,8 @@ class Runtime:
 
     def insert(self, task, value):
         builder = self._builders[task.builder_name]
-        entry = builder.make_raw_entry(builder.name, make_key(task.config), task.config, value,
-                                          None)
-        self.db.create_entries((entry, ))
+        entry = builder.make_raw_entry(builder.name, make_key(task.config), task.config, value, None, None)
+        self.db.create_entries((entry,))
 
     def clean(self, builder_task):
         self.db.clean_builder(builder_task.name)
@@ -226,7 +253,7 @@ class Runtime:
                 raise Exception(
                     "Computation depends on a missing configuration '{}' in a fixed builder"
                     .format(task))
-            job = Job(task, inputs, dep_value)
+            job = Job(task, inputs, dep_value, builder.create_job_setup(task.config))
             jobs[task] = job
             return job
 
