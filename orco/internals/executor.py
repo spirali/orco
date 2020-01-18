@@ -54,7 +54,6 @@ class Executor:
         self.created = None
         self.id = None
         self.runtime = runtime
-        self.resources = ""
         self.stats = {}
         assert heartbeat_interval >= 1
         self.heartbeat_interval = heartbeat_interval
@@ -71,6 +70,8 @@ class Executor:
         self.runners = runners
         if "local" not in self.runners:
             runners["local"] = LocalProcessRunner(n_processes)
+
+        self.resources = ",".join("{} ({})".format(name, r.get_resources()) for name, r in runners.items())
 
     def get_stats(self):
         return self.stats

@@ -81,7 +81,7 @@ class Executors extends React.Component<Props, State> {
             },
             {
                 "Header": "Name",
-                "accessor": "name"
+                "accessor": "name",
                 maxWidth: 150
             },
             {
