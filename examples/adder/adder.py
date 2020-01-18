@@ -1,14 +1,9 @@
-from orco import Runtime, LocalExecutor
+from orco import Runtime
 
 # Create a runtime environment for ORCO.
 # All data will be stored in file on provided path.
 # If file does not exists, it is created
 runtime = Runtime("./mydb")
-
-
-# Registering executor for running jobs.
-# By default, it will use all local cores.
-runtime.register_executor(LocalExecutor())
 
 
 # Build function for our configurations
@@ -24,7 +19,7 @@ add = runtime.register_builder("add", build_fn=build_fn)
 # basically a pair (builder, config)
 # When reference is provided, compute returns instance of Entry that
 # contains attribute 'value' with the result of build function.
-result = runtime.compute(add.ref({"a": 1, "b": 2}))
+result = runtime.compute(add.task({"a": 1, "b": 2}))
 print(result.value)  # prints: 3
 
 # Invoke more compututations at once

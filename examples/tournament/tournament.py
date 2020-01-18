@@ -56,9 +56,9 @@ def play_tournament(config, inputs):
     return score
 
 
-players = runtime.register_collection("players", build_fn=train_player)
-games = runtime.register_collection("games", build_fn=play_game, dep_fn=game_deps)
-tournaments = runtime.register_collection(
+players = runtime.register_builder("players", build_fn=train_player)
+games = runtime.register_builder("games", build_fn=play_game, dep_fn=game_deps)
+tournaments = runtime.register_builder(
     "tournaments", build_fn=play_tournament, dep_fn=tournament_deps)
 
 run_cli(runtime)
