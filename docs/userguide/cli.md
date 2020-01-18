@@ -17,7 +17,6 @@ def build_fn(config, inputs):
 runtime.register_builder("adder", build_fn=build_fn)
 
 run_cli(runtime)  # Start CLI interface
-                  # (note that we did not register LocalExecutor, it is managed by run_cli)
 ```
 
 Let us assume that the script above is saved as `adder_cli.py`, then we can

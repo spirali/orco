@@ -8,29 +8,27 @@ recomputation in the future.
 
 The database with computation results is represented by a `Runtime`, which
 receives a path to a database file where the results will be stored.
+In this chapter, we use a default 'job runner' that executes task locally.
+It is spawned automatically on demand by the runtime, so no further action is needed.
+
 
 ```python
-from orco import Runtime, LocalExecutor
+from orco import Runtime
 
 # Create a new runtime
 # If the database file does not exist, it will be created
 runtime = Runtime("./mydb")
 ```
 
-After you have a database, you have to create an executor that will be used for running
-the actual computations.
-```python
-# By default, the executor will use all local cores to run the experiments
-runtime.register_executor(LocalExecutor())
-```
-
 Now you can start defining your computations. Computations in ORCO are stored in **builder**s.
 A builder stores the results of a single type of computation (preparing a dataset,
 training a neural network, benchmarking or compiling a program, ...). To define a builder,
-you have to specify three things:
-- Name
+you may specify four things:
+- **Name**, a string identifier
 - **Build function**, which produces a result from an input
-- **Dependency function**, which specifies other computations on which the build function depends (if any)
+- **Dependency function**, which specifies other computations on which the build function depends (this is optional)
+- **Job setup**, a configuration how should be task executed (e.g. timeout, where to execute the task) (this is optional).
+  Note that in in this chapter, we will not cover job setup.  
 
 Let's define a trivial builder that will store results of a computation which simply adds two numbers
 from its input. It does not depend on any other builders, so the dependency function does not have
@@ -59,8 +57,8 @@ config_1 = { "a": 1, "b": 2 }
 config_2 = { "a": 3, "b": 4 }
 ```
 
-We have now defined a database for storing computation results, an executor for
-running the computations, a builder that defines a simple `adder` computation
+We have now defined a database for storing computation results,
+a builder that defines a simple `adder` computation 
 and two configurations for `adder` that we want to compute.
 
 To compute a result, we have to give a **task** to the runtime. Task is an object specifying
@@ -98,17 +96,12 @@ to give you results for your desired configurations.
 The whole code example is listed here:
 
 ```python
-from orco import Runtime, LocalExecutor
+from orco import Runtime
 
 # Create a runtime environment for ORCO
 # All data will be stored in file on provided path
 # If the file does not exists, it will be created
 runtime = Runtime("./mydb")
-
-
-# Registering executor for running jobs
-# By default, it will use all local cores
-runtime.register_executor(LocalExecutor())
 
 
 # Build function for our builder
@@ -153,11 +146,11 @@ look like `{"p": <PARAMETER-OF-SIMULATION>}`.
 We define builder of simulations as follows:
 
 ```python
-from orco import Runtime, LocalExecutor
+from orco import Runtime
 import time
 
 runtime = Runtime("./mydb")
-runtime.register_executor(LocalExecutor())
+
 
 def simulation_run(config, inputs):
     # Fake a computation
