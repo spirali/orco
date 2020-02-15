@@ -1,7 +1,7 @@
-from ..task import Task, TaskKey
+from ..task import Task, EntryKey
 from typing import Iterable
 
-
+"""
 def collect_tasks(obj):
     result = set()
     _collect_tasks_helper(obj, result, Task)
@@ -59,3 +59,4 @@ def _walk_map(value, target_type, final_fn):
         return [_walk_map(v, target_type, final_fn) for v in value]
     else:
         return value
+"""

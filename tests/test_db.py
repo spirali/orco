@@ -2,7 +2,7 @@ import time
 import pickle
 import pytest
 
-from orco.task import make_key
+from orco.internals.key import make_key
 
 
 def test_db_announce(env):
@@ -16,16 +16,16 @@ def test_db_announce(env):
     e2.start()
 
     c = r.register_builder("col1")
-    assert r.db.announce_entries(e1.id, [c.task("test1"), c.task("test2")], [])
-    assert not r.db.announce_entries(e2.id, [c.task("test2"), c.task("test3")], [])
-    assert not r.db.announce_entries(e1.id, [c.task("test2"), c.task("test3")], [])
-    assert r.db.announce_entries(e2.id, [c.task("test3")], [])
+    assert r.db.announce_entries(e1.id, [c("test1"), c("test2")], [])
+    assert not r.db.announce_entries(e2.id, [c("test2"), c("test3")], [])
+    assert not r.db.announce_entries(e1.id, [c("test2"), c("test3")], [])
+    assert r.db.announce_entries(e2.id, [c("test3")], [])
     assert r.db.get_entry_state(c.name, make_key("test1")) == "announced"
     time.sleep(3)
     assert r.db.get_entry_state(c.name, make_key("test1")) is None
-    assert not r.db.announce_entries(e2.id, [c.task("test2"), c.task("test3")], [])
-    assert r.db.announce_entries(e2.id, [c.task("test2")], [])
-    assert not r.db.announce_entries(e2.id, [c.task("test2")], [])
+    assert not r.db.announce_entries(e2.id, [c("test2"), c("test3")], [])
+    assert r.db.announce_entries(e2.id, [c("test2")], [])
+    assert not r.db.announce_entries(e2.id, [c("test2")], [])
 
 
 def make_raw_entry(runtime, c, cfg, value, comp_time=1):
@@ -41,18 +41,18 @@ def test_db_set_value(env):
     c = r.register_builder("col1")
     assert r.db.get_entry_state(c.name, make_key("cfg1")) is None
 
-    r.db.announce_entries(e1.id, [c.task("cfg1")], [])
+    r.db.announce_entries(e1.id, [c("cfg1")], [])
     assert r.db.get_entry_state(c.name, make_key("cfg1")) == "announced"
 
-    assert r.get_entry(c.task("cfg1")) is None
-    assert r.get_entry(c.task("cfg1"), include_announced=True) is not None
+    assert r.try_read_entry(c("cfg1")) is None
+    assert r.try_read_entry(c("cfg1"), include_announced=True) is not None
 
     e = make_raw_entry(r, c, "cfg1", "value1")
     r.db.set_entry_values(e1.id, [e])
     assert r.db.get_entry_state(c.name, make_key("cfg1")) == "finished"
 
-    assert r.get_entry(c.task("cfg1")) is not None
-    assert r.get_entry(c.task("cfg1"), include_announced=True) is not None
+    assert r.try_read_entry(c("cfg1")) is not None
+    assert r.try_read_entry(c("cfg1"), include_announced=True) is not None
 
     with pytest.raises(Exception):
         r.db.set_entry_values(e1.id, [e])
@@ -60,7 +60,7 @@ def test_db_set_value(env):
     e2 = make_raw_entry(r, c, "cfg2", "value2")
     with pytest.raises(Exception):
         r.db.set_entry_values(e1.id, [e2])
-    r.db.announce_entries(e1.id, [c.task("cfg2")], [])
+    r.db.announce_entries(e1.id, [c("cfg2")], [])
     r.db.set_entry_values(e1.id, [e2])
 
     with pytest.raises(Exception):
@@ -79,8 +79,8 @@ def test_db_run_stats(env):
     _ = runtime.register_builder("col2")
 
     assert runtime.db.announce_entries(
-        e1.id, [c.task("a"), c.task("b"), c.task("c"),
-                c.task("d"), c.task("e")], [])
+        e1.id, [c("a"), c("b"), c("c"),
+                c("d"), c("e")], [])
     assert runtime.db.get_entry_state(c.name, make_key("a")) == "announced"
     runtime.db._dump()
     entry = make_raw_entry(runtime, c, "a", "value", comp_time=1)

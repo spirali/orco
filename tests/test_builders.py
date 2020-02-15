@@ -17,32 +17,37 @@ def test_fixed_builder(env):
     runtime = env.test_runtime()
 
     fix1 = runtime.register_builder("fix1")
-    col2 = runtime.register_builder("col2", lambda c, d: d[0].value * 10,
-                                       lambda c: [fix1.task(c)])
 
-    runtime.insert(fix1.task("a"), 11)
+    def b1(config):
+        f = fix1(config)
+        yield
+        return f.value * 10
 
-    assert runtime.compute(col2.task("a")).value == 110
-    assert runtime.compute(fix1.task("a")).value == 11
+    col2 = runtime.register_builder("col2", b1)
+
+    runtime.insert(fix1("a"), 11)
+
+    assert runtime.compute(col2("a")).value == 110
+    assert runtime.compute(fix1("a")).value == 11
 
     with pytest.raises(Exception, match=".* fixed builder.*"):
-        assert runtime.compute(col2.task("b"))
+        assert runtime.compute(col2("b"))
     with pytest.raises(Exception, match=".* fixed builder.*"):
-        assert runtime.compute(col2.task("b"))
+        assert runtime.compute(col2("b"))
 
 
 def test_builder_upgrade(env):
     runtime = env.test_runtime()
     runtime.configure_executor(n_processes=1)
 
-    def creator(config, deps):
+    def creator(config):
         return config * 10
 
-    def adder(config, deps):
-        return deps["a"].value + deps["b"].value
-
-    def adder_deps(config):
-        return {"a": col1.task(config["a"]), "b": col1.task(config["b"])}
+    def adder(config):
+        a = col1(config["a"])
+        b = col1(config["b"])
+        yield
+        return a.value + b.value
 
     def upgrade(config):
         config["c"] = config["a"] + config["b"]
@@ -53,24 +58,24 @@ def test_builder_upgrade(env):
         return config
 
     col1 = runtime.register_builder("col1", creator)
-    col2 = runtime.register_builder("col2", adder, adder_deps)
+    col2 = runtime.register_builder("col2", adder)
 
-    runtime.compute(col1.task(123))
-    runtime.compute(col2.tasks([{"a": 10, "b": 12}, {"a": 14, "b": 11}, {"a": 17, "b": 12}]))
+    runtime.compute(col1(123))
+    runtime.compute_many([col2(c) for c in [{"a": 10, "b": 12}, {"a": 14, "b": 11}, {"a": 17, "b": 12}]])
 
-    assert runtime.get_entry(col2.task({"a": 10, "b": 12})).value == 220
+    assert runtime.read_entry(col2({"a": 10, "b": 12})).value == 220
 
     with pytest.raises(Exception, match=".* collision.*"):
         runtime.upgrade_builder(col2, upgrade_confict)
 
-    assert runtime.get_entry(col2.task({"a": 10, "b": 12})).value == 220
+    assert runtime.read_entry(col2({"a": 10, "b": 12})).value == 220
 
     runtime.upgrade_builder(col2, upgrade)
 
-    assert runtime.get_entry(col2.task({"a": 10, "b": 12})) is None
-    assert runtime.get_entry(col2.task({"a": 10, "b": 12, "c": 22})).value == 220
-    assert runtime.get_entry(col2.task({"a": 14, "b": 11})) is None
-    assert runtime.get_entry(col2.task({"a": 14, "b": 11, "c": 25})).value == 250
+    assert runtime.try_read_entry(col2({"a": 10, "b": 12})) is None
+    assert runtime.read_entry(col2({"a": 10, "b": 12, "c": 22})).value == 220
+    assert runtime.try_read_entry(col2({"a": 14, "b": 11})) is None
+    assert runtime.read_entry(col2({"a": 14, "b": 11, "c": 25})).value == 250
 
 
 def test_builder_compute(env):
@@ -79,21 +84,20 @@ def test_builder_compute(env):
 
     counter = env.file_storage("counter", 0)
 
-    def adder(config, deps):
-        assert not deps
+    def adder(config):
         counter.write(counter.read() + 1)
         return config["a"] + config["b"]
 
     builder = runtime.register_builder("col1", adder)
 
-    entry = runtime.compute(builder.task({"a": 10, "b": 30}))
+    entry = runtime.compute(builder({"a": 10, "b": 30}))
     assert entry.config["a"] == 10
     assert entry.config["b"] == 30
     assert entry.value == 40
     assert entry.comp_time >= 0
     assert counter.read() == 1
 
-    result = runtime.compute([builder.task({"a": 10, "b": 30})])
+    result = runtime.compute_many([builder({"a": 10, "b": 30})])
     assert len(result) == 1
     entry = result[0]
     assert entry.config["a"] == 10
@@ -109,120 +113,109 @@ def test_builder_deps(env):
 
     counter_file = env.file_storage("counter", [0, 0])
 
-    def builder1(config, input):
+    def builder1(config):
         counter = counter_file.read()
         counter[0] += 1
         counter_file.write(counter)
         return config * 10
 
-    def builder2(config, deps):
+    def builder2(config):
+        deps = [col1(x) for x in range(config)]
+        yield
         counter = counter_file.read()
         counter[1] += 1
         counter_file.write(counter)
         return sum(e.value for e in deps)
 
-    def make_deps(config):
-        return [col1.task(x) for x in range(config)]
-
     col1 = runtime.register_builder("col1", builder1)
-    col2 = runtime.register_builder("col2", builder2, make_deps)
+    col2 = runtime.register_builder("col2", builder2)
 
-    e = runtime.compute(col2.task(5))
+    e = runtime.compute(col2(5))
     counter = counter_file.read()
     assert counter == [5, 1]
     assert e.value == 100
 
-    e = runtime.compute(col2.task(4))
+    e = runtime.compute(col2(4))
 
     counter = counter_file.read()
     assert counter == [5, 2]
     assert e.value == 60
 
-    runtime.remove_many(col1.tasks([0, 3]))
+    runtime.remove_many([col1(0), col1(3)])
 
-    e = runtime.compute(col2.task(6))
+    e = runtime.compute(col2(6))
     counter = counter_file.read()
     assert counter == [8, 3]
     assert e.value == 150
 
-    e = runtime.compute(col2.task(6))
+    e = runtime.compute(col2(6))
     counter = counter_file.read()
     assert counter == [8, 3]
     assert e.value == 150
 
-    runtime.remove(col2.task(6))
-    e = runtime.compute(col2.task(5))
+    runtime.remove(col2(6))
+    e = runtime.compute(col2(5))
     counter = counter_file.read()
     assert counter == [8, 4]
     assert e.value == 100
 
-    e = runtime.compute(col2.task(6))
+    e = runtime.compute(col2(6))
     counter = counter_file.read()
     assert counter == [8, 5]
     assert e.value == 150
 
 
-def test_builder_deps_complex(env):
-    runtime = env.test_runtime()
-    runtime.configure_executor(n_processes=1)
-
-    def builder1(config, input):
-        return config * 10
-
-    def builder2(config, deps):
-        return sum(e.value for e in deps[0].values()) + deps[1]
-
-    def make_deps(config):
-        return [{"a": col1.task(1), "b": col1.task(1), "c": col1.task(3), "d": col1.task(4)}, 5]
-
-    col1 = runtime.register_builder("col1", builder1)
-    col2 = runtime.register_builder("col2", builder2, make_deps)
-
-    e = runtime.compute(col2.task(1))
-    assert e.value == 95
-
-
 def test_builder_double_task(env):
     runtime = env.test_runtime()
 
-    col1 = runtime.register_builder("col1", lambda c, d: c * 10)
-    col2 = runtime.register_builder(
-        "col2", (lambda c, d: sum(x.value for x in d)),
-        (lambda c: [col1.task(10), col1.task(10), col1.task(10)]))
-    assert runtime.compute(col2.task("abc")).value == 300
+    def b2(config):
+        tasks = [col1(10), col1(10), col1(10)]
+        yield
+        return sum(x.value for x in tasks)
+    col1 = runtime.register_builder("col1", lambda c: c * 10)
+    col2 = runtime.register_builder("col2", b2)
+    assert runtime.compute(col2("abc")).value == 300
 
 
 def test_builder_stored_deps(env):
     runtime = env.test_runtime()
 
-    col1 = runtime.register_builder("col1", lambda c, d: c * 10)
-    col2 = runtime.register_builder(
-        "col2", (lambda c, d: sum(x.value for x in d)),
-        lambda c: [col1.task(i) for i in range(c["start"], c["end"], c["step"])])
-    col3 = runtime.register_builder(
-        "col3", (lambda c, d: sum(x.value for x in d)), lambda c:
-        [col2.task({
+    col1 = runtime.register_builder("col1", lambda c: c * 10)
+
+    def b2(c):
+        data = [col1(i) for i in range(c["start"], c["end"], c["step"])]
+        yield
+        return sum(d.value for d in data)
+
+    col2 = runtime.register_builder("col2", b2)
+
+    def b3(config):
+        a = col2({
             "start": 0,
-            "end": c,
+            "end": config,
             "step": 2
-        }),
-         col2.task({
-             "start": 0,
-             "end": c,
-             "step": 3
-         })])
-    assert runtime.compute(col3.task(10)).value == 380
+        })
+        b = col2({
+                "start": 0,
+                "end": config,
+                "step": 3
+        })
+        yield
+        return a.value + b.value
+
+    col3 = runtime.register_builder("col3", b3)
+    assert runtime.compute(col3(10)).value == 380
 
     cc2_2 = {"end": 10, "start": 0, "step": 2}
     cc2_3 = {"end": 10, "start": 0, "step": 3}
-    c2_2 = col2.task(cc2_2)
-    c2_3 = col2.task(cc2_3)
+    c2_2 = col2(cc2_2)
+    c2_3 = col2(cc2_3)
 
-    assert runtime.get_entry_state(col3.task(10)) == "finished"
+    assert runtime.get_entry_state(col3(10)) == "finished"
     assert runtime.get_entry_state(c2_2) == "finished"
     assert runtime.get_entry_state(c2_3) == "finished"
-    assert runtime.get_entry_state(col1.task(0)) == "finished"
-    assert runtime.get_entry_state(col1.task(2)) == "finished"
+    assert runtime.get_entry_state(col1(0)) == "finished"
+    assert runtime.get_entry_state(col1(2)) == "finished"
 
     assert set(runtime.db.get_recursive_consumers(col1.name, "2")) == {
         ("col1", "2"), ('col2', "{'end':10,'start':0,'step':2,}"), ('col3', "10")
@@ -240,92 +233,166 @@ def test_builder_stored_deps(env):
     assert set(runtime.db.get_recursive_consumers(col2.name, c2_3.key)) == {("col2", c2_3.key),
                                                                             ('col3', "10")}
 
-    assert set(runtime.db.get_recursive_consumers(col3.name, col3.task(10).key)) == {('col3', '10')}
+    assert set(runtime.db.get_recursive_consumers(col3.name, col3(10).key)) == {('col3', '10')}
 
-    runtime.remove(col1.task(6))
-    assert runtime.get_entry_state(col3.task(10)) is None
+    runtime.remove(col1(6))
+    assert runtime.get_entry_state(col3(10)) is None
     assert runtime.get_entry_state(c2_2) is None
     assert runtime.get_entry_state(c2_3) is None
-    assert runtime.get_entry_state(col1.task(0)) == "finished"
-    assert runtime.get_entry_state(col1.task(6)) is None
-    assert runtime.get_entry_state(col1.task(2)) == "finished"
+    assert runtime.get_entry_state(col1(0)) == "finished"
+    assert runtime.get_entry_state(col1(6)) is None
+    assert runtime.get_entry_state(col1(2)) == "finished"
 
-    runtime.remove(col1.task(0))
-    assert runtime.get_entry_state(col3.task(10)) is None
+    runtime.remove(col1(0))
+    assert runtime.get_entry_state(col3(10)) is None
     assert runtime.get_entry_state(c2_2) is None
     assert runtime.get_entry_state(c2_3) is None
-    assert runtime.get_entry_state(col1.task(0)) is None
-    assert runtime.get_entry_state(col1.task(6)) is None
-    assert runtime.get_entry_state(col1.task(2)) == "finished"
+    assert runtime.get_entry_state(col1(0)) is None
+    assert runtime.get_entry_state(col1(6)) is None
+    assert runtime.get_entry_state(col1(2)) == "finished"
 
-    assert runtime.compute(col3.task(10)).value == 380
+    assert runtime.compute(col3(10)).value == 380
 
-    assert runtime.get_entry_state(col3.task(10)) == "finished"
+    assert runtime.get_entry_state(col3(10)) == "finished"
     assert runtime.get_entry_state(c2_2) == "finished"
     assert runtime.get_entry_state(c2_3) == "finished"
-    assert runtime.get_entry_state(col1.task(0)) == "finished"
-    assert runtime.get_entry_state(col1.task(2)) == "finished"
+    assert runtime.get_entry_state(col1(0)) == "finished"
+    assert runtime.get_entry_state(col1(2)) == "finished"
 
-    runtime.remove(col1.task(2))
+    runtime.remove(col1(2))
 
-    assert runtime.get_entry_state(col3.task(10)) is None
+    assert runtime.get_entry_state(col3(10)) is None
     assert runtime.get_entry_state(c2_2) is None
     assert runtime.get_entry_state(c2_3) == "finished"
-    assert runtime.get_entry_state(col1.task(0)) == "finished"
-    assert runtime.get_entry_state(col1.task(6)) == "finished"
-    assert runtime.get_entry_state(col1.task(2)) is None
+    assert runtime.get_entry_state(col1(0)) == "finished"
+    assert runtime.get_entry_state(col1(6)) == "finished"
+    assert runtime.get_entry_state(col1(2)) is None
 
-    runtime.remove(col1.task(2))
+    runtime.remove(col1(2))
 
 
-def test_builder_clean(env):
+def test_builder_clear(env):
     runtime = env.test_runtime()
 
-    col1 = runtime.register_builder("col1", lambda c, d: c)
-    col2 = runtime.register_builder("col2", lambda c, d: c, lambda c: [col1.task(c)])
+    col1 = runtime.register_builder("col1", lambda c: c)
 
-    runtime.compute(col2.task(1))
-    runtime.clean(col1)
-    assert runtime.get_entry_state(col1.task(1)) is None
-    assert runtime.get_entry_state(col2.task(1)) is None
-    assert runtime.get_entry_state(col2.task(2)) is None
+    def b2(c):
+        d = col1(c)
+        yield
+        return d.value
+
+    col2 = runtime.register_builder("col2", b2)
+
+    runtime.compute(col2(1))
+    runtime.clear(col1)
+    assert runtime.get_entry_state(col1(1)) is None
+    assert runtime.get_entry_state(col2(1)) is None
+    assert runtime.get_entry_state(col2(2)) is None
 
 
 def test_builder_remove_inputs(env):
     runtime = env.test_runtime()
 
-    col1 = runtime.register_builder("col1", lambda c, d: c)
-    col2 = runtime.register_builder("col2", lambda c, d: c, lambda c: [col1.task(c)])
-    col3 = runtime.register_builder("col3", lambda c, d: c, lambda c: [col1.task(c)])
-    col4 = runtime.register_builder("col4", lambda c, d: c, lambda c: [col2.task(c)])
+    col1 = runtime.register_builder("col1", lambda c: c)
 
-    runtime.compute(col4.task(1))
-    runtime.compute(col3.task(1))
-    runtime.remove(col2.task(1), remove_inputs=True)
-    assert runtime.get_entry_state(col1.task(1)) is None
-    assert runtime.get_entry_state(col2.task(1)) is None
-    assert runtime.get_entry_state(col3.task(1)) is None
-    assert runtime.get_entry_state(col4.task(1)) is None
+    def b1(c):
+        d = col1(c)
+        yield
+        return d.value
+
+    def b2(c):
+        d = col2(c)
+        yield
+        return d.value
+
+    col2 = runtime.register_builder("col2", b1)
+    col3 = runtime.register_builder("col3", b1)
+    col4 = runtime.register_builder("col4", b2)
+
+    runtime.compute(col4(1))
+    runtime.compute(col3(1))
+    runtime.remove(col2(1), remove_inputs=True)
+    assert runtime.get_entry_state(col1(1)) is None
+    assert runtime.get_entry_state(col2(1)) is None
+    assert runtime.get_entry_state(col3(1)) is None
+    assert runtime.get_entry_state(col4(1)) is None
 
 
 def test_builder_computed(env):
     runtime = env.test_runtime()
     runtime.configure_executor(n_processes=1)
 
-    def build_fn(x, deps):
+    def build_fn(x):
         return x * 10
 
     builder = runtime.register_builder("col1", build_fn)
-    tasks = builder.tasks([2, 3, 4, 0, 5])
+    tasks = [builder(b) for b in [2, 3, 4, 0, 5]]
     assert len(tasks) == 5
-    assert runtime.get_entries(tasks) == [None] * len(tasks)
-    assert runtime.get_entries(tasks, drop_missing=True) == []
+    assert runtime.read_entries(tasks) == [None] * len(tasks)
+    assert runtime.read_entries(tasks, drop_missing=True) == []
 
-    runtime.compute(tasks)
-    assert [e.value for e in runtime.get_entries(tasks)] == [20, 30, 40, 0, 50]
-    assert [e.value if e else "missing" for e in runtime.get_entries(tasks + [builder.task(123)])
+    runtime.compute_many(tasks)
+    assert [e.value for e in runtime.read_entries(tasks)] == [20, 30, 40, 0, 50]
+    assert [e.value if e else "missing" for e in runtime.read_entries(tasks + [builder(123)])
             ] == [20, 30, 40, 0, 50, "missing"]
     assert [
         e.value if e else "missing"
-        for e in runtime.get_entries(tasks + [builder.task(123)], drop_missing=True)
+        for e in runtime.read_entries(tasks + [builder(123)], drop_missing=True)
     ] == [20, 30, 40, 0, 50]
+
+
+def test_builder_error_in_deps(env):
+
+    def builder_fn(c):
+        if c != 0:
+            raise Exception("MyError")
+        yield
+        return 123
+
+    runtime = env.test_runtime()
+    builder = runtime.register_builder("col1", builder_fn)
+    with pytest.raises(Exception, match="MyError"):
+        runtime.compute(builder(1))
+
+
+def test_builder_double_yield_error(env):
+
+    def builder_fn(c):
+        yield
+        yield
+        return 123
+
+    runtime = env.test_runtime()
+    builder = runtime.register_builder("col1", builder_fn)
+    with pytest.raises(Exception, match="yielded"):
+        runtime.compute(builder(1))
+
+
+def test_builder_ref_in_compute(env):
+
+    def builder_fn(c):
+        yield
+        col0(123)
+        return 123
+
+    runtime = env.test_runtime()
+    col0 = runtime.register_builder("col0", lambda c: 123)
+    builder = runtime.register_builder("col1", builder_fn)
+    with pytest.raises(Exception, match="computation phase"):
+        runtime.compute(builder(1))
+
+
+def test_builder_inconsistent_deps(env):
+
+    def builder_fn(c):
+        import random
+        col0(random.random())
+        yield
+        col0(123)
+        return 123
+
+    runtime = env.test_runtime()
+    col0 = runtime.register_builder("col0", lambda c: 123)
+    builder = runtime.register_builder("col1", builder_fn)
+    with pytest.raises(Exception, match="dependencies"):
+        runtime.compute(builder(1))

@@ -162,7 +162,7 @@ class DB:
 
         self._run(_helper)
 
-    def clean_builder(self, name):
+    def clear_builder(self, name):
 
         def _helper():
             with self.conn:
@@ -275,8 +275,7 @@ WHERE rowid IN
 
         return self._run(_helper)
 
-    def get_entry_no_config(self, builder_name, key, include_announced=False):
-
+    def read_entry(self, entry, include_announced=False):
         def _helper():
             c = self.conn.cursor()
             if include_announced:
@@ -287,25 +286,25 @@ WHERE rowid IN
                     WHERE builder = ? AND key = ? AND
                         (value is not null OR executor is null OR executor in
                         (SELECT id FROM executors WHERE {}))""".format(self.LIVE_EXECUTOR_QUERY),
-                    [builder_name, key])
+                    [entry.builder_name, entry.key])
             else:
                 c.execute(
                     """
                     SELECT value, job_setup, created, comp_time
                     FROM entries
                     WHERE builder = ? AND key = ? AND value is not null""",
-                    [builder_name, key])
+                    [entry.builder_name, entry.key])
             return c.fetchone()
 
         result = self._run(_helper)
         if result is None:
             return None
         value, job_setup, created, comp_time = result
-        return Entry(None,
-                     pickle.loads(value) if value is not None else None,
-                     pickle.loads(job_setup) if job_setup is not None else None,
-                     created,
-                     comp_time)
+        entry.value = pickle.loads(value) if value is not None else None
+        entry.job_setup = pickle.loads(job_setup) if job_setup is not None else None
+        entry.created = created
+        entry.comp_time = comp_time
+        return entry
 
     def get_entry(self, builder_name, key):
 
@@ -323,6 +322,8 @@ WHERE rowid IN
             return None
         config, value, job_setup, created, comp_time = result
         return Entry(
+            builder_name,
+            key,
             pickle.loads(config),
             pickle.loads(value) if value is not None else None,
             pickle.loads(job_setup) if job_setup is not None else None,
@@ -466,13 +467,12 @@ DELETE FROM entries
             message, config in self._run(_helper)
         ]
 
-    def announce_entries(self, executor_id, tasks, deps, report=None):
-
+    def announce_entries(self, executor_id, entries, deps, report=None):
         def _helper():
             if report:
                 report_data = self._unfold_report(report)
             entry_data = [(r.builder_name, r.key, pickle.dumps(r.config), executor_id)
-                          for r in tasks]
+                          for r in entries]
             deps_data = [(r1.builder_name, r1.key, r2.builder_name, r2.key)
                          for r1, r2 in deps]
             try:
@@ -637,16 +637,18 @@ DELETE FROM entries
         def _helper():
             c = self.conn.cursor()
             r = c.execute(
-                "SELECT config, value, comp_time, job_setup, created FROM entries WHERE builder = ?",
+                "SELECT key, config, value, comp_time, job_setup, created FROM entries WHERE builder = ?",
                 [builder_name])
             return list(r.fetchall())
 
         return [
-            Entry(pickle.loads(config),
+            Entry(builder_name,
+                  key,
+                  pickle.loads(config),
                   pickle.loads(value),
                   pickle.loads(job_setup) if job_setup is not None else None,
                   created, comp_time)
-            for (config, value, comp_time, job_setup, created) in self._run(_helper)
+            for (key, config, value, comp_time, job_setup, created) in self._run(_helper)
         ]
 
     def get_all_configs(self, builder_name):

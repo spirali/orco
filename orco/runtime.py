@@ -1,19 +1,23 @@
 import collections
+import inspect
 import logging
 import threading
 import pickle
 import time
 
 from .builder import Builder
+from .entry import Entry
 from .internals.db import DB
 from .internals.executor import Executor
 from .internals.job import Job
 from .internals.rawentry import RawEntry
 from .internals.runner import JobRunner
-from .task import make_key
+from .internals.key import make_key
 from .report import Report
-from .internals.tasktools import collect_tasks, resolve_tasks
+#from .internals.tasktools import collect_tasks, resolve_tasks
 from .internals.utils import format_time
+from orco.internals.context import _CONTEXT
+
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +33,12 @@ def _default_make_raw_entry(builder_name, key, config, value, job_setup, comp_ti
     return RawEntry(builder_name, key, config, pickle.dumps(value), value_repr, job_setup, comp_time)
 
 
-class _Builder:
+class _BuilderDef:
 
-    def __init__(self, name: str, build_fn, dep_fn, job_setup):
+    def __init__(self, name: str, main_fn, job_setup):
         self.name = name
-        self.build_fn = build_fn
+        self.main_fn = main_fn
         self.make_raw_entry = _default_make_raw_entry
-        self.dep_fn = dep_fn
         self.job_setup = job_setup
 
     def create_job_setup(self, config):
@@ -62,7 +65,7 @@ class Runtime:
     >>> runtime = Runtime("/path/to/dbfile.db")
     """
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, global_builders=False):
         self.db = DB(db_path)
         self.db.init()
 
@@ -75,6 +78,12 @@ class Runtime:
         self.runners = {}
 
         logging.debug("Starting runtime %s (db=%s)", self, db_path)
+
+        if global_builders:
+            from .globals import _get_global_builders
+            for builder in _get_global_builders():
+                logging.debug("Registering global builder %s", builder.name)
+                self._register_builder(builder)
 
     def __enter__(self):
         self._check_stopped()
@@ -122,14 +131,20 @@ class Runtime:
             self.executor.stop()
             self.executor = None
 
-    def register_builder(self, name, build_fn=None, dep_fn=None, job_setup=None):
+    def register_builder(self, name, build_fn=None, *, job_setup=None):
+        if not isinstance(name, str) or not name:
+            raise Exception("Builder name has to be non-empty string, not {!r}".format(name))
         with self._lock:
-            if name in self._builders:
-                raise Exception("Builder already registered")
-            self.db.ensure_builder(name)
-            builder = _Builder(name, build_fn, dep_fn, job_setup)
-            self._builders[name] = builder
+            builder = _BuilderDef(name, build_fn, job_setup)
+            self._register_builder(builder)
         return Builder(name)
+
+    def _register_builder(self, builder):
+        name = builder.name
+        if name in self._builders:
+            raise Exception("Builder '{}' is already registered".format(name))
+        self.db.ensure_builder(name)
+        self._builders[name] = builder
 
     def serve(self, port=8550, debug=False, testing=False, nonblocking=False):
         from .internals.browser import init_service
@@ -150,41 +165,53 @@ class Runtime:
             else:
                 run_app()
 
-    def get_entry_state(self, task):
-        return self.db.get_entry_state(task.builder_name, task.key)
+    def get_entry_state(self, entry):
+        return self.db.get_entry_state(entry.builder_name, entry.key)
 
-    def get_entry(self, task, include_announced=False):
-        entry = self.db.get_entry_no_config(task.builder_name, task.key, include_announced)
-        if entry is not None:
-            entry.config = task.config
-        return entry
+    def read_entry(self, entry, include_announced=False):
+        result = self.db.read_entry(entry, include_announced)
+        if result is None:
+            raise Exception("Entry {} is not in database".format(entry))
+        return result
 
-    def get_entries(self, tasks, include_announced=False, drop_missing=False):
-        results = [self.get_entry(task, include_announced) for task in tasks]
-        if drop_missing:
-            results = [entry for entry in results if entry is not None]
+    def try_read_entry(self, entry, include_announced=False):
+        return self.db.read_entry(entry, include_announced)
+
+    def read_entries(self, entries, include_announced=False, drop_missing=False):
+        results = []
+        for entry in entries:
+            if self.try_read_entry(entry, include_announced):
+                results.append(entry)
+            elif not drop_missing:
+                results.append(None)
         return results
 
-    def remove(self, task, remove_inputs=False):
-        return self.remove_many([task], remove_inputs)
+    def remove(self, entry, remove_inputs=False):
+        return self.remove_many([entry], remove_inputs)
 
-    def remove_many(self, tasks, remove_inputs=False):
+    def remove_many(self, entries, remove_inputs=False):
         if remove_inputs:
-            self.db.invalidate_entries_by_key(tasks)
+            self.db.invalidate_entries_by_key(entries)
         else:
-            self.db.remove_entries_by_key(tasks)
+            self.db.remove_entries_by_key(entries)
 
-    def insert(self, task, value):
-        builder = self._builders[task.builder_name]
-        entry = builder.make_raw_entry(builder.name, make_key(task.config), task.config, value, None, None)
+    def insert(self, entry, value):
+        entry.value = value
+        builder = self._builders[entry.builder_name]
+        entry = builder.make_raw_entry(builder.name, entry.key, entry.config, value, None, None)
         self.db.create_entries((entry,))
 
-    def clean(self, builder_task):
-        self.db.clean_builder(builder_task.name)
+    def clear(self, builder):
+        assert isinstance(builder, Builder)
+        self.db.clear_builder(builder.name)
 
-    def compute(self, obj, continue_on_error=False):
-        results = self._compute_tasks(collect_tasks(obj), continue_on_error)
-        return resolve_tasks(obj, results)
+    def compute(self, entry, continue_on_error=False):
+        self._compute((entry,), continue_on_error)
+        return entry
+
+    def compute_many(self, entries, continue_on_error=False):
+        self._compute(entries, continue_on_error)
+        return entries
 
     def get_reports(self, count=100):
         return self.db.get_reports(count)
@@ -214,51 +241,61 @@ class Runtime:
     def _executor_summaries(self):
         return self.db.executor_summaries()
 
-    def _get_builder(self, task):
-        return self._builders[task.builder_name]
+    def _get_builder(self, builder_name):
+        return self._builders[builder_name]
 
-    def _create_compute_tree(self, tasks, exists, errors):
+    def _create_compute_tree(self, entries, exists, errors):
         jobs = {}
         global_deps = set()
         conflicts = set()
+        assert _CONTEXT.on_entry is None
 
-        def make_job(task):
-            if task in exists:
-                return task
-            if task in conflicts or (errors and task in errors):
+        def make_job(entry):
+            if entry in exists:
+                return entry
+            if entry in conflicts or (errors and entry in errors):
                 return None
-            job = jobs.get(task)
+            entry_key = entry.make_entry_key()
+            job = jobs.get(entry_key)
             if job is not None:
                 return job
-            builder = self._get_builder(task)
-            state = self.db.get_entry_state(task.builder_name, task.key)
+            builder = self._get_builder(entry.builder_name)
+            state = self.db.get_entry_state(entry.builder_name, entry.key)
             if state == "finished":
-                exists.add(task)
-                return task
+                exists.add(entry)
+                return entry
             if state == "announced":
-                conflicts.add(task)
+                conflicts.add(entry_key)
                 return None
-            if state is None and builder.dep_fn:
-                dep_value = builder.dep_fn(task.config)
-                dep_tasks = collect_tasks(dep_value)
-                inputs = [make_job(r) for r in dep_tasks]
+
+            if state is None and builder.main_fn and inspect.isgeneratorfunction(builder.main_fn):
+                deps = []
+                try:
+                    _CONTEXT.on_entry = deps.append
+                    it = builder.main_fn(entry.config)
+                    next(it)
+                except StopIteration:
+                    raise Exception("Builder '{}' main function is generator but does not yield".format(entry.builder_name, entry))
+                finally:
+                    _CONTEXT.on_entry = None
+                inputs = [make_job(r) for r in deps]
                 if any(inp is None for inp in inputs):
                     return None
-                for r in dep_tasks:
-                    global_deps.add((r, task))
+                for r in deps:
+                    global_deps.add((r.make_entry_key(), entry_key))
             else:
                 inputs = ()
-                dep_value = None
-            if state is None and builder.build_fn is None:
+            if state is None and builder.main_fn is None:
                 raise Exception(
                     "Computation depends on a missing configuration '{}' in a fixed builder"
-                    .format(task))
-            job = Job(task, inputs, dep_value, builder.create_job_setup(task.config))
-            jobs[task] = job
+                    .format(entry))
+            job = Job(entry, inputs, builder.create_job_setup(entry.config))
+            jobs[entry_key] = job
+            print("JOB", job)
             return job
 
-        for task in tasks:
-            make_job(task)
+        for entry in entries:
+            make_job(entry)
 
         return jobs, global_deps, len(conflicts)
 
@@ -267,7 +304,7 @@ class Runtime:
             raise Exception("Runtime was already stopped")
 
     def _print_report(self, jobs):
-        jobs_per_builder = collections.Counter([t.task.builder_name for t in jobs.values()])
+        jobs_per_builder = collections.Counter([j.entry.builder_name for j in jobs.values()])
         print("Scheduled jobs   |     # | Expected comp. time (per entry)\n"
               "-----------------+-------+--------------------------------")
         for col, count in sorted(jobs_per_builder.items()):
@@ -279,24 +316,24 @@ class Runtime:
                                                            format_time(stats["stdev"])))
         print("-----------------+-------+--------------------------------")
 
-    def _run_computation(self, tasks, exists, errors):
+    def _run_computation(self, entries, exists, errors):
         executor = self.executor
-        jobs, global_deps, n_conflicts = self._create_compute_tree(tasks, exists, errors)
+        jobs, global_deps, n_conflicts = self._create_compute_tree(entries, exists, errors)
         if not jobs and n_conflicts == 0:
             return "finished"
-        need_to_compute_tasks = [job.task for job in jobs.values()]
-        if not need_to_compute_tasks:
-            print("Waiting for finished computation on another executor ...")
+        need_to_compute_entries = [job.entry for job in jobs.values()]
+        if not need_to_compute_entries:
+            print("Waiting for computation on another executor ...")
             return "wait"
-        logger.debug("Announcing tasks %s at executor %s", need_to_compute_tasks, executor.id)
+        logger.debug("Announcing entries %s at executor %s", need_to_compute_entries, executor.id)
         if not self.db.announce_entries(
-                executor.id, need_to_compute_tasks, global_deps,
+                executor.id, need_to_compute_entries, global_deps,
                 Report("info", executor.id, "Computing {} job(s)".format(
-                    len(need_to_compute_tasks)))):
+                    len(need_to_compute_entries)))):
             return "wait"
         try:
             # we do not this anymore, and .run may be long
-            del global_deps, need_to_compute_tasks
+            del global_deps, need_to_compute_entries
             if n_conflicts:
                 print(
                     "Some computation was temporarily skipped as they depends on jobs computed by another executor"
@@ -315,7 +352,10 @@ class Runtime:
             self.db.unannounce_entries(executor.id, list(jobs))
             raise
 
-    def _compute_tasks(self, tasks, continue_on_error=False):
+    def _compute(self, entries, continue_on_error=False):
+        for entry in entries:
+            if not isinstance(entry, Entry):
+                raise Exception("'{!r}' is not an entry".format(entry))
         exists = set()
         if continue_on_error:
             errors = set()
@@ -326,7 +366,7 @@ class Runtime:
             self.start_executor()
 
         while True:
-            status = self._run_computation(tasks, exists, errors)
+            status = self._run_computation(entries, exists, errors)
             if status == "finished":
                 break
             elif status == "next":
@@ -339,4 +379,5 @@ class Runtime:
         if errors:
             print("During computation, {} errors occured, see reports for details".format(
                 len(errors)))
-        return {task: self.get_entry(task) for task in tasks}
+        for entry in entries:
+            self.read_entry(entry)

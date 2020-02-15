@@ -11,7 +11,7 @@ import platform
 from orco.internals.runner import LocalProcessRunner, JobFailure
 from orco.internals.job import Job
 
-from orco.task import TaskKey
+from orco.entry import EntryKey
 from orco.report import Report
 
 logger = logging.getLogger(__name__)
@@ -132,7 +132,7 @@ class Executor:
             runner_name = job_setup.get("runner", "local")
         runner = self.runners.get(runner_name)
         if runner is None:
-            raise Exception("Task '{}' asked for runner unknown runner '{}'".format(job.task.task_key, runner_name))
+            raise Exception("Task '{}' asked for runner unknown runner '{}'".format(job.entry, runner_name))
         return runner.submit(self.runtime, job)
 
     def run(self, all_jobs, continue_on_error):
@@ -143,7 +143,7 @@ class Executor:
             if pending_reports:
                 del pending_reports[:]
             for raw_entry in unprocessed:
-                job = all_jobs[TaskKey(raw_entry.builder_name, raw_entry.key)]
+                job = all_jobs[EntryKey(raw_entry.builder_name, raw_entry.key)]
                 for c in consumers.get(job, ()):
                     waiting_deps[c] -= 1
                     w = waiting_deps[c]
@@ -154,7 +154,7 @@ class Executor:
         self.stats = {"n_jobs": len(all_jobs), "n_completed": 0}
 
         pending_reports = []
-        all_jobs = {task.task_key(): job for (task, job) in all_jobs.items()}
+        #all_jobs = {job.entry.entry_key(): job for job in all_jobs}
         db = self.runtime.db
         db.update_stats(self.id, self.stats)
         consumers, waiting_deps, ready = self._init(all_jobs.values())
@@ -175,23 +175,23 @@ class Executor:
                     progressbar.update()
                     result = f.result()
                     if isinstance(result, JobFailure):
-                        task_key = result.task_key
-                        config = db.get_config(task_key[0], task_key[1])
+                        entry_key = result.entry_key
+                        config = db.get_config(entry_key[0], entry_key[1])
                         message = result.message()
                         report = Report(
                             result.report_type(),
                             self.id,
                             message,
-                            builder_name=task_key[0],
+                            builder_name=entry_key[0],
                             config=config)
                         if continue_on_error:
-                            errors.append(task_key)
+                            errors.append(entry_key)
                             pending_reports.append(report)
                         else:
                             db.insert_report(report)
 
                             raise JobFailedException("{} ({}/{})".format(
-                                message, result.task_key[0], repr(result.task_key[1])))
+                                message, result.entry_key[0], repr(result.entry_key[1])))
                         continue
                     logger.debug("Job finished: %s/%s", result.builder_name, result.key)
                     unprocessed.append(result)

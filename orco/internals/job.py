@@ -1,14 +1,14 @@
 from typing import Iterable
 
+from ..entry import Entry
 from ..task import Task
 
 
 class Job:
 
-    __slots__ = ("task", "inputs", "dep_value", "job_setup")
+    __slots__ = ("entry", "inputs", "deps", "job_setup")
 
-    def __init__(self, task: Task, inputs: Iterable["Job"], dep_value, job_setup):
-        self.task = task
+    def __init__(self, entry: Entry, inputs: Iterable["Job"], job_setup):
+        self.entry = entry
         self.inputs = inputs
-        self.dep_value = dep_value
         self.job_setup = job_setup

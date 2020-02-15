@@ -21,10 +21,10 @@ class TestEnv:
         self.executors = []
         self.tmpdir = tmpdir
 
-    def test_runtime(self):
+    def test_runtime(self, **kwargs):
         db_path = str(self.tmpdir.join("db"))
         logger.info("DB path %s", db_path)
-        r = orco.Runtime(db_path)
+        r = orco.Runtime(db_path, **kwargs)
         self.runtimes.append(r)
         return r
 
@@ -51,6 +51,7 @@ class TestEnv:
 def env(tmpdir):
     print("Test temp dir", tmpdir)
     test_env = TestEnv(tmpdir)
+    orco.globals.clear_global_builders()
     yield test_env
     test_env.stop()
 

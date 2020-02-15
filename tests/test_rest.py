@@ -12,8 +12,8 @@ def test_rest_builders():
 
         c = rt.register_builder("hello")
 
-        rt.insert(c.task({"x": 1, "y": [1, 2, 3]}), "ABC")
-        rt.insert(c.task("e2"), "A" * (1024 * 1024))
+        rt.insert(c({"x": 1, "y": [1, 2, 3]}), "ABC")
+        rt.insert(c("e2"), "A" * (1024 * 1024))
 
         rt.register_builder("hello2")
 
@@ -52,8 +52,8 @@ def test_rest_executors(env):
 
 def test_rest_reports(env):
     rt = env.test_runtime()
-    col1 = rt.register_builder("col1", lambda c, d: c * 10)
-    rt.compute([col1.task(20), col1.task(30)])
+    col1 = rt.register_builder("col1", lambda c: c * 10)
+    rt.compute_many([col1(20), col1(30)])
     with rt.serve(testing=True).test_client() as client:
         r = client.get("rest/reports").get_json()
         assert len(r) == 1

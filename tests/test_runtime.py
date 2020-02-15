@@ -18,12 +18,12 @@ def test_runtime_stop(env):
 
 def test_reports(env):
 
-    def adder(config, deps):
+    def adder(config):
         return config["a"] + config["b"]
 
     runtime = env.test_runtime()
     builder = runtime.register_builder("col1", adder)
-    entry = runtime.compute(builder.task({"a": 10, "b": 30}))
+    runtime.compute(builder({"a": 10, "b": 30}))
 
     reports = runtime.get_reports()
     assert len(reports) == 1

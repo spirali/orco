@@ -3,7 +3,7 @@ import threading
 import pytest
 
 from orco import Builder, JobFailedException
-from orco.task import make_key
+from orco.internals.key import make_key
 
 
 @pytest.mark.parametrize("n_processes", [1, 2])
@@ -27,7 +27,7 @@ def test_executor(env, n_processes):
     executor3.start()
 
     c = runtime.register_builder("abc")
-    runtime.db.announce_entries(executor3.id, [c.task("x")], [])
+    runtime.db.announce_entries(executor3.id, [c("x")], [])
     assert runtime.db.get_entry_state(c.name, make_key("x")) == "announced"
     executor3.stop()
     assert runtime.db.get_entry_state(c.name, make_key("x")) is None
@@ -52,16 +52,26 @@ def test_executor_error(env):
     executor = env.executor(runtime, heartbeat_interval=1, n_processes=2)
     executor.start()
 
-    col0 = runtime.register_builder("col0", lambda c, d: c)
-    col1 = runtime.register_builder("col1", lambda c, d: 100 // d[0].value,
-                                       lambda c: [col0.task(c)])
-    col2 = runtime.register_builder("col2", lambda c, ds: sum(d.value for d in ds),
-                                       lambda c: [col1.task(x) for x in c])
+    col0 = runtime.register_builder("col0", lambda c: c)
+
+    def b1(c):
+        d = col0(c)
+        yield
+        return 100 // d.value
+
+    col1 = runtime.register_builder("col1", b1)
+
+    def b2(c):
+        data = [col1(x) for x in c]
+        yield
+        return sum(d.value for d in data)
+
+    col2 = runtime.register_builder("col2", b2)
 
     assert not runtime.get_reports()
 
     with pytest.raises(JobFailedException, match=".*ZeroDivisionError.*"):
-        assert runtime.compute(col2.task([10, 0, 20]))
+        assert runtime.compute(col2([10, 0, 20]))
 
     reports = runtime.get_reports()
     assert len(reports) == 2
@@ -70,21 +80,21 @@ def test_executor_error(env):
     assert reports[0].config == 0
     assert "ZeroDivisionError" in reports[0].message
 
-    assert runtime.get_entry_state(col0.task(0)) == "finished"
+    assert runtime.get_entry_state(col0(0)) == "finished"
 
-    assert runtime.compute(col2.task([10, 20])).value == 15
-    assert runtime.compute(col2.task([1, 2, 4])).value == 175
+    assert runtime.compute(col2([10, 20])).value == 15
+    assert runtime.compute(col2([1, 2, 4])).value == 175
 
     with pytest.raises(JobFailedException, match=".*ZeroDivisionError.*"):
-        assert runtime.compute(col1.task(0))
-    assert runtime.get_entry_state(col0.task(0)) == "finished"
+        assert runtime.compute(col1(0))
+    assert runtime.get_entry_state(col0(0)) == "finished"
 
-    assert runtime.compute(col2.task([10, 20])).value == 15
-    assert runtime.compute(col2.task([1, 2, 4])).value == 175
+    assert runtime.compute(col2([10, 20])).value == 15
+    assert runtime.compute(col2([1, 2, 4])).value == 175
 
-    r1 = [col2.task([100 + x, 101 + x, 102 + x]) for x in range(20)]
-    r2 = [col2.task([200 + x, 201 + x, 202 + x]) for x in range(20)]
-    result = runtime.compute(r1 + [col2.task([303, 0, 304])] + r2, continue_on_error=True)
+    r1 = [col2([100 + x, 101 + x, 102 + x]) for x in range(20)]
+    r2 = [col2([200 + x, 201 + x, 202 + x]) for x in range(20)]
+    result = runtime.compute_many(r1 + [col2([303, 0, 304])] + r2, continue_on_error=True)
     for i in range(20):
         assert result[i] is not None
     for i in range(21, 41):
@@ -112,7 +122,7 @@ def test_executor_timeout(env):
 
     config0 = {"time": 1, "timeout": 0.2}
     with pytest.raises(JobFailedException, match=".*timeout.*"):
-        assert runtime.compute(col0.task(config0))
+        assert runtime.compute(col0(config0))
 
     reports = runtime.get_reports()
     assert len(reports) == 2
@@ -121,8 +131,8 @@ def test_executor_timeout(env):
     assert reports[0].config == config0
     assert "timeout" in reports[0].message
 
-    assert runtime.compute(col0.task({"time": 1})).value == 1
-    assert runtime.compute(col0.task({"time": 0.2, "timeout": 5})).value == 0.2
+    assert runtime.compute(col0({"time": 1})).value == 1
+    assert runtime.compute(col0({"time": 0.2, "timeout": 5})).value == 0.2
 
 
 def test_executor_conflict(env, tmpdir):
@@ -140,7 +150,7 @@ def test_executor_conflict(env, tmpdir):
     def init():
         runtime = env.test_runtime()
         col0 = runtime.register_builder("col0", compute_0)
-        col1 = runtime.register_builder("col1", compute_1, lambda c: [col0.task(x) for x in c])
+        col1 = runtime.register_builder("col1", compute_1, lambda c: [col0(x) for x in c])
         return runtime, col0, col1
 
     runtime1, col0_0, col1_0 = init()
@@ -149,15 +159,15 @@ def test_executor_conflict(env, tmpdir):
     results = [None, None]
 
     def comp1(runtime, col0, col1):
-        results[0] = runtime1.compute(col1.task([0, 2, 3, 7, 10]))
+        results[0] = runtime1.compute(col1([0, 2, 3, 7, 10]))
 
     def comp2(runtime, col0, col1):
-        results[1] = runtime2.compute(col1.task([2, 3, 7, 11]))
+        results[1] = runtime2.compute(col1([2, 3, 7, 11]))
 
     t1 = threading.Thread(target=comp1, args=(runtime1, col0_0, col1_0))
     t1.start()
     time.sleep(0.5)
-    assert runtime2.get_entry_state(Builder("col0").task(0)) == "announced"
+    assert runtime2.get_entry_state(Builder("col0")(0)) == "announced"
 
     t2 = threading.Thread(target=comp2, args=(runtime2, col0_1, col1_1))
     t2.start()
@@ -171,10 +181,10 @@ def test_executor_conflict(env, tmpdir):
     results = [None, None]
 
     def comp3(runtime, col0, col1):
-        results[0] = runtime1.compute(col1.task([2, 7, 10, 30]))
+        results[0] = runtime1.compute(col1([2, 7, 10, 30]))
 
     def comp4(runtime, col0, col1):
-        results[1] = runtime2.compute(col0.task(30))
+        results[1] = runtime2.compute(col0(30))
 
     t1 = threading.Thread(target=comp3, args=(runtime1, col0_0, col1_0))
     t1.start()
