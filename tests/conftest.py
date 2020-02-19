@@ -51,7 +51,7 @@ class TestEnv:
 def env(tmpdir):
     print("Test temp dir", tmpdir)
     test_env = TestEnv(tmpdir)
-    orco.globals.clear_global_builders()
+    orco.clear_global_builders()
     yield test_env
     test_env.stop()
 

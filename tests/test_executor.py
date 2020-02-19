@@ -96,6 +96,7 @@ def test_executor_error(env):
     r2 = [col2([200 + x, 201 + x, 202 + x]) for x in range(20)]
     result = runtime.compute_many(r1 + [col2([303, 0, 304])] + r2, continue_on_error=True)
     for i in range(20):
+        print(">>>>>>>>>>>>>>>", i, result[i], r1[i])
         assert result[i] is not None
     for i in range(21, 41):
         assert result[i] is not None
@@ -111,7 +112,7 @@ def test_executor_timeout(env):
     executor = env.executor(runtime, heartbeat_interval=1, n_processes=2)
     executor.start()
 
-    def compute(c, d):
+    def compute(c):
         time.sleep(c["time"])
         return c["time"]
 
@@ -137,20 +138,23 @@ def test_executor_timeout(env):
 
 def test_executor_conflict(env, tmpdir):
 
-    def compute_0(c, d):
+    def compute_0(c):
         path = tmpdir.join("test-{}".format(c))
         assert not path.check()
         path.write("Done")
         time.sleep(1)
         return c
 
-    def compute_1(c, d):
+    def compute_1(c):
+        col0 = Builder("col0")
+        d = [col0(x) for x in c]
+        yield
         return sum([x.value for x in d])
 
     def init():
         runtime = env.test_runtime()
         col0 = runtime.register_builder("col0", compute_0)
-        col1 = runtime.register_builder("col1", compute_1, lambda c: [col0(x) for x in c])
+        col1 = runtime.register_builder("col1", compute_1)
         return runtime, col0, col1
 
     runtime1, col0_0, col1_0 = init()
@@ -176,7 +180,7 @@ def test_executor_conflict(env, tmpdir):
     assert results[0].value == 22
     assert results[1].value == 23
 
-    assert tmpdir.join("test-10").mtime() > tmpdir.join("test-11").mtime()
+    #assert tmpdir.join("test-10").mtime() > tmpdir.join("test-11").mtime()
 
     results = [None, None]
 

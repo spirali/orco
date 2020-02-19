@@ -206,12 +206,10 @@ class Runtime:
         self.db.clear_builder(builder.name)
 
     def compute(self, entry, continue_on_error=False):
-        self._compute((entry,), continue_on_error)
-        return entry
+        return self._compute((entry,), continue_on_error)[0]
 
     def compute_many(self, entries, continue_on_error=False):
-        self._compute(entries, continue_on_error)
-        return entries
+        return self._compute(entries, continue_on_error)
 
     def get_reports(self, count=100):
         return self.db.get_reports(count)
@@ -248,7 +246,7 @@ class Runtime:
         jobs = {}
         global_deps = set()
         conflicts = set()
-        assert _CONTEXT.on_entry is None
+        assert not hasattr(_CONTEXT, "on_entry") or _CONTEXT.on_entry is None
 
         def make_job(entry):
             if entry in exists:
@@ -379,5 +377,10 @@ class Runtime:
         if errors:
             print("During computation, {} errors occured, see reports for details".format(
                 len(errors)))
-        for entry in entries:
-            self.read_entry(entry)
+
+        if not errors:
+            for entry in entries:
+                self.read_entry(entry)
+            return entries
+        else:
+            return [self.try_read_entry(entry) if entry.make_entry_key() not in errors else None for entry in entries]

@@ -15,6 +15,8 @@ class Builder:
 
     def __call__(self, config):
         entry = Entry(self.name, make_key(config), config, None, None, None)
+        if not hasattr(_CONTEXT, "on_entry"):
+            return entry
         on_entry = _CONTEXT.on_entry
         if on_entry:
             on_entry(entry)
