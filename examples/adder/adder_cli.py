@@ -1,12 +1,10 @@
-from orco import Runtime, run_cli
-
-runtime = Runtime("./mydb")
+import orco
 
 
-def build_fn(config, inputs):
+@orco.builder()
+def add(config):
     return config["a"] + config["b"]
 
 
-add = runtime.register_builder("add", build_fn=build_fn)
-
-run_cli(runtime)
+runtime = orco.Runtime("./mydb")
+orco.run_cli(runtime)

@@ -65,7 +65,7 @@ class Runtime:
     >>> runtime = Runtime("/path/to/dbfile.db")
     """
 
-    def __init__(self, db_path: str, global_builders=False):
+    def __init__(self, db_path: str, global_builders=True):
         self.db = DB(db_path)
         self.db.init()
 
@@ -289,7 +289,6 @@ class Runtime:
                     .format(entry))
             job = Job(entry, inputs, builder.create_job_setup(entry.config))
             jobs[entry_key] = job
-            print("JOB", job)
             return job
 
         for entry in entries:

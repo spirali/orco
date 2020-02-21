@@ -10,7 +10,7 @@ def _command_serve(runtime, args):
 
 
 def _command_compute(runtime, args):
-    task = Builder(args.builder).task(json.loads(args.config))
+    task = Builder(args.builder)(json.loads(args.config))
     print(runtime.compute(task).value)
 
 
