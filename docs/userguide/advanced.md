@@ -54,14 +54,17 @@ configurations of already computed results in the database "in-place". Using thi
 change already computed configurations without recomputing them again.
 
 ```python
-builder = runtime.register_builder(...)
+
+@orco.builder()
+def my_builder(config):
+    ...
 
 # Introduce a "version" key to all computed configurations of a builder
 def uprage_config(config):
     config.setdefault("version", 1)
     return config
 
-runtime.upgrade_builder(builder, upgrade_config)
+runtime.upgrade_builder(my_builder, upgrade_config)
 ```
 
 Note that the upgrade is atomic, i.e. if an exception happens during the upgrade, the changes made so far
@@ -243,23 +246,18 @@ the name of the builder:
 from orco import Builder
 
 builder1 = Builder("builder1")
-builder1.task(config)
+entry = builder1(config)
 ```
 
-The only limitation is that the builder with the specified name has to be registered in
-the runtime by the point that you try to `compute` the created references.
 
 ## Retrieving entries without computation
 
 If you want to query the database for already computed entries, without starting the computation
-for configurations that are not yet computed, you can use the `get_entry` function on a `Runtime`.
+for configurations that are not yet computed, you can use the `read_entry` function on a `Runtime`.
+It fills the entry value if its exists or throws an exception.
 
-If no computed entry is stored in the database for a given configuration, `None` will be returned.
+The method `try_read_entry` works similarly, but return `None` is not in the database. 
 
-```python
-# Returns None if config is not in the builder
-entry = runtime.get_entry(builder.task(config))
-```
 
 ## Fixed builders
 
@@ -268,12 +266,13 @@ You can insert values into them method using the `insert` function, which receiv
 and its result value:
 
 ```python
-# Register a fixed builder
-builder = runtime.register_builder("my_builder")
+
+my_builder = runtime.register_builder("my_builder")
 
 # Insert two values
-runtime.insert(builder.task({"something": 1}), 123)
-runtime.insert(builder.task("abc"), "xyz")
+runtime.insert(my_builder({"something": 1}), 123)
+runtime.insert(my_builder("abc"), "xyz")
+
 ```
 
 When a reference into a fixed builder occurs in a computation, the value for
@@ -310,42 +309,5 @@ with some exceptions:
   equivalent.
 * Dictionary keys starting with an underscore are ignored:
   `{"iterations": 100, "_note": "Foo!"}` and `{"iterations": 100}` are equivalent.
-
-
-## Tasks in configurations
-
-Even though you usually only use `task` as parameters for `compute` and as a return value
-from a `dependency function`, you can in fact pass an arbitrary JSON-like Python object.
-
-The `compute` function computes all `tasks` in the object and evaluates them to an `entry`.
-All `tasks` contained in the return value of `dependency function` are evaluated to a computed
-`entry` and the final value is provided as the `inputs` parameter to a `build function`.
-
-Example with `compute`:
-```python
-# Result is a single entry
-runtime.compute(adder.tasks({"a": 1, "b": 2}))
-
-# Result is a list of two entries
-runtime.compute([adder.task({"a": 1, "b": 2}), adder.task({"a": 4, "b": 5})])
-
-# Result is a dictionary {"x": <Entry>, "y": <Entry>}
-runtime.compute({"x": adder.task({"a": 1, "b": 2}),
-                 "y": adder.task({"a": 4, "b": 5})})
-```
-
-Example with a `dependency function`:
-```python
-# In this example, we assume that 'c' and 'd' are builders
-
-# Dependency function
-def dep_fn(config):
-    return {"abc": [c.task(...), d.task(...), c.task(...)], "xyz": c.task(...)}
-
-# Build function, that is used for
-def build_fn(config, inputs):
-    # When this function is called, its inputs will look like:
-    # {"abc": [<Entry from 'c'>, <Entry from 'd'>, <Entry from 'c'>], "xyz": <Entry from 'c'>}
-```
 
 Continue to [Best practices](best-practices.md)

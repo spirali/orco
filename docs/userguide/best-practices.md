@@ -21,12 +21,18 @@ builders.
 
 ```python
 # Original version
-def make_deps(config):
-    return builder1.task(config["dep_parameters"])
+@orco.builder()
+def original_builder(config):
+    dep = other_builder(config["dep_parameters"])
+    yield 
+    ...
 
 # Version propagating
-def make_deps(config):
-    return builder1.task({**config["dep_parameters"], "version": config["version"]})
+@orco.builder()
+def verisioning_builder(config):
+    dep = other_builder({**config["dep_parameters"], "version": config["version"]})
+    yield
+    ...
 ```
 
 If you already have some results computed without a `version` key, you can
@@ -54,16 +60,15 @@ In the following example, we compute 20 samples with the same input parameters.
 
 ```python
 # Build function for sampler
-def run_sampler(config, inputs):
+orco.builder()
+def sampler(config):
     # In the configration we ignore the 'sample' key
     return doSomethingNondeterministic(config)
 
-samples = runtime.register_builder("samples", build_fn=run_sampler)
-
 config = {...}
-results = runtime.compute(samples.tasks(
-        [{**config, "sample": i}
-         for i in range(20)])
+results = runtime.compute(
+          [sampler({**config, "sample": i})
+           for i in range(20)])
 ```
 
 Later, when we find out that we need more samples, we can easily increase the sample count.
@@ -71,7 +76,6 @@ Only the new samples will be computed (the first 20 ones are already stored in t
 
 ```python
 # only the 10 new samples will be computed
-results = runtime.compute(samples.tasks(
-        [{**config, "sample": i}
-         for i in range(30)])
+results = runtime.compute([sampler({**config, "sample": i})
+                           for i in range(30)])
 ```

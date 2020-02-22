@@ -6,17 +6,16 @@ To use it, you have to pass your created runtime It can be used
 as follows:
 
 ```python
-from orco import Runtime, run_cli
+import orco
 
-runtime = Runtime("./mydb")
+runtime = orco.Runtime("./mydb")
 
-def build_fn(config, inputs):
+@orco.builder()
+def adder(config):
     return config["a"] + config["b"]
 
 
-runtime.register_builder("adder", build_fn=build_fn)
-
-run_cli(runtime)  # Start CLI interface
+orco.run_cli(runtime)  # Start CLI interface
 ```
 
 Let us assume that the script above is saved as `adder_cli.py`, then we can
