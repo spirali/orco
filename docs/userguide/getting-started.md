@@ -137,7 +137,7 @@ import orco
 import time
 import random
 
-orco.builder()
+@orco.builder()
 def simulation(config, inputs):
     # Fake a computation
     result = random.randint(0, config["p"])
@@ -151,7 +151,7 @@ will be as follows `{"from": <P-START>, "upto": <P-END>}` where `<P-START>`
 and `<P-END>` defines a range in which we want to run simulations.
 
 Because we want share simulations between experiments, experiment itself will
-not perform the computation, but establish an dependency on "sims" builder.
+not perform the computation, but establish an dependency on "simulation" builder.
 
 ```python
 
@@ -165,6 +165,18 @@ def experiment(config):
     return sum([s.value for s in sims])
 ```
 
+When dependencies are used, there are two phases:
+
+* Inputs gathering (before ``yield``)
+* Computation (after ``yeild``)
+
+You call other builders in the first phase. They are gathered as dependencies for the computation.
+This phase should be quick without any heavy computation. This phase is possibly invoked more than once.
+
+The second phase is computation phase where the main part of the computation should
+happen. It may freely used entries created in the first phase. It is not allowed to create new entries by calling 
+builders (an exception is thrown in such case).
+ 
 Now if we run:
 
 ```python
