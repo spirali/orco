@@ -1,7 +1,7 @@
+import collections
 import itertools
 import json
 from collections import Iterable
-import collections
 
 _State = collections.namedtuple("State", ["toplevel", "computed", "resolving"])
 
@@ -73,7 +73,6 @@ OPS_SWITCH = {
 
 
 def _resolve(state, value):
-
     if isinstance(value, dict) and len(value) == 1:
         key = tuple(value.keys())[0]
         fn = OPS_SWITCH.get(key)

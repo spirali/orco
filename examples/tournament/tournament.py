@@ -1,6 +1,7 @@
-import orco
-import random
 import itertools
+import random
+
+import orco
 
 
 # Function that trains "players"

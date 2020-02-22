@@ -1,5 +1,6 @@
 import collections
 
+
 class Entry:
     """
     A single computation with its configuration and result

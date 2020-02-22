@@ -1,5 +1,6 @@
-import time
 import pickle
+import time
+
 import pytest
 
 from orco.internals.key import make_key

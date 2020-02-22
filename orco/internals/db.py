@@ -5,7 +5,6 @@ import pickle
 from concurrent.futures import ThreadPoolExecutor
 
 import apsw
-import pandas as pd
 
 from ..entry import Entry
 from ..report import Report
@@ -14,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class DB:
-
     DEAD_EXECUTOR_QUERY = "((STRFTIME('%s', heartbeat) + heartbeat_interval * 2) - STRFTIME('%s', 'now') < 0)"
     LIVE_EXECUTOR_QUERY = "((STRFTIME('%s', heartbeat) + heartbeat_interval * 2) - STRFTIME('%s', 'now') >= 0)"
     RECURSIVE_CONSUMERS = """
@@ -234,7 +232,7 @@ WHERE rowid IN
                             ["{}/{}".format(c.builder_name, c.key) for c in raw_entries])
 
     def get_recursive_consumers(self, builder_name, key):
-        #WHERE EXISTS(SELECT null FROM selected AS s WHERE deps.builder_s == selected.builder AND deps.key_s == selected.key
+        # WHERE EXISTS(SELECT null FROM selected AS s WHERE deps.builder_s == selected.builder AND deps.key_s == selected.key
         query = """
             {}
             SELECT builder, key FROM selected
@@ -264,7 +262,7 @@ WHERE rowid IN
             c = self.conn.cursor()
             c.execute(
                 "SELECT value is not null FROM entries WHERE builder = ? AND key = ? AND (value is not null OR executor is null OR executor in (SELECT id FROM executors WHERE {}))"
-                .format(self.LIVE_EXECUTOR_QUERY), [builder_name, key])
+                    .format(self.LIVE_EXECUTOR_QUERY), [builder_name, key])
             v = c.fetchone()
             if v is None:
                 return None
@@ -426,7 +424,7 @@ DELETE FROM entries
     def _cleanup_lost_entries(self, cursor):
         cursor.execute(
             "DELETE FROM entries WHERE value is null AND executor IN (SELECT id FROM executors WHERE {})"
-            .format(self.DEAD_EXECUTOR_QUERY))
+                .format(self.DEAD_EXECUTOR_QUERY))
 
     def _unfold_report(self, report):
         return (report.report_type, report.executor_id, report.builder_name, report.message,
@@ -453,7 +451,7 @@ DELETE FROM entries
             c = self.conn.cursor()
             c.execute(
                 "SELECT timestamp, type, executor, builder, message, config "
-                "FROM reports ORDER BY id DESC LIMIT ?", (count, ))
+                "FROM reports ORDER BY id DESC LIMIT ?", (count,))
             return list(c.fetchall())
 
         return [
@@ -464,7 +462,7 @@ DELETE FROM entries
                 builder_name=builder_name,
                 config=pickle.loads(config) if config else None,
                 timestamp=timestamp) for timestamp, report_type, executor_id, builder_name,
-            message, config in self._run(_helper)
+                                         message, config in self._run(_helper)
         ]
 
     def announce_entries(self, executor_id, entries, deps, report=None):
@@ -556,7 +554,7 @@ DELETE FROM entries
             r = c.execute(
                 "SELECT id, created, {}, stats, name, hostname, resources FROM executors".format(
                     self.DEAD_EXECUTOR_QUERY))
-            #r = c.execute("SELECT uuid, created, , stats, type, version, resources FROM executors")
+            # r = c.execute("SELECT uuid, created, , stats, type, version, resources FROM executors")
 
             return [{
                 "id": id,

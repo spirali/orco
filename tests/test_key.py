@@ -1,5 +1,6 @@
-from orco.internals.key import make_key
 import pytest
+
+from orco.internals.key import make_key
 
 
 def test_make_key_basics():
@@ -22,7 +23,6 @@ def test_make_key_ignored_keys():
 
 
 def test_make_key_invalid():
-
     class X():
         pass
 

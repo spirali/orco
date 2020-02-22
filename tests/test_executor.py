@@ -1,5 +1,6 @@
-import time
 import threading
+import time
+
 import pytest
 
 from orco import Builder, JobFailedException
@@ -8,7 +9,6 @@ from orco.internals.key import make_key
 
 @pytest.mark.parametrize("n_processes", [1, 2])
 def test_executor(env, n_processes):
-
     def to_dict(lst):
         return {x["id"]: x for x in lst}
 
@@ -137,7 +137,6 @@ def test_executor_timeout(env):
 
 
 def test_executor_conflict(env, tmpdir):
-
     def compute_0(c):
         path = tmpdir.join("test-{}".format(c))
         assert not path.check()
@@ -180,7 +179,7 @@ def test_executor_conflict(env, tmpdir):
     assert results[0].value == 22
     assert results[1].value == 23
 
-    #assert tmpdir.join("test-10").mtime() > tmpdir.join("test-11").mtime()
+    # assert tmpdir.join("test-10").mtime() > tmpdir.join("test-11").mtime()
 
     results = [None, None]
 

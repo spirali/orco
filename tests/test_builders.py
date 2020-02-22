@@ -172,6 +172,7 @@ def test_builder_double_task(env):
         tasks = [col1(10), col1(10), col1(10)]
         yield
         return sum(x.value for x in tasks)
+
     col1 = runtime.register_builder("col1", lambda c: c * 10)
     col2 = runtime.register_builder("col2", b2)
     assert runtime.compute(col2("abc")).value == 300
@@ -196,9 +197,9 @@ def test_builder_stored_deps(env):
             "step": 2
         })
         b = col2({
-                "start": 0,
-                "end": config,
-                "step": 3
+            "start": 0,
+            "end": config,
+            "step": 3
         })
         yield
         return a.value + b.value
@@ -336,13 +337,12 @@ def test_builder_computed(env):
     assert [e.value if e else "missing" for e in runtime.read_entries(tasks + [builder(123)])
             ] == [20, 30, 40, 0, 50, "missing"]
     assert [
-        e.value if e else "missing"
-        for e in runtime.read_entries(tasks + [builder(123)], drop_missing=True)
-    ] == [20, 30, 40, 0, 50]
+               e.value if e else "missing"
+               for e in runtime.read_entries(tasks + [builder(123)], drop_missing=True)
+           ] == [20, 30, 40, 0, 50]
 
 
 def test_builder_error_in_deps(env):
-
     def builder_fn(c):
         if c != 0:
             raise Exception("MyError")
@@ -356,7 +356,6 @@ def test_builder_error_in_deps(env):
 
 
 def test_builder_double_yield_error(env):
-
     def builder_fn(c):
         yield
         yield
@@ -369,7 +368,6 @@ def test_builder_double_yield_error(env):
 
 
 def test_builder_ref_in_compute(env):
-
     def builder_fn(c):
         yield
         col0(123)
@@ -383,7 +381,6 @@ def test_builder_ref_in_compute(env):
 
 
 def test_builder_inconsistent_deps(env):
-
     def builder_fn(c):
         import random
         col0(random.random())

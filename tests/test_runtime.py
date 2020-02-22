@@ -17,7 +17,6 @@ def test_runtime_stop(env):
 
 
 def test_reports(env):
-
     def adder(config):
         return config["a"] + config["b"]
 

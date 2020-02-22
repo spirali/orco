@@ -1,17 +1,15 @@
 import logging
+import platform
 import threading
 import time
-
 from concurrent.futures import wait, FIRST_COMPLETED
 from datetime import datetime
 
 import tqdm
-import platform
-
-from orco.internals.runner import LocalProcessRunner, JobFailure
-from orco.internals.job import Job
 
 from orco.entry import EntryKey
+from orco.internals.job import Job
+from orco.internals.runner import LocalProcessRunner, JobFailure
 from orco.report import Report
 
 logger = logging.getLogger(__name__)
@@ -154,7 +152,7 @@ class Executor:
         self.stats = {"n_jobs": len(all_jobs), "n_completed": 0}
 
         pending_reports = []
-        #all_jobs = {job.entry.entry_key(): job for job in all_jobs}
+        # all_jobs = {job.entry.entry_key(): job for job in all_jobs}
         db = self.runtime.db
         db.update_stats(self.id, self.stats)
         consumers, waiting_deps, ready = self._init(all_jobs.values())

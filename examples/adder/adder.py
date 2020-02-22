@@ -12,7 +12,6 @@ def add(config):
 # If file does not exists, it is created
 runtime = orco.Runtime("./mydb")
 
-
 # Invoke computations, builder.ref(...) creates a "reference into a builder",
 # basically a pair (builder, config)
 # When reference is provided, compute returns instance of Entry that

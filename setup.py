@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
-from setuptools import setup
 import os
+
+from setuptools import setup
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -12,7 +13,6 @@ def read(fname):
 
 with open('requirements.txt') as reqs:
     requirements = [line.strip().split("==")[0] for line in reqs.readlines()]
-
 
 setup(name='orco',
       version="0.3.0",

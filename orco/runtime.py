@@ -1,23 +1,22 @@
 import collections
 import inspect
 import logging
-import threading
 import pickle
+import threading
 import time
 
+from orco.internals.context import _CONTEXT
 from .builder import Builder
 from .entry import Entry
 from .internals.db import DB
 from .internals.executor import Executor
 from .internals.job import Job
+from .internals.key import make_key
 from .internals.rawentry import RawEntry
 from .internals.runner import JobRunner
-from .internals.key import make_key
-from .report import Report
-#from .internals.tasktools import collect_tasks, resolve_tasks
+# from .internals.tasktools import collect_tasks, resolve_tasks
 from .internals.utils import format_time
-from orco.internals.context import _CONTEXT
-
+from .report import Report
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +272,8 @@ class Runtime:
                     it = builder.main_fn(entry.config)
                     next(it)
                 except StopIteration:
-                    raise Exception("Builder '{}' main function is generator but does not yield".format(entry.builder_name, entry))
+                    raise Exception(
+                        "Builder '{}' main function is generator but does not yield".format(entry.builder_name, entry))
                 finally:
                     _CONTEXT.on_entry = None
                 inputs = [make_job(r) for r in deps]
@@ -286,7 +286,7 @@ class Runtime:
             if state is None and builder.main_fn is None:
                 raise Exception(
                     "Computation depends on a missing configuration '{}' in a fixed builder"
-                    .format(entry))
+                        .format(entry))
             job = Job(entry, inputs, builder.create_job_setup(entry.config))
             jobs[entry_key] = job
             return job

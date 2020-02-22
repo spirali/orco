@@ -1,15 +1,15 @@
 import inspect
+import os
 import threading
 import time
 import traceback
-import os
 from concurrent.futures.process import ProcessPoolExecutor
 
 import cloudpickle
-from orco.internals.db import DB
-from orco.internals.context import _CONTEXT
 
-#from orco.internals.tasktools import task_to_taskkey, collect_task_keys, resolve_task_keys
+from orco.internals.context import _CONTEXT
+from orco.internals.db import DB
+# from orco.internals.tasktools import task_to_taskkey, collect_task_keys, resolve_task_keys
 from orco.internals.job import Job
 
 
@@ -81,7 +81,8 @@ class PoolJobRunner(JobRunner):
             pickled_fns = cloudpickle.dumps((builder.main_fn, builder.make_raw_entry))
             self.pickle_cache[entry.builder_name] = pickled_fns
         deps = [inp.entry.make_entry_key() if isinstance(inp, Job) else inp.make_entry_key() for inp in job.inputs]
-        return self.pool.submit(_run_job, runtime.db.path, pickled_fns, entry.make_entry_key(), entry.config, deps, job.job_setup)
+        return self.pool.submit(_run_job, runtime.db.path, pickled_fns, entry.make_entry_key(), entry.config, deps,
+                                job.job_setup)
 
 
 class LocalProcessRunner(PoolJobRunner):
@@ -137,8 +138,8 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
                 _CONTEXT.on_entry = None
             end_time = time.time()
             result.append(
-            finalize_fn(entry_key.builder_name, entry_key.key, None, value, job_setup,
-                        end_time - start_time))
+                finalize_fn(entry_key.builder_name, entry_key.key, None, value, job_setup,
+                            end_time - start_time))
 
         timeout = job_setup.get("timeout")
         if timeout is not None:
@@ -153,5 +154,3 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
         return result[0]
     except Exception as exception:
         return JobError(entry_key, str(exception), traceback.format_exc())
-
-

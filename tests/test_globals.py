@@ -1,10 +1,7 @@
 from orco.globals import builder
-import orco
-import pytest
 
 
 def test_global_builders(env):
-
     @builder()
     def compute1(config):
         return config + 1

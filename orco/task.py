@@ -1,6 +1,3 @@
-from collections import Iterable, namedtuple
-
-
 class Task:
     """
     Task is a pair Builder + a configuration
@@ -30,5 +27,3 @@ class Task:
 
     def task_key(self):
         return EntryKey(self.builder_name, self.key)
-
-

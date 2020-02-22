@@ -1,5 +1,6 @@
-from orco.internals.runner import PoolJobRunner
 from concurrent.futures import Future
+
+from orco.internals.runner import PoolJobRunner
 
 
 class NaivePool():

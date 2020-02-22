@@ -1,10 +1,10 @@
-from orco import Runtime, LocalExecutor
-
 import itertools
-import random
-import time
-import threading
 import os
+import random
+import threading
+import time
+
+from orco import Runtime, LocalExecutor
 
 if os.path.isfile("test.db"):
     os.unlink("test.db")
@@ -24,7 +24,7 @@ executor3.stop()
 
 c_sleepers = rt.register_builder("sleepers", lambda c, d: time.sleep(c))
 c_bedrooms = rt.register_builder("bedrooms", lambda c, d: None,
-                                    lambda c: [c_sleepers.task(x) for x in c["sleepers"]])
+                                 lambda c: [c_sleepers.task(x) for x in c["sleepers"]])
 
 
 def failer(config, deps):

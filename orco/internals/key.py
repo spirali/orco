@@ -1,4 +1,3 @@
-
 def _make_key_helper(obj, stream):
     if isinstance(obj, str) or isinstance(obj, int) or isinstance(obj, float):
         stream.append(repr(obj))

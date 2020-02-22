@@ -1,8 +1,8 @@
-from flask import Flask, request, current_app, Response
-from flask_restful import Resource, Api
-from flask_cors import CORS
-import json
 import os
+
+from flask import Flask, current_app, Response
+from flask_cors import CORS
+from flask_restful import Resource, Api
 
 STATIC_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 app = Flask(__name__, static_url_path=STATIC_ROOT)
