@@ -119,7 +119,7 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
                 if inspect.isgeneratorfunction(main_fn):
                     deps = []
                     _CONTEXT.on_entry = deps.append
-                    it = main_fn(config)
+                    it = main_fn(**config)
                     next(it)
                     if set(e.make_entry_key() for e in deps) != set(dep_keys):
                         raise Exception("Builder function does not consistently return dependencies")
@@ -133,7 +133,7 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
                         value = e.value
                 else:
                     _CONTEXT.on_entry = block_new_entries
-                    value = main_fn(config)
+                    value = main_fn(**config)
             finally:
                 _CONTEXT.on_entry = None
             end_time = time.time()

@@ -6,7 +6,7 @@ class Entry:
     A single computation with its configuration and result
 
     Attributes
-    * config - configuration
+    * config - `OrderedDict` of function parameters (i.e. usable as `f(**config)`)
     * value - resulting value of the computation
     * job_setup - setup for the job
     * created - datetime when entry was created

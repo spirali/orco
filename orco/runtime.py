@@ -6,6 +6,7 @@ import threading
 import time
 
 from orco.internals.context import _CONTEXT
+
 from .builder import Builder
 from .entry import Entry
 from .internals.db import DB
@@ -228,7 +229,7 @@ class Runtime:
                 deps = []
                 try:
                     _CONTEXT.on_entry = deps.append
-                    it = builder.main_fn(entry.config)
+                    it = builder.main_fn(**entry.config)
                     next(it)
                 except StopIteration:
                     raise Exception(

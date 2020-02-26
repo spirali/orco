@@ -1,5 +1,6 @@
 import functools
 import pickle
+import inspect
 
 from .entry import Entry
 from .internals.context import _CONTEXT
@@ -16,6 +17,10 @@ def _default_make_raw_entry(builder_name, key, config, value, job_setup, comp_ti
     if job_setup is not None:
         job_setup = pickle.dumps(job_setup)
     return RawEntry(builder_name, key, config, pickle.dumps(value), value_repr, job_setup, comp_time)
+
+
+def _generic_kwargs_fn(**kwargs):
+    pass
 
 
 class Builder:
@@ -41,17 +46,37 @@ class Builder:
             raise ValueError("{!r} is not a valid name for Builder (needs a valid identifier)".format(name))
         self.name = name
         self.main_fn = fn
+        if self.main_fn is not None:
+            self.fn_signature = inspect.signature(self.main_fn)
+        else:
+            self.fn_signature = inspect.signature(_generic_kwargs_fn)
         self.make_raw_entry = _default_make_raw_entry
         self.job_setup = job_setup
         if update_wrapper:
             functools.update_wrapper(self, fn)
 
-    def __call__(self, config):
+    def _create_config_from_call(self, args, kwargs):
+        "Return an OrderedDIct of named parameters, unpacking extra kwargs into the dict."
+        ba = self.fn_signature.bind(*args, **kwargs)
+        ba.apply_defaults()
+        kwnames = [p.name for p in self.fn_signature.parameters.values() if p.kind == p.VAR_KEYWORD]
+        args = ba.arguments
+        if kwnames:
+            assert len(kwnames) == 1
+            kwname = kwnames[0]
+            if kwname in args:
+                kws = args[kwname]
+                del args[kwname]
+                args.update(kws)
+        return args
+
+    def __call__(self, *args, **kwargs):
         """
         Create an unresolved Entry for this builder.
 
         Calls `_CONTEXT.on_entry` to register/check dependencies etc.
         """
+        config = self._create_config_from_call(args, kwargs)
         entry = Entry(self.name, make_key(config), config, None, None, None)
         if not hasattr(_CONTEXT, "on_entry"):
             return entry
