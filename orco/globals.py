@@ -16,11 +16,11 @@ def builder(*, name=None):
     return _register
 
 
-def _register_builder(builder):
-    name = builder.name
+def _register_builder(builder_):
+    name = builder_.name
     if name in _global_builders:
         raise Exception("Builder '{}' is already globally registered.".format(name))
-    _global_builders[name] = builder
+    _global_builders[name] = builder_
 
 
 def clear_global_builders():
