@@ -1,26 +1,21 @@
 from .builder import Builder
-from .runtime import _BuilderDef
 
 _global_builders = {}
 
 
-def builder(*, name=None):
+def builder(*, name=None, job_setup=None):
     def _register(fn):
-        if name is None:
-            builder_name = fn.__name__
-        else:
-            builder_name = name
-        _register_builder(_BuilderDef(builder_name, fn, None))
-        return Builder(builder_name)
+        b = Builder(fn, name=name, job_setup=job_setup, update_wrapper=True)
+        _register_builder(b)
+        return b
 
     return _register
 
 
-def _register_builder(builder_):
-    name = builder_.name
-    if name in _global_builders:
-        raise Exception("Builder '{}' is already globally registered.".format(name))
-    _global_builders[name] = builder_
+def _register_builder(b):
+    if b.name in _global_builders:
+        raise Exception("Builder '{}' is already globally registered.".format(b.name))
+    _global_builders[b.name] = b
 
 
 def clear_global_builders():

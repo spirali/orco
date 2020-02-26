@@ -1,4 +1,4 @@
-from orco import Runtime
+from orco import Runtime, Builder
 
 
 def test_rest_builders():
@@ -10,12 +10,12 @@ def test_rest_builders():
         r = client.get("rest/builders")
         assert r.get_json() == []
 
-        c = rt.register_builder("hello")
+        c = rt.register_builder(Builder(None, "hello"))
 
         rt.insert(c({"x": 1, "y": [1, 2, 3]}), "ABC")
         rt.insert(c("e2"), "A" * (1024 * 1024))
 
-        rt.register_builder("hello2")
+        rt.register_builder(Builder(None, "hello2"))
 
         r = client.get("rest/builders")
         rr = r.get_json()
@@ -52,7 +52,7 @@ def test_rest_executors(env):
 
 def test_rest_reports(env):
     rt = env.test_runtime()
-    col1 = rt.register_builder("col1", lambda c: c * 10)
+    col1 = rt.register_builder(Builder(lambda c: c * 10, "col1"))
     rt.compute_many([col1(20), col1(30)])
     with rt.serve(testing=True).test_client() as client:
         r = client.get("rest/reports").get_json()

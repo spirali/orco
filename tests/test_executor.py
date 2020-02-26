@@ -26,7 +26,7 @@ def test_executor(env, n_processes):
     executor3 = env.executor(runtime, heartbeat_interval=1, n_processes=n_processes)
     executor3.start()
 
-    c = runtime.register_builder("abc")
+    c = runtime.register_builder(Builder(None, "abc"))
     runtime.db.announce_entries(executor3.id, [c("x")], [])
     assert runtime.db.get_entry_state(c.name, make_key("x")) == "announced"
     executor3.stop()
@@ -52,21 +52,21 @@ def test_executor_error(env):
     executor = env.executor(runtime, heartbeat_interval=1, n_processes=2)
     executor.start()
 
-    col0 = runtime.register_builder("col0", lambda c: c)
+    col0 = runtime.register_builder(Builder(lambda c: c, "col0"))
 
     def b1(c):
         d = col0(c)
         yield
         return 100 // d.value
 
-    col1 = runtime.register_builder("col1", b1)
+    col1 = runtime.register_builder(Builder(b1, "col1"))
 
     def b2(c):
         data = [col1(x) for x in c]
         yield
         return sum(d.value for d in data)
 
-    col2 = runtime.register_builder("col2", b2)
+    col2 = runtime.register_builder(Builder(b2, "col2"))
 
     assert not runtime.get_reports()
 
@@ -119,7 +119,7 @@ def test_executor_timeout(env):
     def job_setup(c):
         return {"timeout": c.get("timeout")}
 
-    col0 = runtime.register_builder("col0", compute, job_setup=job_setup)
+    col0 = runtime.register_builder(Builder(compute, "col0", job_setup=job_setup))
 
     config0 = {"time": 1, "timeout": 0.2}
     with pytest.raises(JobFailedException, match=".*timeout.*"):
@@ -145,15 +145,15 @@ def test_executor_conflict(env, tmpdir):
         return c
 
     def compute_1(c):
-        col0 = Builder("col0")
+        col0 = Builder(None, "col0")
         d = [col0(x) for x in c]
         yield
         return sum([x.value for x in d])
 
     def init():
         runtime = env.test_runtime()
-        col0 = runtime.register_builder("col0", compute_0)
-        col1 = runtime.register_builder("col1", compute_1)
+        col0 = runtime.register_builder(Builder(compute_0, "col0"))
+        col1 = runtime.register_builder(Builder(compute_1, "col1"))
         return runtime, col0, col1
 
     runtime1, col0_0, col1_0 = init()
@@ -170,7 +170,7 @@ def test_executor_conflict(env, tmpdir):
     t1 = threading.Thread(target=comp1, args=(runtime1, col0_0, col1_0))
     t1.start()
     time.sleep(0.5)
-    assert runtime2.get_entry_state(Builder("col0")(0)) == "announced"
+    assert runtime2.get_entry_state(Builder(None, "col0")(0)) == "announced"
 
     t2 = threading.Thread(target=comp2, args=(runtime2, col0_1, col1_1))
     t2.start()

@@ -1,5 +1,6 @@
 from concurrent.futures import Future
 
+from orco import Builder
 from orco.internals.runner import PoolJobRunner
 
 
@@ -34,14 +35,14 @@ def test_runner_selection(env):
     testing_runner = NaiveRunner()
     runtime.add_runner("tr", testing_runner)
 
-    b1 = runtime.register_builder("col1", lambda c: c, job_setup="tr")
+    b1 = runtime.register_builder(Builder(lambda c: c, "col1", job_setup="tr"))
 
     def builder_fn(c):
         b1(c)
         yield
         return c
 
-    b2 = runtime.register_builder("col2", builder_fn)
+    b2 = runtime.register_builder(Builder(builder_fn, "col2"))
 
     r = runtime.compute(b2(10))
     assert r.value == 10

@@ -12,47 +12,12 @@ from .internals.db import DB
 from .internals.executor import Executor
 from .internals.job import Job
 from .internals.key import make_key
-from .internals.rawentry import RawEntry
 from .internals.runner import JobRunner
 # from .internals.tasktools import collect_tasks, resolve_tasks
 from .internals.utils import format_time
 from .report import Report
 
 logger = logging.getLogger(__name__)
-
-
-def _default_make_raw_entry(builder_name, key, config, value, job_setup, comp_time):
-    value_repr = repr(value)
-    if len(value_repr) > 85:
-        value_repr = value_repr[:80] + " ..."
-    if config is not None:
-        config = pickle.dumps(config)
-    if job_setup is not None:
-        job_setup = pickle.dumps(job_setup)
-    return RawEntry(builder_name, key, config, pickle.dumps(value), value_repr, job_setup, comp_time)
-
-
-class _BuilderDef:
-
-    def __init__(self, name: str, main_fn, job_setup):
-        self.name = name
-        self.main_fn = main_fn
-        self.make_raw_entry = _default_make_raw_entry
-        self.job_setup = job_setup
-
-    def create_job_setup(self, config):
-        job_setup = self.job_setup
-        if callable(job_setup):
-            job_setup = job_setup(config)
-
-        if job_setup is None:
-            return {}
-        elif isinstance(job_setup, str):
-            return {"runner": job_setup}
-        elif isinstance(job_setup, dict):
-            return job_setup
-        else:
-            raise Exception("Invalid object as job_setup")
 
 
 class Runtime:
@@ -82,7 +47,7 @@ class Runtime:
             from .globals import _get_global_builders
             for builder in _get_global_builders():
                 logging.debug("Registering global builder %s", builder.name)
-                self._register_builder(builder)
+                self.register_builder(builder)
 
     def __enter__(self):
         self._check_stopped()
@@ -130,20 +95,14 @@ class Runtime:
             self.executor.stop()
             self.executor = None
 
-    def register_builder(self, name, build_fn=None, *, job_setup=None):
-        if not isinstance(name, str) or not name:
-            raise Exception("Builder name has to be non-empty string, not {!r}".format(name))
-        with self._lock:
-            builder = _BuilderDef(name, build_fn, job_setup)
-            self._register_builder(builder)
-        return Builder(name)
-
-    def _register_builder(self, builder):
+    def register_builder(self, builder: Builder):
+        assert isinstance(builder, Builder)
         name = builder.name
         if name in self._builders:
             raise Exception("Builder '{}' is already registered".format(name))
         self.db.ensure_builder(name)
         self._builders[name] = builder
+        return builder
 
     def serve(self, port=8550, debug=False, testing=False, nonblocking=False):
         from .internals.browser import init_service
@@ -273,7 +232,7 @@ class Runtime:
                     next(it)
                 except StopIteration:
                     raise Exception(
-                        "Builder '{}' main function is generator but does not yield".format(entry.builder_name, entry))
+                        "Builder {!r} main function is generator but does not yield for {!r}".format(entry.builder_name, entry))
                 finally:
                     _CONTEXT.on_entry = None
                 inputs = [make_job(r) for r in deps]
@@ -287,7 +246,7 @@ class Runtime:
                 raise Exception(
                     "Computation depends on a missing configuration '{}' in a fixed builder"
                         .format(entry))
-            job = Job(entry, inputs, builder.create_job_setup(entry.config))
+            job = Job(entry, inputs, builder._create_job_setup(entry.config))
             jobs[entry_key] = job
             return job
 

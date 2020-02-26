@@ -1,29 +1,61 @@
 import pytest
 
+from orco import Builder, builder
+
 
 def adder(config):
     return config["a"] + config["b"]
 
 
+def test_builder_init(env):
+    @builder(name="foo")
+    def bar(conf):
+        "Test doc"
+        return conf
+
+    assert bar.name == "foo"
+    assert bar.__name__ == "bar"
+    assert bar.__doc__ == "Test doc"
+
+    @builder()
+    def baz(conf):
+        return conf
+    assert baz.name == "baz"
+    assert baz.__name__ == "baz"
+
+    with pytest.raises(ValueError, match=".*Provide at leas one of fn and name.*"):
+        Builder(None)
+    with pytest.raises(ValueError, match=".*is not a valid name for Builder.*"):
+        Builder(lambda cfg: None)
+
+    runtime = env.test_runtime()
+    runtime.register_builder(Builder(None, "b1"))
+
+    assert "b1" in runtime._builders
+    assert "foo" in runtime._builders
+    assert "bar" not in runtime._builders
+    assert "baz" in runtime._builders
+
+
 def test_reopen_builder(env):
     runtime = env.test_runtime()
-    runtime.register_builder("col1", adder)
+    runtime.register_builder(Builder(adder, "col1"))
 
     with pytest.raises(Exception):
-        runtime.register_builder("col1", adder)
+        runtime.register_builder(Builder(adder, "col1"))
 
 
 def test_fixed_builder(env):
     runtime = env.test_runtime()
 
-    fix1 = runtime.register_builder("fix1")
+    fix1 = runtime.register_builder(Builder(None, "fix1"))
 
     def b1(config):
         f = fix1(config)
         yield
         return f.value * 10
 
-    col2 = runtime.register_builder("col2", b1)
+    col2 = runtime.register_builder(Builder(b1, "col2"))
 
     runtime.insert(fix1("a"), 11)
 
@@ -57,8 +89,8 @@ def test_builder_upgrade(env):
         del config["a"]
         return config
 
-    col1 = runtime.register_builder("col1", creator)
-    col2 = runtime.register_builder("col2", adder)
+    col1 = runtime.register_builder(Builder(creator, "col1"))
+    col2 = runtime.register_builder(Builder(adder, "col2"))
 
     runtime.compute(col1(123))
     runtime.compute_many([col2(c) for c in [{"a": 10, "b": 12}, {"a": 14, "b": 11}, {"a": 17, "b": 12}]])
@@ -88,7 +120,7 @@ def test_builder_compute(env):
         counter.write(counter.read() + 1)
         return config["a"] + config["b"]
 
-    builder = runtime.register_builder("col1", adder)
+    builder = runtime.register_builder(Builder(adder, "col1"))
 
     entry = runtime.compute(builder({"a": 10, "b": 30}))
     assert entry.config["a"] == 10
@@ -127,8 +159,8 @@ def test_builder_deps(env):
         counter_file.write(counter)
         return sum(e.value for e in deps)
 
-    col1 = runtime.register_builder("col1", builder1)
-    col2 = runtime.register_builder("col2", builder2)
+    col1 = runtime.register_builder(Builder(builder1, "col1"))
+    col2 = runtime.register_builder(Builder(builder2, "col2"))
 
     e = runtime.compute(col2(5))
     counter = counter_file.read()
@@ -173,22 +205,22 @@ def test_builder_double_task(env):
         yield
         return sum(x.value for x in tasks)
 
-    col1 = runtime.register_builder("col1", lambda c: c * 10)
-    col2 = runtime.register_builder("col2", b2)
+    col1 = runtime.register_builder(Builder(lambda c: c * 10, "col1"))
+    col2 = runtime.register_builder(Builder(b2, "col2"))
     assert runtime.compute(col2("abc")).value == 300
 
 
 def test_builder_stored_deps(env):
     runtime = env.test_runtime()
 
-    col1 = runtime.register_builder("col1", lambda c: c * 10)
+    col1 = runtime.register_builder(Builder(lambda c: c * 10, "col1"))
 
     def b2(c):
         data = [col1(i) for i in range(c["start"], c["end"], c["step"])]
         yield
         return sum(d.value for d in data)
 
-    col2 = runtime.register_builder("col2", b2)
+    col2 = runtime.register_builder(Builder(b2, "col2"))
 
     def b3(config):
         a = col2({
@@ -204,7 +236,7 @@ def test_builder_stored_deps(env):
         yield
         return a.value + b.value
 
-    col3 = runtime.register_builder("col3", b3)
+    col3 = runtime.register_builder(Builder(b3, "col3"))
     assert runtime.compute(col3(10)).value == 380
 
     cc2_2 = {"end": 10, "start": 0, "step": 2}
@@ -275,14 +307,14 @@ def test_builder_stored_deps(env):
 def test_builder_clear(env):
     runtime = env.test_runtime()
 
-    col1 = runtime.register_builder("col1", lambda c: c)
+    col1 = runtime.register_builder(Builder(lambda c: c, "col1"))
 
     def b2(c):
         d = col1(c)
         yield
         return d.value
 
-    col2 = runtime.register_builder("col2", b2)
+    col2 = runtime.register_builder(Builder(b2, "col2"))
 
     runtime.compute(col2(1))
     runtime.clear(col1)
@@ -294,7 +326,7 @@ def test_builder_clear(env):
 def test_builder_remove_inputs(env):
     runtime = env.test_runtime()
 
-    col1 = runtime.register_builder("col1", lambda c: c)
+    col1 = runtime.register_builder(Builder(lambda c: c, "col1"))
 
     def b1(c):
         d = col1(c)
@@ -306,9 +338,9 @@ def test_builder_remove_inputs(env):
         yield
         return d.value
 
-    col2 = runtime.register_builder("col2", b1)
-    col3 = runtime.register_builder("col3", b1)
-    col4 = runtime.register_builder("col4", b2)
+    col2 = runtime.register_builder(Builder(b1, "col2"))
+    col3 = runtime.register_builder(Builder(b1, "col3"))
+    col4 = runtime.register_builder(Builder(b2, "col4"))
 
     runtime.compute(col4(1))
     runtime.compute(col3(1))
@@ -326,7 +358,7 @@ def test_builder_computed(env):
     def build_fn(x):
         return x * 10
 
-    builder = runtime.register_builder("col1", build_fn)
+    builder = runtime.register_builder(Builder(build_fn, "col1"))
     tasks = [builder(b) for b in [2, 3, 4, 0, 5]]
     assert len(tasks) == 5
     assert runtime.read_entries(tasks) == [None] * len(tasks)
@@ -350,7 +382,7 @@ def test_builder_error_in_deps(env):
         return 123
 
     runtime = env.test_runtime()
-    builder = runtime.register_builder("col1", builder_fn)
+    builder = runtime.register_builder(Builder(builder_fn, "col1"))
     with pytest.raises(Exception, match="MyError"):
         runtime.compute(builder(1))
 
@@ -362,7 +394,7 @@ def test_builder_double_yield_error(env):
         return 123
 
     runtime = env.test_runtime()
-    builder = runtime.register_builder("col1", builder_fn)
+    builder = runtime.register_builder(Builder(builder_fn, "col1"))
     with pytest.raises(Exception, match="yielded"):
         runtime.compute(builder(1))
 
@@ -374,8 +406,8 @@ def test_builder_ref_in_compute(env):
         return 123
 
     runtime = env.test_runtime()
-    col0 = runtime.register_builder("col0", lambda c: 123)
-    builder = runtime.register_builder("col1", builder_fn)
+    col0 = runtime.register_builder(Builder(lambda c: 123, "col0"))
+    builder = runtime.register_builder(Builder(builder_fn, "col1"))
     with pytest.raises(Exception, match="computation phase"):
         runtime.compute(builder(1))
 
@@ -389,7 +421,7 @@ def test_builder_inconsistent_deps(env):
         return 123
 
     runtime = env.test_runtime()
-    col0 = runtime.register_builder("col0", lambda c: 123)
-    builder = runtime.register_builder("col1", builder_fn)
+    col0 = runtime.register_builder(Builder(lambda c: 123, "col0"))
+    builder = runtime.register_builder(Builder(builder_fn, "col1"))
     with pytest.raises(Exception, match="dependencies"):
         runtime.compute(builder(1))

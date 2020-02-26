@@ -1,10 +1,11 @@
+from orco import Builder
 from orco.export import export_builder_to_pandas
 
 
 def test_builder_to_pandas(env):
     runtime = env.test_runtime()
 
-    col1 = runtime.register_builder("col1", lambda c: c * 2)
+    col1 = runtime.register_builder(Builder(lambda c: c * 2, "col1"))
     runtime.compute_many([col1(x) for x in [1, 2, 3, 4]])
     frame = export_builder_to_pandas(runtime, col1.name)
     assert len(frame) == 4

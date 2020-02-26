@@ -4,6 +4,7 @@ import time
 import pytest
 
 from orco.internals.key import make_key
+from orco import Builder
 
 
 def test_db_announce(env):
@@ -16,7 +17,7 @@ def test_db_announce(env):
     e2.runtime = r
     e2.start()
 
-    c = r.register_builder("col1")
+    c = r.register_builder(Builder(None, "col1"))
     assert r.db.announce_entries(e1.id, [c("test1"), c("test2")], [])
     assert not r.db.announce_entries(e2.id, [c("test2"), c("test3")], [])
     assert not r.db.announce_entries(e1.id, [c("test2"), c("test3")], [])
@@ -39,7 +40,7 @@ def test_db_set_value(env):
     r.configure_executor(heartbeat_interval=1)
     e1 = r.start_executor()
 
-    c = r.register_builder("col1")
+    c = r.register_builder(Builder(None, "col1"))
     assert r.db.get_entry_state(c.name, make_key("cfg1")) is None
 
     r.db.announce_entries(e1.id, [c("cfg1")], [])
@@ -76,8 +77,8 @@ def test_db_run_stats(env):
     runtime.configure_executor(heartbeat_interval=1)
     e1 = runtime.start_executor()
 
-    c = runtime.register_builder("col1")
-    _ = runtime.register_builder("col2")
+    c = runtime.register_builder(Builder(None, "col1"))
+    _ = runtime.register_builder(Builder(None, "col2"))
 
     assert runtime.db.announce_entries(
         e1.id, [c("a"), c("b"), c("c"),

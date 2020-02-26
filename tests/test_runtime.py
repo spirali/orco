@@ -1,5 +1,5 @@
 import pytest
-
+from orco import Builder
 
 def test_runtime_stop(env):
     with env.test_runtime() as runtime:
@@ -21,7 +21,7 @@ def test_reports(env):
         return config["a"] + config["b"]
 
     runtime = env.test_runtime()
-    builder = runtime.register_builder("col1", adder)
+    builder = runtime.register_builder(Builder(adder, "col1"))
     runtime.compute(builder({"a": 10, "b": 30}))
 
     reports = runtime.get_reports()
