@@ -14,7 +14,7 @@ def builder(*, name=None, job_setup=None):
 
 def _register_builder(b):
     if b.name in _global_builders:
-        raise Exception("Builder '{}' is already globally registered.".format(b.name))
+        raise Exception("Builder {!r} is already globally registered.".format(b.name))
     _global_builders[b.name] = b
 
 

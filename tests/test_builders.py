@@ -8,6 +8,7 @@ def adder(config):
 
 
 def test_builder_init(env):
+
     @builder(name="foo")
     def bar(conf):
         "Test doc"

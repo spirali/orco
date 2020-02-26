@@ -20,6 +20,7 @@ class TestEnv:
         self.runtimes = []
         self.executors = []
         self.tmpdir = tmpdir
+        orco.clear_global_builders()
 
     def test_runtime(self, **kwargs):
         db_path = str(self.tmpdir.join("db"))
@@ -45,6 +46,7 @@ class TestEnv:
                 e.stop()
         self.runtimes = []
         self.executors = []
+        orco.clear_global_builders()
 
 
 @pytest.fixture()
