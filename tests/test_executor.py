@@ -1,5 +1,5 @@
 import threading
-import time
+from time import sleep
 
 import pytest
 
@@ -27,10 +27,10 @@ def test_executor(env, n_processes):
     executor3.start()
 
     c = runtime.register_builder(Builder(None, "abc"))
-    runtime.db.announce_entries(executor3.id, [c("x")], [])
-    assert runtime.db.get_entry_state(c.name, make_key("x")) == "announced"
+    runtime.db.announce_entries(executor3.id, [c(a="x")], [])
+    assert runtime.db.get_entry_state(c.name, make_key({'a': "x"})) == "announced"
     executor3.stop()
-    assert runtime.db.get_entry_state(c.name, make_key("x")) is None
+    assert runtime.db.get_entry_state(c.name, make_key({'a': "x"})) is None
 
     r = to_dict(runtime._executor_summaries())
     assert len(r) == 3
@@ -38,7 +38,7 @@ def test_executor(env, n_processes):
     assert r[executor2.id]["status"] == "running"
     assert r[executor3.id]["status"] == "stopped"
 
-    time.sleep(3)
+    sleep(3)
 
     r = to_dict(runtime._executor_summaries())
     assert len(r) == 3
@@ -77,7 +77,7 @@ def test_executor_error(env):
     assert len(reports) == 2
     assert reports[0].report_type == "error"
     assert reports[0].builder_name == "col1"
-    assert reports[0].config == 0
+    assert reports[0].config == {'c': 0}
     assert "ZeroDivisionError" in reports[0].message
 
     assert runtime.get_entry_state(col0(0)) == "finished"
@@ -112,9 +112,9 @@ def test_executor_timeout(env):
     executor = env.executor(runtime, heartbeat_interval=1, n_processes=2)
     executor.start()
 
-    def compute(c):
-        time.sleep(c["time"])
-        return c["time"]
+    def compute(time, **kwargs):
+        sleep(time)
+        return time
 
     def job_setup(c):
         return {"timeout": c.get("timeout")}
@@ -123,17 +123,18 @@ def test_executor_timeout(env):
 
     config0 = {"time": 1, "timeout": 0.2}
     with pytest.raises(JobFailedException, match=".*timeout.*"):
-        assert runtime.compute(col0(config0))
+        assert runtime.compute(col0(**config0))
 
     reports = runtime.get_reports()
     assert len(reports) == 2
     assert reports[0].report_type == "timeout"
+    print(reports[0])
     assert reports[0].builder_name == "col0"
     assert reports[0].config == config0
     assert "timeout" in reports[0].message
 
-    assert runtime.compute(col0({"time": 1})).value == 1
-    assert runtime.compute(col0({"time": 0.2, "timeout": 5})).value == 0.2
+    assert runtime.compute(col0(time=1)).value == 1
+    assert runtime.compute(col0(time=0.2, timeout=5)).value == 0.2
 
 
 def test_executor_conflict(env, tmpdir):
@@ -141,12 +142,12 @@ def test_executor_conflict(env, tmpdir):
         path = tmpdir.join("test-{}".format(c))
         assert not path.check()
         path.write("Done")
-        time.sleep(1)
+        sleep(1)
         return c
 
     def compute_1(c):
         col0 = Builder(None, "col0")
-        d = [col0(x) for x in c]
+        d = [col0(c=x) for x in c]
         yield
         return sum([x.value for x in d])
 
@@ -169,8 +170,8 @@ def test_executor_conflict(env, tmpdir):
 
     t1 = threading.Thread(target=comp1, args=(runtime1, col0_0, col1_0))
     t1.start()
-    time.sleep(0.5)
-    assert runtime2.get_entry_state(Builder(None, "col0")(0)) == "announced"
+    sleep(0.5)
+    assert runtime2.get_entry_state(Builder(None, "col0")(c=0)) == "announced"
 
     t2 = threading.Thread(target=comp2, args=(runtime2, col0_1, col1_1))
     t2.start()

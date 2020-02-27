@@ -56,7 +56,11 @@ class Builder:
             functools.update_wrapper(self, fn)
 
     def _create_config_from_call(self, args, kwargs):
-        "Return an OrderedDIct of named parameters, unpacking extra kwargs into the dict."
+        """
+        Return an OrderedDIct of named parameters, unpacking extra kwargs into the dict.
+        """
+        if self.main_fn is None and args:
+            raise Exception("Builders with fn=None only accept keyword arguments")
         ba = self.fn_signature.bind(*args, **kwargs)
         ba.apply_defaults()
         kwnames = [p.name for p in self.fn_signature.parameters.values() if p.kind == p.VAR_KEYWORD]

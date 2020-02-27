@@ -51,17 +51,17 @@ def test_fixed_builder(env):
 
     fix1 = runtime.register_builder(Builder(None, "fix1"))
 
-    def b1(config):
-        f = fix1(config)
+    def b1(v):
+        f = fix1(x=v)
         yield
         return f.value * 10
 
     col2 = runtime.register_builder(Builder(b1, "col2"))
 
-    runtime.insert(fix1("a"), 11)
+    runtime.insert(fix1(x="a"), 11)
 
     assert runtime.compute(col2("a")).value == 110
-    assert runtime.compute(fix1("a")).value == 11
+    assert runtime.compute(fix1(x="a")).value == 11
 
     with pytest.raises(Exception, match=".* fixed builder.*"):
         assert runtime.compute(col2("b"))
@@ -73,14 +73,14 @@ def test_builder_upgrade(env):
     runtime = env.test_runtime()
     runtime.configure_executor(n_processes=1)
 
-    def creator(config):
-        return config * 10
+    def creator(a):
+        return a * 10
 
-    def adder(config):
-        a = col1(config["a"])
-        b = col1(config["b"])
+    def adder2(a, b, **kwargs):
+        ae = col1(a)
+        be = col1(b)
         yield
-        return a.value + b.value
+        return ae.value + be.value
 
     def upgrade(config):
         config["c"] = config["a"] + config["b"]
@@ -91,24 +91,24 @@ def test_builder_upgrade(env):
         return config
 
     col1 = runtime.register_builder(Builder(creator, "col1"))
-    col2 = runtime.register_builder(Builder(adder, "col2"))
+    col2 = runtime.register_builder(Builder(adder2, "col2"))
 
     runtime.compute(col1(123))
-    runtime.compute_many([col2(c) for c in [{"a": 10, "b": 12}, {"a": 14, "b": 11}, {"a": 17, "b": 12}]])
+    runtime.compute_many([col2(**c) for c in [{"a": 10, "b": 12}, {"a": 14, "b": 11}, {"a": 17, "b": 12}]])
 
-    assert runtime.read_entry(col2({"a": 10, "b": 12})).value == 220
+    assert runtime.read_entry(col2(a=10, b=12)).value == 220
 
     with pytest.raises(Exception, match=".* collision.*"):
         runtime.upgrade_builder(col2, upgrade_confict)
 
-    assert runtime.read_entry(col2({"a": 10, "b": 12})).value == 220
+    assert runtime.read_entry(col2(a=10, b=12)).value == 220
 
     runtime.upgrade_builder(col2, upgrade)
 
-    assert runtime.try_read_entry(col2({"a": 10, "b": 12})) is None
-    assert runtime.read_entry(col2({"a": 10, "b": 12, "c": 22})).value == 220
-    assert runtime.try_read_entry(col2({"a": 14, "b": 11})) is None
-    assert runtime.read_entry(col2({"a": 14, "b": 11, "c": 25})).value == 250
+    assert runtime.try_read_entry(col2(a=10, b=12)) is None
+    assert runtime.read_entry(col2(a=10, b=12, c=22)).value == 220
+    assert runtime.try_read_entry(col2(a=14, b=11)) is None
+    assert runtime.read_entry(col2(a=14, b=11, c=25)).value == 250
 
 
 def test_builder_compute(env):
@@ -117,20 +117,20 @@ def test_builder_compute(env):
 
     counter = env.file_storage("counter", 0)
 
-    def adder(config):
+    def adder2(a, b):
         counter.write(counter.read() + 1)
-        return config["a"] + config["b"]
+        return a + b
 
-    builder = runtime.register_builder(Builder(adder, "col1"))
+    bld = runtime.register_builder(Builder(adder2, "col1"))
 
-    entry = runtime.compute(builder({"a": 10, "b": 30}))
+    entry = runtime.compute(bld(10, 30))
     assert entry.config["a"] == 10
     assert entry.config["b"] == 30
     assert entry.value == 40
     assert entry.comp_time >= 0
     assert counter.read() == 1
 
-    result = runtime.compute_many([builder({"a": 10, "b": 30})])
+    result = runtime.compute_many([bld(b=30, a=10)])
     assert len(result) == 1
     entry = result[0]
     assert entry.config["a"] == 10
@@ -216,24 +216,16 @@ def test_builder_stored_deps(env):
 
     col1 = runtime.register_builder(Builder(lambda c: c * 10, "col1"))
 
-    def b2(c):
-        data = [col1(i) for i in range(c["start"], c["end"], c["step"])]
+    def b2(start, end, step):
+        data = [col1(i) for i in range(start, end, step)]
         yield
         return sum(d.value for d in data)
 
     col2 = runtime.register_builder(Builder(b2, "col2"))
 
-    def b3(config):
-        a = col2({
-            "start": 0,
-            "end": config,
-            "step": 2
-        })
-        b = col2({
-            "start": 0,
-            "end": config,
-            "step": 3
-        })
+    def b3(end):
+        a = col2(0, end, 2)
+        b = col2(0, end, 3)
         yield
         return a.value + b.value
 
@@ -242,8 +234,8 @@ def test_builder_stored_deps(env):
 
     cc2_2 = {"end": 10, "start": 0, "step": 2}
     cc2_3 = {"end": 10, "start": 0, "step": 3}
-    c2_2 = col2(cc2_2)
-    c2_3 = col2(cc2_3)
+    c2_2 = col2(**cc2_2)
+    c2_3 = col2(**cc2_3)
 
     assert runtime.get_entry_state(col3(10)) == "finished"
     assert runtime.get_entry_state(c2_2) == "finished"
@@ -251,23 +243,23 @@ def test_builder_stored_deps(env):
     assert runtime.get_entry_state(col1(0)) == "finished"
     assert runtime.get_entry_state(col1(2)) == "finished"
 
-    assert set(runtime.db.get_recursive_consumers(col1.name, "2")) == {
-        ("col1", "2"), ('col2', "{'end':10,'start':0,'step':2,}"), ('col3', "10")
+    assert set(runtime.db.get_recursive_consumers(col1.name, "{'c':2,}")) == {
+        ("col1", "{'c':2,}"), ('col2', "{'end':10,'start':0,'step':2,}"), ('col3', "{'end':10,}")
     }
 
-    assert set(runtime.db.get_recursive_consumers(col1.name, "6")) == {("col1", "6"),
+    assert set(runtime.db.get_recursive_consumers(col1.name, "{'c':6,}")) == {("col1", "{'c':6,}"),
                                                                        ('col2', c2_2.key),
                                                                        ("col2", c2_3.key),
-                                                                       ('col3', "10")}
+                                                                       ('col3', "{'end':10,}")}
 
-    assert set(runtime.db.get_recursive_consumers(col1.name, "9")) == {("col1", "9"),
+    assert set(runtime.db.get_recursive_consumers(col1.name, "{'c':9,}")) == {("col1", "{'c':9,}"),
                                                                        ("col2", c2_3.key),
-                                                                       ('col3', "10")}
+                                                                       ('col3', "{'end':10,}")}
 
     assert set(runtime.db.get_recursive_consumers(col2.name, c2_3.key)) == {("col2", c2_3.key),
-                                                                            ('col3', "10")}
+                                                                            ('col3', "{'end':10,}")}
 
-    assert set(runtime.db.get_recursive_consumers(col3.name, col3(10).key)) == {('col3', '10')}
+    assert set(runtime.db.get_recursive_consumers(col3.name, col3(10).key)) == {('col3', "{'end':10,}")}
 
     runtime.remove(col1(6))
     assert runtime.get_entry_state(col3(10)) is None
@@ -383,9 +375,9 @@ def test_builder_error_in_deps(env):
         return 123
 
     runtime = env.test_runtime()
-    builder = runtime.register_builder(Builder(builder_fn, "col1"))
+    bld = runtime.register_builder(Builder(builder_fn, "col1"))
     with pytest.raises(Exception, match="MyError"):
-        runtime.compute(builder(1))
+        runtime.compute(bld(1))
 
 
 def test_builder_double_yield_error(env):
@@ -395,26 +387,26 @@ def test_builder_double_yield_error(env):
         return 123
 
     runtime = env.test_runtime()
-    builder = runtime.register_builder(Builder(builder_fn, "col1"))
+    bld = runtime.register_builder(Builder(builder_fn, "col1"))
     with pytest.raises(Exception, match="yielded"):
-        runtime.compute(builder(1))
+        runtime.compute(bld(1))
 
 
 def test_builder_ref_in_compute(env):
-    def builder_fn(c):
+    def builder_fn():
         yield
         col0(123)
         return 123
 
     runtime = env.test_runtime()
     col0 = runtime.register_builder(Builder(lambda c: 123, "col0"))
-    builder = runtime.register_builder(Builder(builder_fn, "col1"))
+    bld = runtime.register_builder(Builder(builder_fn, "col1"))
     with pytest.raises(Exception, match="computation phase"):
-        runtime.compute(builder(1))
+        runtime.compute(bld())
 
 
 def test_builder_inconsistent_deps(env):
-    def builder_fn(c):
+    def builder_fn():
         import random
         col0(random.random())
         yield
@@ -423,6 +415,6 @@ def test_builder_inconsistent_deps(env):
 
     runtime = env.test_runtime()
     col0 = runtime.register_builder(Builder(lambda c: 123, "col0"))
-    builder = runtime.register_builder(Builder(builder_fn, "col1"))
+    bld = runtime.register_builder(Builder(builder_fn, "col1"))
     with pytest.raises(Exception, match="dependencies"):
-        runtime.compute(builder(1))
+        runtime.compute(bld())

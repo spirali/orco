@@ -12,8 +12,8 @@ def test_rest_builders():
 
         c = rt.register_builder(Builder(None, "hello"))
 
-        rt.insert(c({"x": 1, "y": [1, 2, 3]}), "ABC")
-        rt.insert(c("e2"), "A" * (1024 * 1024))
+        rt.insert(c(x=1, y=[1, 2, 3]), "ABC")
+        rt.insert(c(e="e2"), "A" * (1024 * 1024))
 
         rt.register_builder(Builder(None, "hello2"))
 
@@ -35,7 +35,7 @@ def test_rest_builders():
             assert item.get("size")
             del item["size"]
         assert len(rr) == 2
-        assert rr[0]["config"] == "e2"
+        assert rr[0]["config"] == {'e': "e2"}
         assert rr[1]["config"] == {'x': 1, 'y': [1, 2, 3]}
 
 

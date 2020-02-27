@@ -5,6 +5,7 @@ def export_builder_to_pandas(runtime, builder_name, missing=pd.NA, arg_prefix="a
     """
     Export builder into pandas  DataFrame
     """
+
     cols = {"value": [], "comp_time": []}
     for i, entry in enumerate(runtime.db.get_all_entries(builder_name)):
         cols["value"].append(entry.value)
