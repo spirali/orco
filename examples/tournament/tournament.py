@@ -49,5 +49,4 @@ def play_tournament(config):
     return score
 
 
-runtime = orco.Runtime("mydb.db")
-orco.run_cli(runtime)
+orco.run_cli()

@@ -18,5 +18,4 @@ def make_experiment(config):
     return sum(entry.value for entry in data)
 
 
-runtime = orco.Runtime("mydb.db")
-orco.run_cli(runtime)
+orco.run_cli()

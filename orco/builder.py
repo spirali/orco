@@ -30,7 +30,8 @@ class Builder:
     """
 
     def __init__(self, fn, name: str = None, job_setup=None, update_wrapper=False):
-        assert callable(fn) or fn is None
+        if not callable(fn) and fn is not None:
+            raise TypeError("Fn must be callable or None, {!r} provided".format(fn))
         if name is None:
             if fn is None:
                 raise ValueError("Provide at leas one of fn and name")
