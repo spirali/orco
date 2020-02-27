@@ -2,8 +2,8 @@ import orco
 
 
 @orco.builder()
-def add(config):
-    return config["a"] + config["b"]
+def add(a, b):
+    return a + b
 
 
 orco.run_cli()

@@ -12,7 +12,7 @@ def _command_serve(runtime, args):
 
 def _command_compute(runtime, args):
     builder = runtime._get_builder(args.builder)
-    task = Builder(builder)(json.loads(args.config))
+    task = Builder(builder)(**json.loads(args.config))
     print(runtime.compute(task).value)
 
 
