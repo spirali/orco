@@ -1,6 +1,7 @@
+import collections
 import functools
-import pickle
 import inspect
+import pickle
 
 from .entry import Entry
 from .internals.context import _CONTEXT
@@ -50,6 +51,12 @@ class Builder:
             self.fn_signature = inspect.signature(self.main_fn)
         else:
             self.fn_signature = inspect.signature(_generic_kwargs_fn)
+
+        kwnames = [p.name for p in self.fn_signature.parameters.values() if p.kind == p.VAR_KEYWORD]
+        self.kwargs_name = kwnames[0] if kwnames else None
+        argnames = [p.name for p in self.fn_signature.parameters.values() if p.kind == p.VAR_POSITIONAL]
+        self.args_name = argnames[0] if argnames else None
+
         self.make_raw_entry = _default_make_raw_entry
         self.job_setup = job_setup
         if update_wrapper:
@@ -63,16 +70,11 @@ class Builder:
             raise Exception("Builders with fn=None only accept keyword arguments")
         ba = self.fn_signature.bind(*args, **kwargs)
         ba.apply_defaults()
-        kwnames = [p.name for p in self.fn_signature.parameters.values() if p.kind == p.VAR_KEYWORD]
-        args = ba.arguments
-        if kwnames:
-            assert len(kwnames) == 1
-            kwname = kwnames[0]
-            if kwname in args:
-                kws = args[kwname]
-                del args[kwname]
-                args.update(kws)
-        return args
+        a = ba.arguments
+        if self.kwargs_name:
+            kwargs = a.pop(self.kwargs_name, {})
+            a.update(kwargs)
+        return a
 
     def __call__(self, *args, **kwargs):
         """
@@ -88,6 +90,23 @@ class Builder:
         if on_entry:
             on_entry(entry)
         return entry
+
+    def run_with_config(self, config):
+        "Run the main function with `config`, properly handling `*args` and `**kwargs`."
+        assert isinstance(config, dict)
+        if self.main_fn is None:
+            raise Exception("Fixed builder {!r} can't be run".format(self))
+
+        cfg = collections.OrderedDict(config)  # copy to preserve original
+        if self.kwargs_name:
+            kwargs = cfg.pop(self.kwargs_name, {})
+            cfg.update(kwargs)
+        if self.args_name:
+            more_args = cfg.pop(self.args_name, ())
+        else:
+            more_args = ()
+        ba = self.fn_signature.bind(**cfg)
+        return self.main_fn(*ba.args + more_args, **ba.kwargs)
 
     def __eq__(self, other):
         if not isinstance(other, Builder):

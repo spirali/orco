@@ -229,7 +229,7 @@ class Runtime:
                 deps = []
                 try:
                     _CONTEXT.on_entry = deps.append
-                    it = builder.main_fn(**entry.config)
+                    it = builder.run_with_config(entry.config)
                     next(it)
                 except StopIteration:
                     raise Exception(

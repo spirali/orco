@@ -11,6 +11,7 @@ from orco.internals.context import _CONTEXT
 from orco.internals.db import DB
 # from orco.internals.tasktools import task_to_taskkey, collect_task_keys, resolve_task_keys
 from orco.internals.job import Job
+from orco import Builder
 
 
 class JobFailure:
@@ -107,6 +108,7 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
         if _per_process_db is None:
             _per_process_db = DB(db_path, threading=False)
         main_fn, finalize_fn = cloudpickle.loads(fns)
+        temp_builder = Builder(main_fn, name=entry_key.builder_name)
 
         result = []
 
@@ -119,7 +121,7 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
                 if inspect.isgeneratorfunction(main_fn):
                     deps = []
                     _CONTEXT.on_entry = deps.append
-                    it = main_fn(**config)
+                    it = temp_builder.run_with_config(config)
                     next(it)
                     if set(e.make_entry_key() for e in deps) != set(dep_keys):
                         raise Exception("Builder function does not consistently return dependencies")
@@ -133,7 +135,7 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
                         value = e.value
                 else:
                     _CONTEXT.on_entry = block_new_entries
-                    value = main_fn(**config)
+                    value = temp_builder.run_with_config(config)
             finally:
                 _CONTEXT.on_entry = None
             end_time = time.time()

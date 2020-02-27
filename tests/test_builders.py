@@ -3,8 +3,18 @@ import pytest
 from orco import Builder, builder
 
 
-def adder(config):
-    return config["a"] + config["b"]
+def adder(a, b):
+    return a + b
+
+
+def test_builder_args(env):
+    @builder()
+    def f(a, *ars, e=2, **kwrs):
+        return (a, ars, e, kwrs)
+
+    runtime = env.test_runtime()
+    assert runtime.compute(f(1)).value == (1, (), 2, {})
+    assert runtime.compute(f(1, 2, 3, 4, f=3)).value == (1, (2, 3, 4), 2, {'f': 3})
 
 
 def test_builder_init(env):
