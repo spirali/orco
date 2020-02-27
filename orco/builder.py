@@ -78,11 +78,19 @@ class Builder:
 
     def __call__(self, *args, **kwargs):
         """
-        Create an unresolved Entry for this builder.
+        Create an unresolved Entry for this builder from function arguments.
 
         Calls `_CONTEXT.on_entry` to register/check dependencies etc.
         """
         config = self._create_config_from_call(args, kwargs)
+        return self.from_config(config)
+
+    def from_config(self, config):
+        """
+        Create an unresolved Entry for this builder from config dict.
+
+        Calls `_CONTEXT.on_entry` to register/check dependencies etc.
+        """
         entry = Entry(self.name, make_key(config), config, None, None, None)
         if not hasattr(_CONTEXT, "on_entry"):
             return entry
