@@ -12,9 +12,18 @@ def test_builder_args(env):
     def f(a, *ars, e=2, **kwrs):
         return (a, ars, e, kwrs)
 
+    @builder()
+    def g(a, *ars, e=2, **kwrs):
+        d = f(a, *ars, e=e, **kwrs)
+        yield
+        return d.value
+
     runtime = env.test_runtime()
     assert runtime.compute(f(1)).value == (1, (), 2, {})
     assert runtime.compute(f(1, 2, 3, 4, f=3)).value == (1, (2, 3, 4), 2, {'f': 3})
+    assert runtime.compute(f(e=3, a=42)).value == (42, (), 3, {})
+
+    assert runtime.compute(g(1, 2, 3, 4, f=3)).value == (1, (2, 3, 4), 2, {'f': 3})
 
 
 def test_builder_init(env):
