@@ -2,15 +2,14 @@
 
 In this guide we show additional functionality offered by ORCO.
 
-* [Removing computed results](#removing-entries)
-* [Upgrading builders](#upgrading-builders)
-* [Generating configurations](#configuration-generators)
-* [Builder references](#builder-reference)
-* [Retrieving results without computation](#retrieving-entries-without-computation)
-* [Fixed builders](#fixed-builders)
-* [Export to Pandas](#exporting-results)
-* [How are configurations compared](#configuration-equivalence)
-* [Using tasks in configurations](#tasks-in-configurations)
+- [Advanced usage](#advanced-usage)
+  - [Removing entries](#removing-entries)
+  - [Upgrading builders](#upgrading-builders)
+  - [Configuration generators](#configuration-generators)
+  - [Retrieving entries without computation](#retrieving-entries-without-computation)
+  - [Fixed builders](#fixed-builders)
+  - [Exporting results](#exporting-results)
+  - [Configuration equivalence](#configuration-equivalence)
 
 ## Removing entries
 
@@ -24,7 +23,6 @@ games G1, G2, and G3 and a tournament T1 that used G1, G2 and G3 and T2 that
 used just G2:
 
 ```
-
 players:   A    B    C    D
             \  / \  / \  /
              \/   \/   \/
@@ -79,6 +77,7 @@ It enables you to build complex Python objects from a simple declarative descrip
 The builder is used via the `build_config` function. It expects a dictionary containing
 JSON-like objects (numbers, strings, bools, lists, tuples and dictionaries are allowed). By default,
 it will simply return the input dictionary:
+
 ```python
 from orco.cfggen import build_config
 
@@ -210,6 +209,7 @@ evaluates to [
 
 If you instead want to materialize the inner operator first and use its final value as a single
 element of the product, simply wrap the nested operator in a list:
+
 ```python
 build_config({
     "$product": {
@@ -233,22 +233,6 @@ evaluates to [
 There is also a `build_config_from_file` function, which parses configurations from a path to a JSON file
 containing the configuration description.
 
-## Builder reference
-
-Sometimes you do not have access to the _builder_ object, but you still want to create
-_tasks_ to it (for example if you create these tasks in a different module than where
-the builder is defined).
-
-You can use the `Builder` class to create a builder simply by knowing
-the name of the builder:
-
-```python
-from orco import Builder
-
-builder1 = Builder("builder1")
-entry = builder1(config)
-```
-
 
 ## Retrieving entries without computation
 
@@ -261,13 +245,14 @@ The method `try_read_entry` works similarly, but return `None` is not in the dat
 
 ## Fixed builders
 
-Builders do not need to have an associated build function. Such builders are called *fixed*.
+Builders do not need to have an associated build function. Such builders are called *fixed*
+and are created by passing `None` for the builder function.
 You can insert values into them method using the `insert` function, which receives a configuration
 and its result value:
 
 ```python
 
-my_builder = runtime.register_builder("my_builder")
+my_builder = runtime.register_builder(Builder(None, "my_builder"))
 
 # Insert two values
 runtime.insert(my_builder({"something": 1}), 123)
