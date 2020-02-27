@@ -1,7 +1,7 @@
 import collections
 import itertools
 import json
-from collections import Iterable
+from collections.abc import Iterable
 
 _State = collections.namedtuple("State", ["toplevel", "computed", "resolving"])
 
