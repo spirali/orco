@@ -9,8 +9,8 @@ import cloudpickle
 
 from orco.internals.context import _CONTEXT
 from orco.internals.db import DB
-# from orco.internals.tasktools import task_to_taskkey, collect_task_keys, resolve_task_keys
 from orco.internals.job import Job
+from orco.entry import Entry
 from orco import Builder
 
 
@@ -75,7 +75,8 @@ class PoolJobRunner(JobRunner):
 
     def submit(self, runtime, job):
         builder = runtime._get_builder(job.entry.builder_name)
-        return self.pool.submit(_run_job, runtime.db.path, builder, job)
+        deps = [inp.entry.make_entry_key() if isinstance(inp, Job) else inp.make_entry_key() for inp in job.inputs]
+        return self.pool.submit(_run_job, runtime.db.path, builder, job.entry, deps, job.job_setup)
 
 
 class LocalProcessRunner(PoolJobRunner):
@@ -93,7 +94,7 @@ class LocalProcessRunner(PoolJobRunner):
 
 _per_process_db = None
 
-def _run_job_timed(db, builder, job, result):
+def _run_job_timed(db, builder, entry, dep_keys, job_setup, result):
     start_time = time.time()
     deps = []
 
@@ -105,46 +106,45 @@ def _run_job_timed(db, builder, job, result):
 
     def after_deps():
         _CONTEXT.on_entry = block_new_entries
-        dep_keys = [e.make_entry_key() for e in job.inputs]
         if set(e.make_entry_key() for e in deps) != set(dep_keys):
             raise Exception("Builder function does not consistently return dependencies")
-        for entry in deps:
-            db.read_entry(entry)
+        for e in deps:
+            db.read_entry(e)
 
     try:
         _CONTEXT.on_entry = new_entry
-        value = builder.run_with_config(job.entry.config, only_deps=False, after_deps=after_deps)
+        value = builder.run_with_config(entry.config, only_deps=False, after_deps=after_deps)
     finally:
         _CONTEXT.on_entry = None
     end_time = time.time()
 
-    result.append(builder.make_raw_entry(builder.name, job.entry.make_entry_key().key, job.entry.config, value, job.job_setup, end_time - start_time))
+    result.append(builder.make_raw_entry(builder.name, entry.make_entry_key().key, entry.config, value, job_setup, end_time - start_time))
 
 
-def _run_job_int(db_path, builder, job):
+def _run_job_int(db_path, builder, entry, dep_keys, job_setup):
     global _per_process_db
     if _per_process_db is None:
         _per_process_db = DB(db_path, threading=False)
 
     result = []
 
-    timeout = job.job_setup.get("timeout")
+    timeout = job_setup.get("timeout")
     if timeout is not None:
-        thread = threading.Thread(target=_run_job_timed, args=(_per_process_db, builder, job, result))
+        thread = threading.Thread(target=_run_job_timed, args=(_per_process_db, builder, entry, dep_keys, job_setup, result))
         thread.daemon = True
         thread.start()
         thread.join(timeout)
         if thread.is_alive():
-            return JobTimeout(job.entry.make_entry_key(), timeout)
+            return JobTimeout(entry.make_entry_key(), timeout)
     else:
-        _run_job_timed(_per_process_db, builder, job, result)
+        _run_job_timed(_per_process_db, builder, entry, dep_keys, job_setup, result)
     return result[0]
 
 
-def _run_job(db_path, builder, job):
+def _run_job(db_path, builder, entry, dep_keys, job_setup):
     assert isinstance(builder, Builder)
-    assert isinstance(job, Job)
+    assert isinstance(entry, Entry)
     try:
-        return _run_job_int(db_path, builder, job)
+        return _run_job_int(db_path, builder, entry, dep_keys, job_setup)
     except Exception as exception:
-        return JobError(job.entry.make_entry_key(), str(exception), traceback.format_exc())
+        return JobError(entry.make_entry_key(), str(exception), traceback.format_exc())
