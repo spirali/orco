@@ -74,10 +74,8 @@ class PoolJobRunner(JobRunner):
         self.pool = None
 
     def submit(self, runtime, job):
-        entry = job.entry
-        builder = runtime._get_builder(entry.builder_name)
-        deps = [inp.entry.make_entry_key() if isinstance(inp, Job) else inp.make_entry_key() for inp in job.inputs]
-        return self.pool.submit(_run_job, runtime.db.path, builder, entry, deps, job.job_setup)
+        builder = runtime._get_builder(job.entry.builder_name)
+        return self.pool.submit(_run_job, runtime.db.path, builder, job)
 
 
 class LocalProcessRunner(PoolJobRunner):
@@ -95,53 +93,58 @@ class LocalProcessRunner(PoolJobRunner):
 
 _per_process_db = None
 
+def _run_job_timed(db, builder, job, result):
+    start_time = time.time()
+    deps = []
 
-def _run_job(db_path, builder, entry, dep_keys, job_setup):
-    global _per_process_db
+    def new_entry(e):
+        deps.append(e)
+
+    def block_new_entries(_):
+        raise Exception("Builders cannot be called during computation phase")
+
+    def after_deps():
+        _CONTEXT.on_entry = block_new_entries
+        dep_keys = [e.make_entry_key() for e in job.inputs]
+        if set(e.make_entry_key() for e in deps) != set(dep_keys):
+            raise Exception("Builder function does not consistently return dependencies")
+        for entry in deps:
+            db.read_entry(entry)
+
     try:
-        entry_key = entry.make_entry_key()
-        if _per_process_db is None:
-            _per_process_db = DB(db_path, threading=False)
+        _CONTEXT.on_entry = new_entry
+        value = builder.run_with_config(job.entry.config, only_deps=False, after_deps=after_deps)
+    finally:
+        _CONTEXT.on_entry = None
+    end_time = time.time()
 
-        result = []
+    result.append(builder.make_raw_entry(builder.name, job.entry.make_entry_key().key, job.entry.config, value, job.job_setup, end_time - start_time))
 
-        def run():
-            start_time = time.time()
-            deps = []
 
-            def new_entry(e):
-                deps.append(e)
+def _run_job_int(db_path, builder, job):
+    global _per_process_db
+    if _per_process_db is None:
+        _per_process_db = DB(db_path, threading=False)
 
-            def block_new_entries(_):
-                raise Exception("Builders cannot be called during computation phase")
+    result = []
 
-            def block_and_load_deps():
-                _CONTEXT.on_entry = block_new_entries
-                if set(e.make_entry_key() for e in deps) != set(dep_keys):
-                    raise Exception("Builder function does not consistently return dependencies")
-                for entry in deps:
-                    _per_process_db.read_entry(entry)
+    timeout = job.job_setup.get("timeout")
+    if timeout is not None:
+        thread = threading.Thread(target=_run_job_timed, args=(_per_process_db, builder, job, result))
+        thread.daemon = True
+        thread.start()
+        thread.join(timeout)
+        if thread.is_alive():
+            return JobTimeout(job.entry.make_entry_key(), timeout)
+    else:
+        _run_job_timed(_per_process_db, builder, job, result)
+    return result[0]
 
-            try:
-                _CONTEXT.on_entry = new_entry
-                value = builder.run_with_config(entry.config, only_deps=False, after_deps=block_and_load_deps)
-            finally:
-                _CONTEXT.on_entry = None
-            end_time = time.time()
-            result.append(
-                builder.make_raw_entry(builder.name, entry_key.key, None, value, job_setup, end_time - start_time))
 
-        timeout = job_setup.get("timeout")
-        if timeout is not None:
-            thread = threading.Thread(target=run)
-            thread.daemon = True
-            thread.start()
-            thread.join(timeout)
-            if thread.is_alive():
-                return JobTimeout(entry_key, timeout)
-        else:
-            run()
-        return result[0]
-
+def _run_job(db_path, builder, job):
+    assert isinstance(builder, Builder)
+    assert isinstance(job, Job)
+    try:
+        return _run_job_int(db_path, builder, job)
     except Exception as exception:
-        return JobError(entry_key, str(exception), traceback.format_exc())
+        return JobError(job.entry.make_entry_key(), str(exception), traceback.format_exc())
