@@ -36,7 +36,7 @@ class Builder:
     function (name, doc, etc.).
     """
 
-    def __init__(self, fn, name: str = None, job_setup=None, update_wrapper=False):
+    def __init__(self, fn, name: str = None, job_setup=None):
         if not callable(fn) and fn is not None:
             raise TypeError("Fn must be callable or None, {!r} provided".format(fn))
 
@@ -67,8 +67,10 @@ class Builder:
             self.fn_signature = inspect.signature(_generic_kwargs_fn)
             self.fn_argspec = inspect.getfullargspec(_generic_kwargs_fn)
 
-        if update_wrapper and self.fn:
-            functools.update_wrapper(self, self.fn)
+        self.__signature__ = self.fn_signature
+        if hasattr(self.fn, '__name__'):
+            self.__name__ = self.fn.__name__
+        self.__doc__ = "Builder {!r} for {!r}, original docs:\n\n{}\nBuilde class doc:\n\n{}".format(self.name, self.fn, self.fn.__doc__, self.__doc__)
 
     @property
     def fn(self):

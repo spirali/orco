@@ -5,7 +5,7 @@ _global_builders = {}
 
 def builder(*, name=None, job_setup=None):
     def _register(fn):
-        b = Builder(fn, name=name, job_setup=job_setup, update_wrapper=True)
+        b = Builder(fn, name=name, job_setup=job_setup)
         _register_builder(b)
         return b
 

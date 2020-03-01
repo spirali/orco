@@ -30,10 +30,12 @@ def test_builder_args(env):
 
 
 def test_pickle_builder():
+    @builder()
     def f(x):
         return x + 1
 
-    bf = Builder(f)
+    bf = f
+    print(f)
     s = pickle.dumps(bf)
     f2 = pickle.loads(s)
     assert f2.run_with_config({'x': 42}) == 43
@@ -44,12 +46,12 @@ def test_builder_init(env):
 
     @builder(name="foo")
     def bar(conf):
-        "Test doc"
+        "bleurghsff"
         return conf
 
     assert bar.name == "foo"
     assert bar.__name__ == "bar"
-    assert bar.__doc__ == "Test doc"
+    assert "bleurghsff" in bar.__doc__
 
     @builder()
     def baz(conf):
