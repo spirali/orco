@@ -1,6 +1,9 @@
-import pandas as pd
+import pickle
 
-from orco.internals.utils import format_time, unpack_frame
+import pandas as pd
+import pytest
+
+from orco.internals.utils import CloudWrapper, format_time, unpack_frame
 
 
 def test_format_time():
@@ -48,3 +51,60 @@ def test_unpack_frame():
     assert unpacked[(unpacked["a"] == 5) & (unpacked["b"] == 3)]["value"].iloc[0] == 10
     assert pd.isna(unpacked[(unpacked["a"] == 5) & (unpacked["b"] == 3)]["c"]).all()
     assert unpacked[(unpacked["a"] == 8) & (unpacked["b"] == 4)]["c"].iloc[0] is False
+
+
+def test_cloudwrapper():
+    fn1 = lambda x: x + 1
+
+    def fn2(x):
+        "fiddlesticks"
+        return fn1(x) * 2
+
+    cw1 = CloudWrapper(fn1, cache=False)
+    assert cw1(3) == 4
+
+    cw2 = CloudWrapper(fn2)
+    assert cw2(4) == 10
+    assert "fiddlesticks" in cw2.__doc__
+
+    cw1b = pickle.loads(pickle.dumps(cw1))
+    assert cw1b(6) == 7
+    assert cw1.pickled_fn is None
+    assert cw1b.pickled_fn is None
+
+    cw2b = pickle.loads(pickle.dumps(cw2))
+    assert cw2b(10) == 22
+    assert cw2.pickled_fn is not None
+    assert cw2b.pickled_fn == cw2.pickled_fn
+
+    with pytest.raises(AttributeError):
+        pickle.dumps(fn1)
+
+
+
+def test_cloudwrapper_stateful():
+
+    class Fn:
+        "foobarbaz"
+        def __init__(self, add):
+            self.add = add
+
+        def __call__(self, x):
+            return x + self.add
+
+    fn = Fn(4)
+    cw_c = CloudWrapper(fn, cache=True)
+    cw_nc = CloudWrapper(fn, cache=False)
+    assert cw_c(10) == 14
+    assert cw_nc(10) == 14
+
+    cwb_c = pickle.loads(pickle.dumps(cw_c))
+    cwb_nc = pickle.loads(pickle.dumps(cw_nc))
+    assert cwb_c(10) == 14
+    assert cwb_nc(10) == 14
+
+    fn.add = 1  # Changin state of the callable ...
+    cwb_c = pickle.loads(pickle.dumps(cw_c))
+    cwb_nc = pickle.loads(pickle.dumps(cw_nc))
+    assert cwb_c(10) == 14
+    assert cwb_nc(10) == 11  # ... should propagate to here
