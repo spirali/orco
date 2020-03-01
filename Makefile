@@ -16,7 +16,7 @@ test_simple:
 test_adder:
 	rm -f "$(EXAMPLE_DB)"
 	PYTHONPATH=. python examples/adder/adder_cli.py --db "$(EXAMPLE_DB)" \
-		compute add '{"a": 1, "b": 2}'
+		compute add '{"$$product": {"a": [0,100], "b": {"$$range": 3}}}'
 	rm -f "$(EXAMPLE_DB)"
 
 test_tournament:

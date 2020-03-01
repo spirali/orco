@@ -4,6 +4,7 @@ import sys
 
 from .builder import Builder
 from .runtime import Runtime
+from .cfggen import build_config
 
 
 def _command_serve(runtime, args):
@@ -12,8 +13,17 @@ def _command_serve(runtime, args):
 
 def _command_compute(runtime, args):
     builder = runtime._get_builder(args.builder)
-    task = builder.from_config(json.loads(args.config))
-    print(runtime.compute(task).value)
+    cfg = json.loads(args.config)
+    cfg = build_config(cfg)
+    if isinstance(cfg, list):
+        tasks = [builder.entry_from_config(c) for c in cfg]
+    elif isinstance(cfg, dict):
+        tasks = [builder.entry_from_config(cfg)]
+    else:
+        raise Exception("Expanded config has type {!r}, list (many tasks) or dict (one task) expected.".format(type(cfg)))
+    res = runtime.compute_many(tasks)
+    for e in res:
+        print("{:40s}   {!r}".format(e.key, e.value))
 
 
 def _command_remove(runtime, args):
