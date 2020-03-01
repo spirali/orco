@@ -63,7 +63,6 @@ class PoolJobRunner(JobRunner):
 
     def __init__(self):
         self.pool = None
-        self.pickle_cache = {}
 
     def _create_pool(self):
         raise NotImplementedError
@@ -76,13 +75,10 @@ class PoolJobRunner(JobRunner):
 
     def submit(self, runtime, job):
         entry = job.entry
-        pickled_fns = self.pickle_cache.get(entry.builder_name)
-        if pickled_fns is None:
-            builder = runtime._get_builder(entry.builder_name)
-            pickled_fns = cloudpickle.dumps((builder.main_fn, builder.make_raw_entry))
-            self.pickle_cache[entry.builder_name] = pickled_fns
+        builder = runtime._get_builder(entry.builder_name)
+        fns = (builder._fn, builder.make_raw_entry)
         deps = [inp.entry.make_entry_key() if isinstance(inp, Job) else inp.make_entry_key() for inp in job.inputs]
-        return self.pool.submit(_run_job, runtime.db.path, pickled_fns, entry.make_entry_key(), entry.config, deps,
+        return self.pool.submit(_run_job, runtime.db.path, fns, entry.make_entry_key(), entry.config, deps,
                                 job.job_setup)
 
 
@@ -107,35 +103,31 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
     try:
         if _per_process_db is None:
             _per_process_db = DB(db_path, threading=False)
-        main_fn, finalize_fn = cloudpickle.loads(fns)
-        temp_builder = Builder(main_fn, name=entry_key.builder_name)
+        fn, finalize_fn = fns
+        temp_builder = Builder(fn, name=entry_key.builder_name)
 
         result = []
 
-        def block_new_entries(_):
-            raise Exception("Builders cannot be called during computation phase")
-
         def run():
             start_time = time.time()
+            deps = []
+
+            def new_entry(e):
+                deps.append(e)
+
+            def block_new_entries(_):
+                raise Exception("Builders cannot be called during computation phase")
+
+            def block_and_load_deps():
+                _CONTEXT.on_entry = block_new_entries
+                if set(e.make_entry_key() for e in deps) != set(dep_keys):
+                    raise Exception("Builder function does not consistently return dependencies")
+                for entry in deps:
+                    _per_process_db.read_entry(entry)
+
             try:
-                if inspect.isgeneratorfunction(main_fn):
-                    deps = []
-                    _CONTEXT.on_entry = deps.append
-                    it = temp_builder.run_with_config(config)
-                    next(it)
-                    if set(e.make_entry_key() for e in deps) != set(dep_keys):
-                        raise Exception("Builder function does not consistently return dependencies")
-                    for entry in deps:
-                        _per_process_db.read_entry(entry)
-                    _CONTEXT.on_entry = block_new_entries
-                    try:
-                        next(it)
-                        raise Exception("Computation function yielded for the second time")
-                    except StopIteration as e:
-                        value = e.value
-                else:
-                    _CONTEXT.on_entry = block_new_entries
-                    value = temp_builder.run_with_config(config)
+                _CONTEXT.on_entry = new_entry
+                value = temp_builder.run_with_config(config, only_deps=False, after_deps=block_and_load_deps)
             finally:
                 _CONTEXT.on_entry = None
             end_time = time.time()

@@ -121,7 +121,8 @@ class Builder:
         Correctly handles both generator and ordinary main functions, returning the
         final value. With `only_deps=True` only executes the part until `yield`
         (or nothing for ordinary functions).
-        Does not set the context etc.
+
+        If given, runs after_deps() after the dependency phase. Does not set the context etc.
         """
         if self.fn is None:
             raise Exception("Fixed builder {!r} can't be run".format(self))

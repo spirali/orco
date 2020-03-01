@@ -1,4 +1,5 @@
 import pickle
+import random
 
 import pytest
 
@@ -439,14 +440,14 @@ def test_builder_ref_in_compute(env):
 
 def test_builder_inconsistent_deps(env):
     def builder_fn():
-        import random
-        col0(random.random())
+        c = col0(random.random())
+        print("C", c)
         yield
-        col0(123)
-        return 123
+        return c.value + 1
 
     runtime = env.test_runtime()
     col0 = runtime.register_builder(Builder(lambda c: 123, "col0"))
     bld = runtime.register_builder(Builder(builder_fn, "col1"))
+    
     with pytest.raises(Exception, match="dependencies"):
         runtime.compute(bld())

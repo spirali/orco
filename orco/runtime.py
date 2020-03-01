@@ -224,29 +224,23 @@ class Runtime:
             if state == "announced":
                 conflicts.add(entry_key)
                 return None
-
-            if state is None and builder.main_fn and inspect.isgeneratorfunction(builder.main_fn):
-                deps = []
-                try:
-                    _CONTEXT.on_entry = deps.append
-                    it = builder.run_with_config(entry.config)
-                    next(it)
-                except StopIteration:
-                    raise Exception(
-                        "Builder {!r} main function is generator but does not yield for {!r}".format(entry.builder_name, entry))
-                finally:
-                    _CONTEXT.on_entry = None
-                inputs = [make_job(r) for r in deps]
-                if any(inp is None for inp in inputs):
-                    return None
-                for r in deps:
-                    global_deps.add((r.make_entry_key(), entry_key))
-            else:
-                inputs = ()
-            if state is None and builder.main_fn is None:
+            if builder.fn is None:
                 raise Exception(
                     "Computation depends on a missing configuration '{}' in a fixed builder"
                         .format(entry))
+
+            deps = []
+            try:
+                _CONTEXT.on_entry = deps.append
+                builder.run_with_config(entry.config, only_deps=True)
+            finally:
+                _CONTEXT.on_entry = None
+            inputs = [make_job(r) for r in deps]
+            if any(inp is None for inp in inputs):
+                return None
+            for r in deps:
+                global_deps.add((r.make_entry_key(), entry_key))
+
             job = Job(entry, inputs, builder._create_job_setup(entry.config))
             jobs[entry_key] = job
             return job
