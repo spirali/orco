@@ -1,3 +1,4 @@
+import inspect
 import pickle
 
 import pandas as pd
@@ -80,6 +81,22 @@ def test_cloudwrapper():
     with pytest.raises(AttributeError):
         pickle.dumps(fn1)
 
+
+def test_cloudwrapper_generator():
+    def f(x):
+        return x + 1
+
+    cf = CloudWrapper(f)
+    assert not cf.is_generator_function()
+    assert not inspect.isgenerator(cf(1))
+
+    def g(x):
+        yield x + 2
+        return x + 3
+
+    cg = CloudWrapper(g)
+    assert cg.is_generator_function()
+    assert inspect.isgenerator(cg(1))
 
 
 def test_cloudwrapper_stateful():
