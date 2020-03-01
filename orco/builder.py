@@ -7,6 +7,7 @@ from .entry import Entry
 from .internals.context import _CONTEXT
 from .internals.key import make_key
 from .internals.rawentry import RawEntry
+from .internals.utils import CloudWrapper
 
 
 def _default_make_raw_entry(builder_name, key, config, value, job_setup, comp_time):
@@ -20,7 +21,7 @@ def _default_make_raw_entry(builder_name, key, config, value, job_setup, comp_ti
     return RawEntry(builder_name, key, config, pickle.dumps(value), value_repr, job_setup, comp_time)
 
 
-def _generic_kwargs_fn(**kwargs):
+def _generic_kwargs_fn(**_kwargs):
     pass
 
 
@@ -38,43 +39,42 @@ class Builder:
     def __init__(self, fn, name: str = None, job_setup=None, update_wrapper=False):
         if not callable(fn) and fn is not None:
             raise TypeError("Fn must be callable or None, {!r} provided".format(fn))
+
+        # Cloudwrapper
+        if fn is not None and not isinstance(fn, CloudWrapper):
+            fn = CloudWrapper(fn)
+        self._fn = fn
+        self.make_raw_entry = CloudWrapper(_default_make_raw_entry)
+        if callable(job_setup) and not isinstance(job_setup, CloudWrapper):
+            job_setup = CloudWrapper(job_setup)
+        self.job_setup = job_setup
+
+        # Name resolution
         if name is None:
             if fn is None:
                 raise ValueError("Provide at leas one of fn and name")
-            name = fn.__name__
+            name = self.fn.__name__
         assert isinstance(name, str)
         if not name.isidentifier():
             raise ValueError("{!r} is not a valid name for Builder (needs a valid identifier)".format(name))
         self.name = name
-        self.main_fn = fn
-        if self.main_fn is not None:
-            self.fn_signature = inspect.signature(self.main_fn)
+
+        # Signature inference
+        if self.fn is not None:
+            self.fn_signature = inspect.signature(self.fn)
+            self.fn_argspec = inspect.getfullargspec(self.fn)
         else:
             self.fn_signature = inspect.signature(_generic_kwargs_fn)
+            self.fn_argspec = inspect.getfullargspec(_generic_kwargs_fn)
 
-        kwnames = [p.name for p in self.fn_signature.parameters.values() if p.kind == p.VAR_KEYWORD]
-        self.kwargs_name = kwnames[0] if kwnames else None
-        argnames = [p.name for p in self.fn_signature.parameters.values() if p.kind == p.VAR_POSITIONAL]
-        self.args_name = argnames[0] if argnames else None
+        if update_wrapper and self.fn:
+            functools.update_wrapper(self, self.fn)
 
-        self.make_raw_entry = _default_make_raw_entry
-        self.job_setup = job_setup
-        if update_wrapper:
-            functools.update_wrapper(self, fn)
-
-    def _create_config_from_call(self, args, kwargs):
-        """
-        Return an OrderedDIct of named parameters, unpacking extra kwargs into the dict.
-        """
-        if self.main_fn is None and args:
-            raise Exception("Builders with fn=None only accept keyword arguments")
-        ba = self.fn_signature.bind(*args, **kwargs)
-        ba.apply_defaults()
-        a = ba.arguments
-        if self.kwargs_name:
-            kwargs = a.pop(self.kwargs_name, {})
-            a.update(kwargs)
-        return a
+    @property
+    def fn(self):
+        if isinstance(self._fn, CloudWrapper):
+            return self._fn.fn
+        return self._fn
 
     def __call__(self, *args, **kwargs):
         """
@@ -82,10 +82,10 @@ class Builder:
 
         Calls `_CONTEXT.on_entry` to register/check dependencies etc.
         """
-        config = self._create_config_from_call(args, kwargs)
-        return self.from_config(config)
+        config = self._create_config_from_args(args, kwargs)
+        return self.entry_from_config(config)
 
-    def from_config(self, config):
+    def entry_from_config(self, config):
         """
         Create an unresolved Entry for this builder from config dict.
 
@@ -99,22 +99,63 @@ class Builder:
             on_entry(entry)
         return entry
 
-    def run_with_config(self, config):
-        "Run the main function with `config`, properly handling `*args` and `**kwargs`."
-        assert isinstance(config, dict)
-        if self.main_fn is None:
+    def run_with_config(self, config, only_deps=False, after_deps=None):
+        """
+        Run the main function with `config`, properly handling `*args` and `**kwargs`.
+
+        Correctly handles both generator and ordinary main functions, returning the
+        final value. With `only_deps=True` only executes the part until `yield`
+        (or nothing for ordinary functions).
+        Does not set the context etc.
+        """
+        if self.fn is None:
             raise Exception("Fixed builder {!r} can't be run".format(self))
 
-        cfg = collections.OrderedDict(config)  # copy to preserve original
-        if self.kwargs_name:
-            kwargs = cfg.pop(self.kwargs_name, {})
-            cfg.update(kwargs)
-        if self.args_name:
-            more_args = cfg.pop(self.args_name, ())
+        args, kwargs = self._create_args_from_config(config)
+        return self.run_with_args(args, kwargs, only_deps=only_deps, after_deps=after_deps)
+
+    def run_with_args(self, args, kwargs, only_deps=False, after_deps=None):
+        """
+        Run the main function with `*args` and `**kwargs`.
+
+        Correctly handles both generator and ordinary main functions, returning the
+        final value. With `only_deps=True` only executes the part until `yield`
+        (or nothing for ordinary functions).
+        Does not set the context etc.
+        """
+        if self.fn is None:
+            raise Exception("Fixed builder {!r} can't be run".format(self))
+        
+        if inspect.isgeneratorfunction(self.fn):
+            g = self.fn(*args, **kwargs)
+            try:
+                y = next(g)
+            except StopIteration:
+                raise Exception("Computation function is a generator but did not yield")
+            if y is not None:
+                raise Exception("Computation function must yield None")
+            if only_deps:
+                value = None
+            else:
+                if after_deps is not None:
+                    after_deps()
+                try:
+                    y = next(g)
+                except StopIteration as e:
+                    value = e.value
+                else:
+                    raise Exception("Computation function yielded more than once")
         else:
-            more_args = ()
-        ba = self.fn_signature.bind(**cfg)
-        return self.main_fn(*ba.args + more_args, **ba.kwargs)
+            if only_deps:
+                value = None
+            else:
+                if after_deps is not None:
+                    after_deps()
+                value = self.fn(*args, **kwargs)
+
+        if inspect.isgenerator(value):
+            raise Exception("Computation function returned a generator while it seemed like an ordinary function")
+        return value
 
     def __eq__(self, other):
         if not isinstance(other, Builder):
@@ -125,6 +166,7 @@ class Builder:
         return "<{} {!r}>".format(self.__class__.__name__, self.name)
 
     def _create_job_setup(self, config):
+        # TODO: Formalize job_setup
         job_setup = self.job_setup
         if callable(job_setup):
             job_setup = job_setup(config)
@@ -137,3 +179,34 @@ class Builder:
             return job_setup
         else:
             raise TypeError("Invalid object as job_setup: {!r}".format(job_setup))
+
+    def _create_config_from_args(self, args, kwargs):
+        """
+        Return an OrderedDIct of named parameters, unpacking extra kwargs into the dict.
+        """
+        if self.fn is None and args:
+            raise Exception("Builders with fn=None only accept keyword arguments")
+        ba = self.fn_signature.bind(*args, **kwargs)
+        ba.apply_defaults()
+        a = ba.arguments
+        if self.fn_argspec.varkw:
+            kwargs = a.pop(self.fn_argspec.varkw, {})
+            a.update(kwargs)
+        return a
+
+    def _create_args_from_config(self, config):
+        """
+        Return an (args, kwargs) made from from config.
+        
+        Unpacks kwargs and args (as named in function signature) in config.
+        """
+        cfg = collections.OrderedDict(config)  # copy to preserve original
+        if self.fn_argspec.varkw:
+            kwargs = cfg.pop(self.fn_argspec.varkw, {})
+            cfg.update(kwargs)
+        if self.fn_argspec.varargs:
+            more_args = cfg.pop(self.fn_argspec.varargs, ())
+        else:
+            more_args = ()
+        ba = self.fn_signature.bind(**cfg)
+        return (ba.args + more_args, ba.kwargs)

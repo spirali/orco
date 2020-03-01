@@ -1,3 +1,5 @@
+import pickle
+
 import pytest
 
 from orco import Builder, builder
@@ -24,6 +26,17 @@ def test_builder_args(env):
     assert runtime.compute(f(e=3, a=42)).value == (42, (), 3, {})
 
     assert runtime.compute(g(1, 2, 3, 4, f=3)).value == (1, (2, 3, 4), 2, {'f': 3})
+
+
+def test_pickle_builder():
+    def f(x):
+        return x + 1
+
+    bf = Builder(f)
+    s = pickle.dumps(bf)
+    f2 = pickle.loads(s)
+    assert f2.run_with_config({'x': 42}) == 43
+    assert f2.run_with_args((44, ), {}) == 45
 
 
 def test_builder_init(env):
