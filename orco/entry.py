@@ -34,7 +34,14 @@ class Entry:
         return EntryKey(self.builder_name, self.key)
 
     def __repr__(self):
-        return "<Entry {}/{}>".format(self.builder_name, self.config)
+        return "<Entry {}/{}>".format(self.builder_name, self.key)
 
+    def __eq__(self, other):
+        if not isinstance(other, Entry):
+            return False
+        return self.make_entry_key() == other.make_entry_key()
+
+    def __hash__(self):
+        return hash((self.make_entry_key()))
 
 EntryKey = collections.namedtuple("EntryKey", ("builder_name", "key"))

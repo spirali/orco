@@ -165,6 +165,9 @@ class Builder:
             return False
         return self.name == other.name
 
+    def __hash__(self):
+        return hash((3726138, self.name))
+
     def __repr__(self):
         return "<{} {!r}>".format(self.__class__.__name__, self.name)
 

@@ -130,7 +130,7 @@ class Executor:
             runner_name = job_setup.get("runner", "local")
         runner = self.runners.get(runner_name)
         if runner is None:
-            raise Exception("Task '{}' asked for runner unknown runner '{}'".format(job.entry, runner_name))
+            raise Exception("Task '{}' asked for unknown runner '{}'".format(job.entry, runner_name))
         return runner.submit(self.runtime, job)
 
     def run(self, all_jobs, continue_on_error):
