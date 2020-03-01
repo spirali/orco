@@ -76,10 +76,8 @@ class PoolJobRunner(JobRunner):
     def submit(self, runtime, job):
         entry = job.entry
         builder = runtime._get_builder(entry.builder_name)
-        fns = (builder._fn, builder.make_raw_entry)
         deps = [inp.entry.make_entry_key() if isinstance(inp, Job) else inp.make_entry_key() for inp in job.inputs]
-        return self.pool.submit(_run_job, runtime.db.path, fns, entry.make_entry_key(), entry.config, deps,
-                                job.job_setup)
+        return self.pool.submit(_run_job, runtime.db.path, builder, entry, deps, job.job_setup)
 
 
 class LocalProcessRunner(PoolJobRunner):
@@ -98,13 +96,12 @@ class LocalProcessRunner(PoolJobRunner):
 _per_process_db = None
 
 
-def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
+def _run_job(db_path, builder, entry, dep_keys, job_setup):
     global _per_process_db
     try:
+        entry_key = entry.make_entry_key()
         if _per_process_db is None:
             _per_process_db = DB(db_path, threading=False)
-        fn, finalize_fn = fns
-        temp_builder = Builder(fn, name=entry_key.builder_name)
 
         result = []
 
@@ -127,13 +124,12 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
 
             try:
                 _CONTEXT.on_entry = new_entry
-                value = temp_builder.run_with_config(config, only_deps=False, after_deps=block_and_load_deps)
+                value = builder.run_with_config(entry.config, only_deps=False, after_deps=block_and_load_deps)
             finally:
                 _CONTEXT.on_entry = None
             end_time = time.time()
             result.append(
-                finalize_fn(entry_key.builder_name, entry_key.key, None, value, job_setup,
-                            end_time - start_time))
+                builder.make_raw_entry(builder.name, entry_key.key, None, value, job_setup, end_time - start_time))
 
         timeout = job_setup.get("timeout")
         if timeout is not None:
@@ -146,5 +142,6 @@ def _run_job(db_path, fns, entry_key, config, dep_keys, job_setup):
         else:
             run()
         return result[0]
+
     except Exception as exception:
         return JobError(entry_key, str(exception), traceback.format_exc())
