@@ -116,7 +116,6 @@ class Executor:
                         c = []
                         consumers[inp] = c
                     c.append(job_node)
-            print(job_node)
             waiting_deps[job_node] = len(job_node.inputs)
         return consumers, waiting_deps, ready
 

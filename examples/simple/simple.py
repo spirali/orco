@@ -5,7 +5,7 @@ import orco
 
 
 @orco.builder()
-def do_something(_unused):
+def do_something(unused):
     time.sleep(0.3)  # Simulate computation
     return random.randint(0, 10)
 
