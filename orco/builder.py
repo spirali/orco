@@ -8,6 +8,7 @@ from .internals.context import _CONTEXT
 from .internals.key import make_key
 from .internals.rawentry import RawEntry
 from .internals.utils import CloudWrapper
+from .jobsetup import JobSetup
 
 
 def _default_make_raw_entry(builder_name, key, config, value, job_setup, comp_time):
@@ -172,16 +173,15 @@ class Builder:
         return "<{} {!r}>".format(self.__class__.__name__, self.name)
 
     def _create_job_setup(self, config):
-        # TODO: Formalize job_setup
         job_setup = self.job_setup
         if callable(job_setup):
             job_setup = job_setup(config)
 
         if job_setup is None:
-            return {}
+            return JobSetup("local")
         elif isinstance(job_setup, str):
-            return {"runner": job_setup}
-        elif isinstance(job_setup, dict):
+            return JobSetup(job_setup)
+        elif isinstance(job_setup, JobSetup):
             return job_setup
         else:
             raise TypeError("Invalid object as job_setup: {!r}".format(job_setup))

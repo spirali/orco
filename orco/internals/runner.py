@@ -128,14 +128,13 @@ def _run_job_int(db_path, builder, entry, dep_keys, job_setup):
 
     result = []
 
-    timeout = job_setup.get("timeout")
-    if timeout is not None:
+    if job_setup.timeout is not None:
         thread = threading.Thread(target=_run_job_timed, args=(_per_process_db, builder, entry, dep_keys, job_setup, result))
         thread.daemon = True
         thread.start()
-        thread.join(timeout)
+        thread.join(job_setup.timeout)
         if thread.is_alive():
-            return JobTimeout(entry.make_entry_key(), timeout)
+            return JobTimeout(entry.make_entry_key(), job_setup.timeout)
     else:
         _run_job_timed(_per_process_db, builder, entry, dep_keys, job_setup, result)
     return result[0]

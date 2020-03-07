@@ -3,7 +3,7 @@ from time import sleep
 
 import pytest
 
-from orco import Builder, JobFailedException
+from orco import Builder, JobFailedException, JobSetup
 from orco.internals.key import make_key
 
 
@@ -117,7 +117,7 @@ def test_executor_timeout(env):
         return time
 
     def job_setup(c):
-        return {"timeout": c.get("timeout")}
+        return JobSetup(timeout=c.get("timeout"))
 
     col0 = runtime.register_builder(Builder(compute, "col0", job_setup=job_setup))
 

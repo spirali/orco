@@ -125,7 +125,7 @@ class Executor:
         if job_setup is None:
             runner_name = "local"
         else:
-            runner_name = job_setup.get("runner", "local")
+            runner_name = job_setup.runner_name
         runner = self.runners.get(runner_name)
         if runner is None:
             raise Exception("Task '{}' asked for unknown runner '{}'".format(job.entry, runner_name))

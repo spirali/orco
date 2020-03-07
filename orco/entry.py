@@ -1,5 +1,5 @@
 import collections
-
+from .jobsetup import JobSetup
 
 class Entry:
     """
@@ -16,7 +16,7 @@ class Entry:
     __slots__ = ("builder_name", "key", "config", "value", "job_setup", "created", "comp_time")
 
     def __init__(self, builder_name, key, config, value, job_setup, created=None, comp_time=None):
-        assert job_setup is None or isinstance(job_setup, dict)
+        assert job_setup is None or isinstance(job_setup, JobSetup)
         assert comp_time is None or isinstance(comp_time, float)
         self.builder_name = builder_name
         self.key = key
