@@ -102,24 +102,22 @@ class Executor:
             self.heartbeat_thread.daemon = True
             self.heartbeat_thread.start()
 
-    def _init(self, jobs):
+    def _init(self, job_nodes):
         consumers = {}
         waiting_deps = {}
         ready = []
-
-        for job in jobs:
-            count = 0
-            for inp in job.inputs:
-                if isinstance(inp, Job):
-                    count += 1
+        for job_node in job_nodes:
+            if not job_node.inputs:
+                ready.append(job_node.job)
+            else:
+                for inp in job_node.inputs:
                     c = consumers.get(inp)
                     if c is None:
                         c = []
                         consumers[inp] = c
-                    c.append(job)
-            if count == 0:
-                ready.append(job)
-            waiting_deps[job] = count
+                    c.append(job_node)
+            print(job_node)
+            waiting_deps[job_node] = len(job_node.inputs)
         return consumers, waiting_deps, ready
 
     def _submit_job(self, job):
@@ -133,7 +131,7 @@ class Executor:
             raise Exception("Task '{}' asked for unknown runner '{}'".format(job.entry, runner_name))
         return runner.submit(self.runtime, job)
 
-    def run(self, all_jobs, continue_on_error):
+    def run(self, job_nodes, continue_on_error):
 
         def process_unprocessed():
             logging.debug("Writing into db: %s", unprocessed)
@@ -141,25 +139,25 @@ class Executor:
             if pending_reports:
                 del pending_reports[:]
             for raw_entry in unprocessed:
-                job = all_jobs[EntryKey(raw_entry.builder_name, raw_entry.key)]
+                job = job_nodes[EntryKey(raw_entry.builder_name, raw_entry.key)]
                 for c in consumers.get(job, ()):
                     waiting_deps[c] -= 1
                     w = waiting_deps[c]
                     if w <= 0:
                         assert w == 0
-                        waiting.add(self._submit_job(c))
+                        waiting.add(self._submit_job(c.job))
 
-        self.stats = {"n_jobs": len(all_jobs), "n_completed": 0}
+        self.stats = {"n_jobs": len(job_nodes), "n_completed": 0}
 
         pending_reports = []
         # all_jobs = {job.entry.entry_key(): job for job in all_jobs}
         db = self.runtime.db
         db.update_stats(self.id, self.stats)
-        consumers, waiting_deps, ready = self._init(all_jobs.values())
+        consumers, waiting_deps, ready = self._init(job_nodes.values())
         waiting = [self._submit_job(job) for job in ready]
         del ready
 
-        progressbar = tqdm.tqdm(total=len(all_jobs))
+        progressbar = tqdm.tqdm(total=len(job_nodes))
         unprocessed = []
         last_write = time.time()
         errors = []

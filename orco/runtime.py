@@ -11,7 +11,7 @@ from .builder import Builder
 from .entry import Entry
 from .internals.db import DB
 from .internals.executor import Executor
-from .internals.job import Job
+from .internals.job import Job, JobNode
 from .internals.key import make_key
 from .internals.runner import JobRunner
 # from .internals.tasktools import collect_tasks, resolve_tasks
@@ -202,25 +202,25 @@ class Runtime:
         return self._builders[builder_name]
 
     def _create_compute_tree(self, entries, exists, errors):
-        jobs = {}
+        job_nodes = {}
         global_deps = set()
         conflicts = set()
         assert not hasattr(_CONTEXT, "on_entry") or _CONTEXT.on_entry is None
 
-        def make_job(entry):
+        def make_job_node(entry):
             if entry in exists:
-                return entry
+                return "exists"
             if entry in conflicts or (errors and entry in errors):
                 return None
             entry_key = entry.make_entry_key()
-            job = jobs.get(entry_key)
-            if job is not None:
-                return job
+            job_node = job_nodes.get(entry_key)
+            if job_node is not None:
+                return job_node
             builder = self._get_builder(entry.builder_name)
             state = self.db.get_entry_state(entry.builder_name, entry.key)
             if state == "finished":
                 exists.add(entry)
-                return entry
+                return "exists"
             if state == "announced":
                 conflicts.add(entry_key)
                 return None
@@ -235,27 +235,32 @@ class Runtime:
                 builder.run_with_config(entry.config, only_deps=True)
             finally:
                 _CONTEXT.on_entry = None
-            inputs = [make_job(r) for r in deps]
-            if any(inp is None for inp in inputs):
-                return None
+            inputs = []
+            for e in deps:
+                j = make_job_node(e)
+                if j is None:
+                    return None
+                if j == "exists":
+                    continue
+                inputs.append(j)
             for r in deps:
                 global_deps.add((r.make_entry_key(), entry_key))
-
-            job = Job(entry, inputs, builder._create_job_setup(entry.config))
-            jobs[entry_key] = job
-            return job
+            job = Job(entry, deps, builder._create_job_setup(entry.config))
+            job_node = JobNode(job, inputs)
+            job_nodes[entry_key] = job_node
+            return job_node
 
         for entry in entries:
-            make_job(entry)
+            make_job_node(entry)
 
-        return jobs, global_deps, len(conflicts)
+        return job_nodes, global_deps, len(conflicts)
 
     def _check_stopped(self):
         if self.stopped:
             raise Exception("Runtime was already stopped")
 
-    def _print_report(self, jobs):
-        jobs_per_builder = collections.Counter([j.entry.builder_name for j in jobs.values()])
+    def _print_report(self, job_nodes):
+        jobs_per_builder = collections.Counter([job_node.job.entry.builder_name for job_node in job_nodes.values()])
         print("Scheduled jobs   |     # | Expected comp. time (per entry)\n"
               "-----------------+-------+--------------------------------")
         for col, count in sorted(jobs_per_builder.items()):
@@ -269,10 +274,10 @@ class Runtime:
 
     def _run_computation(self, entries, exists, errors):
         executor = self.executor
-        jobs, global_deps, n_conflicts = self._create_compute_tree(entries, exists, errors)
-        if not jobs and n_conflicts == 0:
+        job_nodes, global_deps, n_conflicts = self._create_compute_tree(entries, exists, errors)
+        if not job_nodes and n_conflicts == 0:
             return "finished"
-        need_to_compute_entries = [job.entry for job in jobs.values()]
+        need_to_compute_entries = [job_node.job.entry for job_node in job_nodes.values()]
         if not need_to_compute_entries:
             print("Waiting for computation on another executor ...")
             return "wait"
@@ -289,8 +294,8 @@ class Runtime:
                 print(
                     "Some computation was temporarily skipped as they depends on jobs computed by another executor"
                 )
-            self._print_report(jobs)
-            new_errors = executor.run(jobs, errors is not None)
+            self._print_report(job_nodes)
+            new_errors = executor.run(job_nodes, errors is not None)
             if errors is not None:
                 errors.update(new_errors)
             else:
@@ -300,7 +305,7 @@ class Runtime:
             else:
                 return "next"
         except:
-            self.db.unannounce_entries(executor.id, list(jobs))
+            self.db.unannounce_entries(executor.id, list(job_nodes))
             raise
 
     def _compute(self, entries, continue_on_error=False):

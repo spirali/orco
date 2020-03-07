@@ -75,8 +75,8 @@ class PoolJobRunner(JobRunner):
 
     def submit(self, runtime, job):
         builder = runtime._get_builder(job.entry.builder_name)
-        deps = [inp.entry.make_entry_key() if isinstance(inp, Job) else inp.make_entry_key() for inp in job.inputs]
-        return self.pool.submit(_run_job, runtime.db.path, builder, job.entry, deps, job.job_setup)
+        dep_keys = [entry.make_entry_key() for entry in job.deps]
+        return self.pool.submit(_run_job, runtime.db.path, builder, job.entry, dep_keys, job.job_setup)
 
 
 class LocalProcessRunner(PoolJobRunner):
