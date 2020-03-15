@@ -8,7 +8,6 @@ from datetime import datetime
 import tqdm
 
 from orco.entry import EntryKey
-from orco.internals.job import Job
 from orco.internals.runner import LocalProcessRunner, JobFailure
 from orco.report import Report
 
@@ -20,11 +19,14 @@ class JobFailedException(Exception):
     pass
 
 
+"""
 def _heartbeat(runtime, id, event, heartbeat_interval):
     while not event.is_set():
         runtime.db.update_heartbeat(id)
         time.sleep(heartbeat_interval)
+"""
 
+# TODO: Remove heartbeat
 
 class Executor:
     """
@@ -75,7 +77,7 @@ class Executor:
         return self.stats
 
     def stop(self):
-        self.runtime.db.stop_executor(self.id)
+        #self.runtime.db.stop_executor(self.id)
         if self.heartbeat_stop_event:
             self.heartbeat_stop_event.set()
         for runner in self.runners.values():
@@ -88,12 +90,13 @@ class Executor:
         assert self.created is None
 
         self.created = datetime.now()
-        self.runtime.db.register_executor(self)
-        assert self.id is not None
+        #self.runtime.db.register_executor(self)
+        #assert self.id is not None
 
         for runner in self.runners.values():
             runner.start()
 
+        """
         if not self._debug_do_not_start_heartbeat:
             self.heartbeat_stop_event = threading.Event()
             self.heartbeat_thread = threading.Thread(
@@ -101,101 +104,69 @@ class Executor:
                 args=(self.runtime, self.id, self.heartbeat_stop_event, self.heartbeat_interval))
             self.heartbeat_thread.daemon = True
             self.heartbeat_thread.start()
+        """
 
-    def _init(self, job_nodes):
+    def _init(self, plan):
         consumers = {}
         waiting_deps = {}
         ready = []
-        for job_node in job_nodes:
-            if not job_node.inputs:
-                ready.append(job_node.job)
+        for plan_node in plan.nodes:
+            if not plan_node.inputs:
+                ready.append(plan_node)
             else:
-                for inp in job_node.inputs:
+                for inp in plan_node.inputs:
                     c = consumers.get(inp)
                     if c is None:
                         c = []
                         consumers[inp] = c
-                    c.append(job_node)
-            waiting_deps[job_node] = len(job_node.inputs)
+                    c.append(plan_node)
+            waiting_deps[plan_node] = len(plan_node.inputs)
         return consumers, waiting_deps, ready
 
-    def _submit_job(self, job):
-        job_setup = job.job_setup
+    def _submit_job(self, plan_node):
+        job_setup = plan_node.job_setup
         if job_setup is None:
             runner_name = "local"
         else:
             runner_name = job_setup.runner_name
         runner = self.runners.get(runner_name)
         if runner is None:
-            raise Exception("Task '{}' asked for unknown runner '{}'".format(job.entry, runner_name))
-        return runner.submit(self.runtime, job)
+            raise Exception("Task '{}/{}' asked for unknown runner '{}'".format(plan_node.builder_name, plan_node.config, runner_name))
+        return runner.submit(self.runtime, plan_node)
 
-    def run(self, job_nodes, continue_on_error):
-
-        def process_unprocessed():
-            logging.debug("Writing into db: %s", unprocessed)
-            db.set_entry_values(self.id, unprocessed, self.stats, pending_reports)
-            if pending_reports:
-                del pending_reports[:]
-            for raw_entry in unprocessed:
-                job = job_nodes[EntryKey(raw_entry.builder_name, raw_entry.key)]
-                for c in consumers.get(job, ()):
-                    waiting_deps[c] -= 1
-                    w = waiting_deps[c]
-                    if w <= 0:
-                        assert w == 0
-                        waiting.add(self._submit_job(c.job))
-
-        self.stats = {"n_jobs": len(job_nodes), "n_completed": 0}
-
-        pending_reports = []
-        # all_jobs = {job.entry.entry_key(): job for job in all_jobs}
-        db = self.runtime.db
-        db.update_stats(self.id, self.stats)
-        consumers, waiting_deps, ready = self._init(job_nodes.values())
-        waiting = [self._submit_job(job) for job in ready]
+    def run(self, plan):
+        nodes_by_id = {pn.job_id: pn for pn in plan.nodes}
+        consumers, waiting_deps, ready = self._init(plan)
+        waiting = [self._submit_job(pn) for pn in ready]
         del ready
 
-        progressbar = tqdm.tqdm(total=len(job_nodes))
+        progressbar = tqdm.tqdm(total=len(plan.nodes))
         unprocessed = []
-        last_write = time.time()
-        errors = []
         try:
             while waiting:
                 wait_result = wait(
                     waiting, return_when=FIRST_COMPLETED, timeout=1 if unprocessed else None)
                 waiting = wait_result.not_done
                 for f in wait_result.done:
-                    self.stats["n_completed"] += 1
                     progressbar.update()
                     result = f.result()
                     if isinstance(result, JobFailure):
-                        entry_key = result.entry_key
-                        config = db.get_config(entry_key[0], entry_key[1])
+                        pn = nodes_by_id[result.job_id]
                         message = result.message()
-                        report = Report(
-                            result.report_type(),
-                            self.id,
-                            message,
-                            builder_name=entry_key[0],
-                            config=config)
-                        if continue_on_error:
-                            errors.append(entry_key)
-                            pending_reports.append(report)
+                        if plan.continue_on_error:
+                            plan.error_keys.append(pn.make_entry_key())
                         else:
-                            db.insert_report(report)
-
                             raise JobFailedException("{} ({}/{})".format(
-                                message, result.entry_key[0], repr(result.entry_key[1])))
+                                message, pn.builder_name, repr(pn.config)))
                         continue
-                    logger.debug("Job finished: %s/%s", result.builder_name, result.key)
-                    unprocessed.append(result)
-                if unprocessed and (not waiting or time.time() - last_write > 1):
-                    process_unprocessed()
-                    unprocessed = []
-                    last_write = time.time()
-            db.set_entry_values(self.id, unprocessed, self.stats, pending_reports)
-            return errors
+                    pn = nodes_by_id[result]
+                    logger.debug("Job %s finished: %s/%s", pn.job_id, pn.builder_name, pn.key)
+                    for c in consumers.get(pn, ()):
+                        waiting_deps[c] -= 1
+                        w = waiting_deps[c]
+                        if w <= 0:
+                            assert w == 0
+                            waiting.add(self._submit_job(c))
         finally:
             progressbar.close()
             for f in waiting:

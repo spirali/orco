@@ -9,9 +9,9 @@ from orco.internals.context import _CONTEXT
 
 from .builder import Builder
 from .entry import Entry
-from .internals.db import DB
+from .internals.database import Database, JobState
 from .internals.executor import Executor
-from .internals.job import Job, JobNode
+from .internals.plan import Plan
 from .internals.key import make_key
 from .internals.runner import JobRunner
 # from .internals.tasktools import collect_tasks, resolve_tasks
@@ -31,7 +31,7 @@ class Runtime:
     """
 
     def __init__(self, db_path: str, global_builders=True):
-        self.db = DB(db_path)
+        self.db = Database(db_path)
         self.db.init()
 
         self._builders = {}
@@ -101,7 +101,7 @@ class Runtime:
         name = builder.name
         if name in self._builders:
             raise Exception("Builder '{}' is already registered".format(name))
-        self.db.ensure_builder(name)
+        #self.db.ensure_builder(name)
         self._builders[name] = builder
         return builder
 
@@ -128,13 +128,18 @@ class Runtime:
         return self.db.get_entry_state(entry.builder_name, entry.key)
 
     def read_entry(self, entry, include_announced=False):
-        result = self.db.read_entry(entry, include_announced)
-        if result is None:
+        r = self.try_read_entry(entry, include_announced)
+        if r is None:
             raise Exception("Entry {} is not in database".format(entry))
-        return result
+        return r
 
     def try_read_entry(self, entry, include_announced=False):
-        return self.db.read_entry(entry, include_announced)
+        assert not include_announced  # TODO TODO
+        job_id, state = self.db.get_entry_job_id_and_state(entry.builder_name, entry.key)
+        if state != JobState.FINISHED:
+            return False
+        entry.set_job_id(job_id, self.db)
+        return entry
 
     def read_entries(self, entries, include_announced=False, drop_missing=False):
         results = []
@@ -155,23 +160,27 @@ class Runtime:
             self.db.remove_entries_by_key(entries)
 
     def insert(self, entry, value):
-        entry.value = value
-        builder = self._builders[entry.builder_name]
-        entry = builder.make_raw_entry(builder.name, entry.key, entry.config, value, None, None)
-        self.db.create_entries((entry,))
+        r = self.db.create_job_with_value(entry.builder_name, entry.key, entry.config, pickle.dumps(value))
+        if not r:
+            raise Exception("Entry {} already exists".format(entry))
 
     def clear(self, builder):
         assert isinstance(builder, Builder)
         self.db.clear_builder(builder.name)
 
     def compute(self, entry, continue_on_error=False):
-        return self._compute((entry,), continue_on_error)[0]
+        self._compute((entry,), continue_on_error)
+        return entry
 
     def compute_many(self, entries, continue_on_error=False):
-        return self._compute(entries, continue_on_error)
+        self._compute(entries, continue_on_error)
+        return entries
 
     def get_reports(self, count=100):
         return self.db.get_reports(count)
+
+    def get_builder(self, builder_name):
+        return self._builders[builder_name]
 
     def upgrade_builder(self, builder, upgrade_fn):
         configs = self.db.get_all_configs(builder.name)
@@ -189,140 +198,49 @@ class Runtime:
             keys.add(new_key)
         self.db.upgrade_builder(builder.name, to_update)
 
-    def _builder_summaries(self):
-        return self.db.builder_summaries()
-
-    def _entry_summaries(self, builder_name):
-        return self.db.entry_summaries(builder_name)
-
-    def _executor_summaries(self):
-        return self.db.executor_summaries()
-
-    def _get_builder(self, builder_name):
-        return self._builders[builder_name]
-
-    def _create_compute_tree(self, entries, exists, errors):
-        job_nodes = {}
-        global_deps = set()
-        conflicts = set()
-        assert not hasattr(_CONTEXT, "on_entry") or _CONTEXT.on_entry is None
-
-        def make_job_node(entry):
-            if entry in exists:
-                return "exists"
-            if entry in conflicts or (errors and entry in errors):
-                return None
-            entry_key = entry.make_entry_key()
-            job_node = job_nodes.get(entry_key)
-            if job_node is not None:
-                return job_node
-            builder = self._get_builder(entry.builder_name)
-            state = self.db.get_entry_state(entry.builder_name, entry.key)
-            if state == "finished":
-                exists.add(entry)
-                return "exists"
-            if state == "announced":
-                conflicts.add(entry_key)
-                return None
-            if builder.fn is None:
-                raise Exception(
-                    "Computation depends on a missing configuration '{}' in a fixed builder"
-                        .format(entry))
-
-            deps = []
-            try:
-                _CONTEXT.on_entry = deps.append
-                builder.run_with_config(entry.config, only_deps=True)
-            finally:
-                _CONTEXT.on_entry = None
-            inputs = []
-            for e in deps:
-                j = make_job_node(e)
-                if j is None:
-                    return None
-                if j == "exists":
-                    continue
-                inputs.append(j)
-            for r in deps:
-                global_deps.add((r.make_entry_key(), entry_key))
-            job = Job(entry, deps, builder._create_job_setup(entry.config))
-            job_node = JobNode(job, inputs)
-            job_nodes[entry_key] = job_node
-            return job_node
-
-        for entry in entries:
-            make_job_node(entry)
-
-        return job_nodes, global_deps, len(conflicts)
-
     def _check_stopped(self):
         if self.stopped:
             raise Exception("Runtime was already stopped")
 
-    def _print_report(self, job_nodes):
-        jobs_per_builder = collections.Counter([job_node.job.entry.builder_name for job_node in job_nodes.values()])
-        print("Scheduled jobs   |     # | Expected comp. time (per entry)\n"
-              "-----------------+-------+--------------------------------")
-        for col, count in sorted(jobs_per_builder.items()):
-            stats = self.db.get_run_stats(col)
-            if stats["avg"] is None:
-                print("{:<17}| {:>5} | N/A".format(col, count))
-            else:
-                print("{:<17}| {:>5} | {:>8} +- {}".format(col, count, format_time(stats["avg"]),
-                                                           format_time(stats["stdev"])))
-        print("-----------------+-------+--------------------------------")
-
-    def _run_computation(self, entries, exists, errors):
+    def _run_computation(self, plan):
         executor = self.executor
-        job_nodes, global_deps, n_conflicts = self._create_compute_tree(entries, exists, errors)
-        if not job_nodes and n_conflicts == 0:
+        plan.compute(self)
+        if plan.is_finished():
             return "finished"
-        need_to_compute_entries = [job_node.job.entry for job_node in job_nodes.values()]
-        if not need_to_compute_entries:
+        if plan.need_wait():
             print("Waiting for computation on another executor ...")
             return "wait"
-        logger.debug("Announcing entries %s at executor %s", need_to_compute_entries, executor.id)
-        if not self.db.announce_entries(
-                executor.id, need_to_compute_entries, global_deps,
-                Report("info", executor.id, "Computing {} job(s)".format(
-                    len(need_to_compute_entries)))):
+        logger.debug("Announcing entries %s at executor %s", len(plan.nodes), executor.id)
+        if not self.db.announce_jobs(plan):
             return "wait"
         try:
-            # we do not this anymore, and .run may be long
-            del global_deps, need_to_compute_entries
-            if n_conflicts:
+            if plan.conflicts:
                 print(
                     "Some computation was temporarily skipped as they depends on jobs computed by another executor"
                 )
-            self._print_report(job_nodes)
-            new_errors = executor.run(job_nodes, errors is not None)
-            if errors is not None:
-                errors.update(new_errors)
-            else:
-                assert not new_errors
-            if n_conflicts == 0:
+            plan.print_report(self)
+            executor.run(plan)
+            if plan.is_finished():
                 return "finished"
             else:
                 return "next"
         except:
-            self.db.unannounce_entries(executor.id, list(job_nodes))
+            self.db.unannounce_jobs(plan)
+            plan.fill_job_ids(self)
             raise
 
     def _compute(self, entries, continue_on_error=False):
         for entry in entries:
             if not isinstance(entry, Entry):
                 raise Exception("'{!r}' is not an entry".format(entry))
-        exists = set()
-        if continue_on_error:
-            errors = set()
-        else:
-            errors = None
 
         if self.executor is None:
             self.start_executor()
 
+        plan = Plan(entries, continue_on_error)
+
         while True:
-            status = self._run_computation(entries, exists, errors)
+            status = self._run_computation(plan)
             if status == "finished":
                 break
             elif status == "next":
@@ -332,13 +250,7 @@ class Runtime:
                 continue
             else:
                 assert 0
-        if errors:
+        plan.fill_job_ids(self)
+        if plan.error_keys:
             print("During computation, {} errors occured, see reports for details".format(
-                len(errors)))
-
-        if not errors:
-            for entry in entries:
-                self.read_entry(entry)
-            return entries
-        else:
-            return [self.try_read_entry(entry) if entry.make_entry_key() not in errors else None for entry in entries]
+                len(plan.error_keys)))

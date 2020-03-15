@@ -1,8 +1,8 @@
 from orco import Runtime, Builder
 
 
-def test_rest_builders():
-    rt = Runtime(":memory:")
+def test_rest_builders(env):
+    rt = env.test_runtime()
     with rt.serve(testing=True).test_client() as client:
         r = client.get("rest/builders")
         assert r.get_json() == []

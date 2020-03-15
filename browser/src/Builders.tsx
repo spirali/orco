@@ -54,13 +54,23 @@ class Builders extends React.Component<Props, State> {
             Cell: this._builderCell,
         },
         {
-            Header: "Entries",
-            accessor: "count",
+            Header: "Finished",
+            accessor: "n_finished",
+            maxWidth: 100,
+        },
+        {
+            Header: "In progress",
+            accessor: "n_in_progress",
+            maxWidth: 100,
+        },
+        {
+            Header: "Failed",
+            accessor: "n_failed",
             maxWidth: 100,
         },
         {
             id: "Size",
-            Header: "Size",
+            Header: "Total Size",
             accessor: this._formatSize,
             maxWidth: 200
         }

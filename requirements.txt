@@ -1,7 +1,7 @@
+sqlalchemy
 cloudpickle
 flask
 flask_restful
 flask_cors
 pandas
-apsw
 tqdm

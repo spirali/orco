@@ -162,7 +162,7 @@ def test_builder_compute(env):
     assert entry.config["a"] == 10
     assert entry.config["b"] == 30
     assert entry.value == 40
-    assert entry.comp_time >= 0
+    assert entry.metadata().computation_time >= 0
     assert counter.read() == 1
 
     result = runtime.compute_many([bld(b=30, a=10)])
@@ -171,7 +171,7 @@ def test_builder_compute(env):
     assert entry.config["a"] == 10
     assert entry.config["b"] == 30
     assert entry.value == 40
-    assert entry.comp_time >= 0
+    assert entry.metadata().computation_time >= 0
     assert counter.read() == 1
 
 

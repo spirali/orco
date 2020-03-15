@@ -25,7 +25,7 @@ class TestEnv:
     def test_runtime(self, **kwargs):
         db_path = str(self.tmpdir.join("db"))
         logger.info("DB path %s", db_path)
-        r = orco.Runtime(db_path, **kwargs)
+        r = orco.Runtime("sqlite:///" + db_path, **kwargs)
         self.runtimes.append(r)
         return r
 

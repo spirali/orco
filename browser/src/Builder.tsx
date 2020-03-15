@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactTable, {CellInfo, Column} from 'react-table';
 import {fetchJsonFromServer} from './service';
-import {FaHourglassEnd} from 'react-icons/fa';
+import {FaHourglassEnd, FaCheck, FaTimes} from 'react-icons/fa';
 import {formatSize, formatTime} from './utils';
 import {ErrorContainer} from './Error';
 import {ConfigDetail} from "./ConfigDetail";
@@ -42,12 +42,17 @@ class Builder extends React.Component<Props, State> {
         return (<span>{v}</span>);
     };
 
-    _cellValueRepr = (cellInfo: CellInfo) => {
+    _cellStateRepr = (cellInfo: CellInfo) => {
         const v = cellInfo.value;
-        if (v !== undefined && v !== null) {
-            return <span>{v}</span>
-        } else {
+        console.log(v);
+        if (v == "f") {
+            return <FaCheck/>
+        } else if (v == "r" || v == "a") {
             return <FaHourglassEnd/>
+        } else if (v == "e") {
+            return <FaTimes/>
+        } else {
+            return <span>?</span>
         }
     };
 
@@ -103,13 +108,14 @@ class Builder extends React.Component<Props, State> {
 
                 const columns = [config_column,
                     {
-                        "Header": "Value",
+                        "Header": "Metadata",
                         "columns": [ {
-                            "style": {"background": "#f0fff0"},
-                            headerStyle: {"background": "#90ff90"},
-                            Header: "Repr",
-                            accessor: "value_repr",
-                            Cell: this._cellValueRepr
+                            /*"style": {"background": "#f0fff0"},
+                            headerStyle: {"background": "#90ff90"},*/
+                            Header: "S",
+                            accessor: "state",
+                            Cell: this._cellStateRepr,
+                            maxWidth: 45,
                         },
                         {
                             id: "size",
