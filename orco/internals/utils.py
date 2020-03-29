@@ -1,5 +1,3 @@
-import pandas as pd
-
 
 def format_time(seconds):
     if seconds < 0.8:
@@ -11,7 +9,15 @@ def format_time(seconds):
     return "{:.1f}h".format(seconds / 3600)
 
 
+def make_repr(value):
+    repr_value = repr(value)
+    if len(repr_value) > 85:
+        return repr_value[:80] + " ..."
+    return repr_value
+
+
 def unpack_frame(frame, unpack_column="config"):
+    import pandas as pd
     new = pd.DataFrame(list(frame[unpack_column]))
     new = pd.concat([frame, new], axis=1)
     new.drop(unpack_column, inplace=True, axis=1)

@@ -39,6 +39,15 @@ class Entries(Resource):
 api.add_resource(Entries, '/entries/<string:builder_name>')
 
 
+class Blobs(Resource):
+
+    def get(self, job_id):
+        return get_db().blob_summaries(job_id)
+
+
+api.add_resource(Blobs, '/blobs/<int:job_id>')
+
+
 """
 class Executors(Resource):
 

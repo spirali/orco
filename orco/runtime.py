@@ -14,6 +14,8 @@ from .internals.executor import Executor
 from .internals.plan import Plan
 from .internals.key import make_key
 from .internals.runner import JobRunner
+from .internals.utils import make_repr
+
 # from .internals.tasktools import collect_tasks, resolve_tasks
 from .internals.utils import format_time
 from .report import Report
@@ -160,7 +162,7 @@ class Runtime:
             self.db.remove_entries_by_key(entries)
 
     def insert(self, entry, value):
-        r = self.db.create_job_with_value(entry.builder_name, entry.key, entry.config, pickle.dumps(value))
+        r = self.db.create_job_with_value(entry.builder_name, entry.key, entry.config, pickle.dumps(value), make_repr(value))
         if not r:
             raise Exception("Entry {} already exists".format(entry))
 

@@ -4,7 +4,7 @@ import {fetchJsonFromServer} from './service';
 import {FaHourglassEnd, FaCheck, FaTimes} from 'react-icons/fa';
 import {formatSize, formatTime} from './utils';
 import {ErrorContainer} from './Error';
-import {ConfigDetail} from "./ConfigDetail";
+import {JobDetail} from "./JobDetail";
 
 interface Props {
     match: any,
@@ -28,7 +28,6 @@ class Builder extends React.Component<Props, State> {
 
     constructor(props : Props) {
         super(props);
-        console.log(props.match);
         this.state = {data: [], columns: [], loading: true}
     }
 
@@ -44,13 +43,12 @@ class Builder extends React.Component<Props, State> {
 
     _cellStateRepr = (cellInfo: CellInfo) => {
         const v = cellInfo.value;
-        console.log(v);
-        if (v == "f") {
-            return <FaCheck/>
-        } else if (v == "r" || v == "a") {
-            return <FaHourglassEnd/>
-        } else if (v == "e") {
-            return <FaTimes/>
+        if (v === "f") {
+            return <span style={{color: "green"}}><FaCheck/></span>
+        } else if (v === "r" || v === "a") {
+            return <span style={{color: "orange"}}><FaHourglassEnd/></span>
+        } else if (v === "e") {
+            return <span style={{color: "red"}}><FaTimes/></span>
         } else {
             return <span>?</span>
         }
@@ -131,8 +129,8 @@ class Builder extends React.Component<Props, State> {
                         },
                         {
                             id: "timestamp",
-                            Header: "Timestamp",
-                            accessor: "created",
+                            Header: "Finished time",
+                            accessor: "finished",
                             maxWidth: 200,
                         }
                     ]
@@ -154,11 +152,10 @@ class Builder extends React.Component<Props, State> {
         return this.props.match.params.name;
     }
 
-    renderSubcomponent = (row: {original: {config: string, value_repr: string}}) => {
-        return ConfigDetail(row.original.config, [{
-            header: "Value",
-            value: row.original.value_repr
-        }]);
+    renderSubcomponent = (row: {original: {config: string, id: number}}) => {
+        return (
+            <JobDetail job_id={row.original.id} config={row.original.config} err={this.props.err}/>
+        );
     };
 
     render() {

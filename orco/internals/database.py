@@ -19,6 +19,11 @@ class JobState(enum.Enum):
     ERROR = "e"
 
 
+class DataType(enum.Enum):
+    PICKLE = "pickle"
+    TEXT = "text"
+
+
 class Database:
 
     def __init__(self, url):
@@ -37,7 +42,8 @@ class Database:
             sa.Column("key", sa.String),
             sa.Column("config", sa.PickleType),
             sa.Column("job_setup", sa.PickleType, nullable=True),
-            sa.Column("created", sa.DateTime(timezone=True), nullable=False, server_default=sa.sql.func.now()),
+            sa.Column("created_date", sa.DateTime(timezone=True), nullable=False, server_default=sa.sql.func.now()),
+            sa.Column("finished_date", sa.DateTime(timezone=True), nullable=True),
             sa.Column("computation_time", sa.Integer(), nullable=True),
             sa.Index("builder", "key"),
         )
@@ -54,8 +60,9 @@ class Database:
             sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="RESTRICT"), primary_key=True, nullable=False),
             # None = primary result
             sa.Column("name", sa.String, nullable=True, primary_key=True),
-            sa.Column("data", sa.LargeBinary)
-
+            sa.Column("data", sa.LargeBinary, nullable=False),
+            sa.Column("data_type", sa.Enum(DataType), nullable=False),
+            sa.Column("repr", sa.String(85), nullable=True),
         )
 
         self.metadata = metadata
@@ -104,27 +111,30 @@ class Database:
 
         return job.job_setup, job.config, keys_to_job_ids
 
-    def set_finished(self, job_id, value, computation_time):
+    def _insert_blob(self, job_id, name, value, data_type, repr_value):
+        self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name=name, data=value, data_type=data_type, repr=repr_value))
+
+    def set_finished(self, job_id, value, repr_value, computation_time):
         assert job_id is not None
         c = self.jobs.c
         with self.conn.begin():
             cond = sa.and_(c.id == job_id, c.state == JobState.RUNNING)
-            r = self.conn.execute(sa.update(self.jobs).where(cond).values(state=JobState.FINISHED, computation_time=computation_time))
+            r = self.conn.execute(sa.update(self.jobs).where(cond).values(state=JobState.FINISHED, computation_time=computation_time, finished_date=sa.func.now()))
             if r.rowcount != 1:
                 raise Exception("Setting a job into finished state failed")
             if value is not None:
-                self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name=None, data=value))
+                self._insert_blob(job_id, None, value, DataType.PICKLE, repr_value)
 
     def set_error(self, job_id, message, computation_time):
         assert job_id is not None
         c = self.jobs.c
         with self.conn.begin():
             cond = sa.and_(c.id == job_id, c.state.in_((JobState.RUNNING, JobState.ANNOUNCED)))
-            r = self.conn.execute(sa.update(self.jobs).where(cond).values(state=JobState.ERROR, computation_time=computation_time))
+            r = self.conn.execute(sa.update(self.jobs).where(cond).values(state=JobState.ERROR, computation_time=computation_time, finished_date=sa.func.now()))
             if r.rowcount != 1:
                 raise Exception("Setting a job into finished state failed")
             if message is not None:
-                self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name="!error_message", data=message.encode()))
+                self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name="!message", data=message.encode(), data_type=DataType.TEXT))
 
     def get_entry_job_id_and_state(self, builder_name, key):
         c = self.jobs.c
@@ -141,7 +151,7 @@ class Database:
             return r
         return r[0]
 
-    def create_job_with_value(self, builder_name, key, config, value):
+    def create_job_with_value(self, builder_name, key, config, value, repr_value):
         c = self.jobs.c
         conn = self.conn
         columns = [
@@ -165,7 +175,7 @@ class Database:
             job_id = r.lastrowid
             assert job_id is not None
             if value is not None:
-                self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name=None, data=value))
+                self._insert_blob(job_id, None, value, DataType.PICKLE, repr_value)
             return True
 
     def announce_jobs(self, plan):
@@ -218,10 +228,10 @@ class Database:
 
     def read_metadata(self, job_id):
         c = self.jobs.c
-        r = self.conn.execute(sa.select([c.created, c.computation_time]).where(c.id == job_id)).fetchone()
+        r = self.conn.execute(sa.select([c.created_date, c.finished_date, c.computation_time]).where(c.id == job_id)).fetchone()
         if r is None:
             return None
-        return EntryMetadata(created=r.created, computation_time=r.computation_time)
+        return EntryMetadata(created_date=r.created_time, finished_date=r.finished_data, computation_time=r.computation_time)
 
     def unannounce_jobs(self, plan):
         c = self.jobs.c
@@ -244,7 +254,7 @@ class Database:
         #sa.func.length(c.config)
 
         result = {
-            row.builder: {"name": row.builder, "n_finished": 0, "n_failed": 0, "n_running": 0, "n_in_progress": 0, "size": row.size}
+            row.builder: {"name": row.builder, "n_finished": 0, "n_failed": 0, "n_in_progress": 0, "size": row.size}
             for row in self.conn.execute(query)
         }
 
@@ -260,26 +270,45 @@ class Database:
 
         query = sa.select([c.builder, sa.func.total(sa.func.length(self.blobs.c.data)).label("size")]) \
                 .select_from(self.blobs.join(self.jobs)).group_by(c.builder)
-        for row in self.engine.connect().execute(query):
+        for row in self.conn.execute(query):
             result[row.builder]["size"] += row.size
 
         for builder in registered_builders:
             if builder.name not in result:
-                result[builder.name] = {"name": builder.name, "n_finished": 0, "n_failed": 0, "n_running": 0, "n_in_progress": 0, "size": 0}
+                result[builder.name] = {"name": builder.name, "n_finished": 0, "n_failed": 0, "n_in_progress": 0, "size": 0}
         return sorted(result.values(), key=lambda r: r["name"])
 
     def entry_summaries(self, builder_name):
         c = self.jobs.c
-        query = sa.select([c.key, c.state, c.config, c.created, c.computation_time, sa.func.total(sa.func.length(c.config)).label("size")])\
+        query = sa.select([c.id, c.key, c.state, c.config, c.created_date, c.finished_date, c.computation_time, sa.func.total(sa.func.length(c.config)).label("size")])\
                 .select_from(self.jobs.join(self.blobs, isouter=True)).where(c.builder == builder_name).group_by(c.key)
         return [
             {
+                "id": row.id,
                 "key": row.key,
                 "state": row.state.value,
                 "config": row.config,
                 "size": row.size,
                 "comp_time": row.computation_time,
-                "created": str(row.created),
+                "created": str(row.created_date),
+                "finished": str(row.finished_date),
             }
-            for row in self.engine.connect().execute(query)
+            for row in self.conn.execute(query)
+        ]
+
+    def blob_summaries(self, job_id):
+        c = self.blobs.c
+        query = sa.select([c.name, c.repr, c.data_type,
+                           sa.func.length(c.data).label("size"),
+                           sa.case([(c.data_type == DataType.TEXT, c.data)], else_=sa.null()).label("value")
+                           ]).where(c.job_id == job_id)
+        return [
+            {
+                "name": row.name,
+                "repr": row.repr,
+                "size": row.size,
+                "value": row.value.decode() if row.value else None,
+                "data_type": row.data_type.value,
+            }
+            for row in self.conn.execute(query)
         ]

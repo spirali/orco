@@ -2,7 +2,7 @@ import React from 'react';
 import ReactTable, {CellInfo} from 'react-table';
 import {fetchJsonFromServer} from './service';
 import {ErrorContainer} from './Error';
-import {ConfigDetail} from "./ConfigDetail";
+import {JobDetail} from "./JobDetail";
 
 interface Props {
     err: ErrorContainer
@@ -62,8 +62,8 @@ class Reports extends React.Component<Props, State> {
         }
     };
 
-    renderSubcomponent = (row: {original: {message: string, config: string}}) => {
-        return ConfigDetail(row.original.config, [{
+    /*renderSubcomponent = (row: {original: {message: string, config: string}}) => {
+        return JobDetail(row.original.config, [{
             header: "Message",
             value: row.original.message
         }]);
@@ -121,7 +121,7 @@ class Reports extends React.Component<Props, State> {
                     SubComponent={this.renderSubcomponent} />
             </div>
         );
-    }
+    }*/
 }
 
 export default Reports;

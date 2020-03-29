@@ -5,8 +5,9 @@ import traceback
 import pickle
 from concurrent.futures.process import ProcessPoolExecutor
 
-from orco.internals.context import _CONTEXT
-from orco.internals.database import Database
+from .context import _CONTEXT
+from .database import Database
+from .utils import make_repr
 
 
 class JobFailure:
@@ -107,8 +108,7 @@ def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time):
         value = builder.run_with_config(config, only_deps=False, after_deps=after_deps)
     finally:
         _CONTEXT.on_entry = None
-    value = pickle.dumps(value)
-    _per_process_db.set_finished(job_id, value, time.time() - start_time)
+    _per_process_db.set_finished(job_id, pickle.dumps(value), make_repr(value), time.time() - start_time)
 
 
 def _run_job(db_path, builder, job_id):

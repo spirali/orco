@@ -3,7 +3,7 @@ from .jobsetup import JobSetup
 import pickle
 
 
-EntryMetadata = collections.namedtuple("EntryMetadata", ["created", "computation_time"])
+EntryMetadata = collections.namedtuple("EntryMetadata", ["created_date", "computation_time", "finished_date"])
 
 
 class _NoValue:
