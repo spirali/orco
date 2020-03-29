@@ -45,7 +45,7 @@ class Plan:
     def nodes(self):
         return self._nodes.values()
 
-    def compute(self, runtime):
+    def create(self, runtime):
         conflicts = set()
         self.conflicts = conflicts
         nodes = {}

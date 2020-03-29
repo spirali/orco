@@ -45,7 +45,8 @@ class Database:
             sa.Column("created_date", sa.DateTime(timezone=True), nullable=False, server_default=sa.sql.func.now()),
             sa.Column("finished_date", sa.DateTime(timezone=True), nullable=True),
             sa.Column("computation_time", sa.Integer(), nullable=True),
-            sa.Index("builder", "key"),
+            sa.Index("builder_key_idx", "builder", "key"),
+            sa.Index("finished_date_idx", "finished_date"),
         )
 
         self.job_deps = sa.Table(
@@ -68,6 +69,9 @@ class Database:
         self.metadata = metadata
         self.engine = engine
         self.conn = engine.connect()
+
+    def stop(self):
+        self.conn = None
 
     def init(self):
         self.metadata.create_all(self.engine)
@@ -312,3 +316,39 @@ class Database:
             }
             for row in self.conn.execute(query)
         ]
+
+    def _get_current_jobs(self):
+        # TODO: Find the real window (is it necessary?)
+        c = self.jobs.c
+        running = c.finished_date.is_(None)
+        return sa.select([c.id]).where(sa.or_(running, c.finished_date >= (sa.select([sa.func.min(c.created_date)]).where(running))))
+
+    def get_running_status(self):
+        c = self.jobs.c
+        switch = {
+            JobState.RUNNING: "n_running",
+            JobState.FINISHED: "n_finished",
+            JobState.ANNOUNCED: "n_announced",
+            JobState.ERROR: "n_failed",
+        }
+        counts = {name: 0 for name in switch.values()}
+
+        for r in self.conn.execute(sa.select([c.state, sa.func.count(c.key).label("count")]).where(c.id.in_(self._get_current_jobs())).group_by(c.state)):
+            counts[switch[r.state]] = r.count
+
+        errors = [
+            {
+                "id": r.id,
+                "builder": r.builder,
+                "config": r.config,
+                "finished": str(r.finished_date),
+            }
+            for r in self.conn.execute(sa.select([c.id, c.builder, c.config, c.finished_date]).where(c.state == JobState.ERROR).order_by(c.finished_date.desc()).limit(5))
+        ]
+
+        return {
+            "counts": counts,
+            "errors": errors,
+        }
+
+

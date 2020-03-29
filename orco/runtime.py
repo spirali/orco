@@ -81,6 +81,7 @@ class Runtime:
 
         logger.debug("Stopping runtime %s", self)
         self.stop_executor()
+        self.db.stop()
         self.stopped = True
 
     def start_executor(self):
@@ -206,7 +207,7 @@ class Runtime:
 
     def _run_computation(self, plan):
         executor = self.executor
-        plan.compute(self)
+        plan.create(self)
         if plan.is_finished():
             return "finished"
         if plan.need_wait():

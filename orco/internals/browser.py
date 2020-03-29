@@ -48,24 +48,13 @@ class Blobs(Resource):
 api.add_resource(Blobs, '/blobs/<int:job_id>')
 
 
-"""
-class Executors(Resource):
+class Status(Resource):
 
     def get(self):
-        return current_app.runtime._executor_summaries()
-
-api.add_resource(Executors, '/executors')
+        return get_db().get_running_status()
 
 
-class Reports(Resource):
-
-    def get(self):
-        reports = current_app.runtime.get_reports()
-        return [report.to_dict() for report in reports]
-
-
-api.add_resource(Reports, '/reports')
-"""
+api.add_resource(Status, '/status/')
 
 
 def from_gzipped_file(filename):

@@ -1,4 +1,6 @@
-from orco import Runtime, Builder
+from orco import Runtime, Builder, builder, JobFailedException
+import time
+import threading
 
 
 def test_rest_builders(env):
@@ -46,6 +48,94 @@ def test_rest_builders(env):
         assert 50 < len(v["repr"]) <= 85
         assert v["size"] > 1000
         assert v["data_type"] == "pickle"
+
+
+def test_rest_status(env):
+
+    def compute1(url):
+        @builder()
+        def ff(x=0):
+            time.sleep(0.5)
+        new_rt = Runtime(url)
+        try:
+            new_rt.compute(ff(0))
+        finally:
+            new_rt.stop()
+
+    class MyException(Exception):
+        pass
+
+    def compute2(url):
+
+        @builder()
+        def aa(x=1):
+            return x
+
+        @builder()
+        def bb(x=1):
+            aa(x=1)
+            aa(x=2)
+            yield
+            time.sleep(0.5)
+
+        @builder()
+        def cc():
+            d = bb(x=1)
+            yield
+            raise MyException("MyError")
+
+        new_rt = Runtime(url)
+        try:
+            new_rt.compute(cc())
+        except JobFailedException:
+            pass
+        finally:
+            new_rt.stop()
+
+    rt = env.test_runtime()
+    with rt.serve(testing=True).test_client() as client:
+        r = client.get("rest/status/").get_json()
+        assert r["counts"] == {
+            "n_finished": 0,
+            "n_running": 0,
+            "n_announced": 0,
+            "n_failed": 0,
+        }
+
+        thread = threading.Thread(target=compute1, args=(rt.db.url,))
+        thread.start()
+        time.sleep(0.21)
+        r = client.get("rest/status/").get_json()
+        thread.join()
+        assert r["counts"] == {
+            "n_finished": 0,
+            "n_running": 1,
+            "n_announced": 0,
+            "n_failed": 0,
+        }
+        time.sleep(1.0)
+
+        thread = threading.Thread(target=compute2, args=(rt.db.url,))
+        thread.start()
+        time.sleep(0.25)
+        r = client.get("rest/status/").get_json()
+        thread.join()
+        assert r["counts"] == {
+            "n_finished": 2,
+            "n_running": 1,
+            "n_announced": 1,
+            "n_failed": 0,
+        }
+        assert len(r["errors"]) == 0
+
+        r = client.get("rest/status/").get_json()
+        assert r["counts"] == {
+            "n_finished": 0,
+            "n_running": 0,
+            "n_announced": 0,
+            "n_failed": 0,
+        }
+        assert len(r["errors"]) == 1
 
 """
 def test_rest_executors(env):
