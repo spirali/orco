@@ -1,5 +1,6 @@
 import pickle
 import random
+import os
 
 import pytest
 
@@ -453,3 +454,20 @@ def test_builder_inconsistent_deps(env):
     
     with pytest.raises(Exception, match="dependencies"):
         runtime.compute(bld())
+
+
+def test_builder_workdir(env):
+
+    @builder()
+    def bb(x):
+        with open("test", "x"):
+            pass
+        return os.getcwd()
+
+    runtime = env.test_runtime()
+    a, b = runtime.compute_many([bb(1), bb(2)])
+    assert a.value is not None and b.value is not None
+    assert not os.path.isdir(a.value)
+    assert not os.path.isdir(b.value)
+    assert a.value != b.value
+

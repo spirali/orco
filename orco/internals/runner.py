@@ -3,6 +3,7 @@ import threading
 import time
 import traceback
 import pickle
+import tempfile
 from concurrent.futures.process import ProcessPoolExecutor
 
 from .context import _CONTEXT
@@ -103,10 +104,14 @@ def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time):
         for e in deps:
             e.set_job_id(keys_to_job_ids[e.make_entry_key()], db)
 
+    original_cwd = os.getcwd()
     try:
         _CONTEXT.on_entry = deps.append
-        value = builder.run_with_config(config, only_deps=False, after_deps=after_deps)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.chdir(tmp_dir)
+            value = builder.run_with_config(config, only_deps=False, after_deps=after_deps)
     finally:
+        os.chdir(original_cwd)
         _CONTEXT.on_entry = None
     _per_process_db.set_finished(job_id, pickle.dumps(value), make_repr(value), time.time() - start_time)
 
