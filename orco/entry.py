@@ -1,5 +1,7 @@
 import collections
+
 from .jobsetup import JobSetup
+from orco.consts import MIME_PICKLE
 import pickle
 
 
@@ -41,7 +43,11 @@ class Entry:
         value = self._value
         if value is not _NO_VALUE:
             return value
-        value = pickle.loads(self._db.get_blob(self._job_id, None))
+        value, data_type = self._db.get_blob(self._job_id, None)
+        if value is None:
+            self._value = None
+            return None
+        value = pickle.loads(value)
         self._value = value
         return value
 
@@ -54,8 +60,28 @@ class Entry:
 
     def metadata(self):
         if self._job_id is None:
-            raise Exception("Entry is detached")
+            raise Exception("Entry is not attached")
         return self._db.read_metadata(self._job_id)
+
+    def get_object(self, name, default=_NO_VALUE):
+        value, data_type = self.get_blob(name, default)
+        assert data_type == MIME_PICKLE
+        return pickle.loads(value)
+
+    def get_names(self):
+        if self._job_id is None:
+            raise Exception("Entry is not attached")
+        return self._db.get_blob_names(self._job_id)
+
+    def get_blob(self, name, default=_NO_VALUE):
+        if self._job_id is None:
+            raise Exception("Entry is not attached")
+        value, data_type = self._db.get_blob(self._job_id, name)
+        if value is None:
+            if default is _NO_VALUE:
+                raise Exception("Blob '{}' not found".format(name))
+            return default
+        return value, data_type
 
     def __repr__(self):
         return "<Entry {}/{}>".format(self.builder_name, self.key)

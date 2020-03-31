@@ -470,4 +470,3 @@ def test_builder_workdir(env):
     assert not os.path.isdir(a.value)
     assert not os.path.isdir(b.value)
     assert a.value != b.value
-

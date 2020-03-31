@@ -1,4 +1,4 @@
-from orco import Runtime, Builder, builder, JobFailedException
+from orco import Runtime, Builder, builder, JobFailedException, consts
 import time
 import threading
 
@@ -47,7 +47,7 @@ def test_rest_builders(env):
         v = r[0]
         assert 50 < len(v["repr"]) <= 85
         assert v["size"] > 1000
-        assert v["data_type"] == "pickle"
+        assert v["mime"] == consts.MIME_PICKLE
 
 
 def test_rest_status(env):

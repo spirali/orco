@@ -4,12 +4,14 @@ import time
 import traceback
 import pickle
 import tempfile
+import collections
 from concurrent.futures.process import ProcessPoolExecutor
 
 from .context import _CONTEXT
 from .database import Database
 from .utils import make_repr
 
+JobContext = collections.namedtuple("JobContext", ["db", "job_id"])
 
 class JobFailure:
 
@@ -99,6 +101,7 @@ def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time):
 
     def after_deps():
         _CONTEXT.on_entry = block_new_entries
+        _CONTEXT.job_context = JobContext(db, job_id)
         if set(e.make_entry_key() for e in deps) != set(keys_to_job_ids):
             raise Exception("Builder function does not consistently return dependencies")
         for e in deps:
@@ -113,6 +116,7 @@ def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time):
     finally:
         os.chdir(original_cwd)
         _CONTEXT.on_entry = None
+        _CONTEXT.job_context = None
     _per_process_db.set_finished(job_id, pickle.dumps(value), make_repr(value), time.time() - start_time)
 
 

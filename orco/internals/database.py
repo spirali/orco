@@ -1,4 +1,5 @@
 
+from orco import consts
 import sqlalchemy as sa
 import enum
 
@@ -17,11 +18,6 @@ class JobState(enum.Enum):
     RUNNING = "r"
     FINISHED = "f"
     ERROR = "e"
-
-
-class DataType(enum.Enum):
-    PICKLE = "pickle"
-    TEXT = "text"
 
 
 class Database:
@@ -62,7 +58,7 @@ class Database:
             # None = primary result
             sa.Column("name", sa.String, nullable=True, primary_key=True),
             sa.Column("data", sa.LargeBinary, nullable=False),
-            sa.Column("data_type", sa.Enum(DataType), nullable=False),
+            sa.Column("mime", sa.String(255), nullable=False),
             sa.Column("repr", sa.String(85), nullable=True),
         )
 
@@ -115,8 +111,8 @@ class Database:
 
         return job.job_setup, job.config, keys_to_job_ids
 
-    def _insert_blob(self, job_id, name, value, data_type, repr_value):
-        self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name=name, data=value, data_type=data_type, repr=repr_value))
+    def insert_blob(self, job_id, name, value, mime, repr_value):
+        self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name=name, data=value, mime=mime, repr=repr_value))
 
     def set_finished(self, job_id, value, repr_value, computation_time):
         assert job_id is not None
@@ -127,7 +123,7 @@ class Database:
             if r.rowcount != 1:
                 raise Exception("Setting a job into finished state failed")
             if value is not None:
-                self._insert_blob(job_id, None, value, DataType.PICKLE, repr_value)
+                self.insert_blob(job_id, None, value, consts.MIME_PICKLE, repr_value)
 
     def set_error(self, job_id, message, computation_time):
         assert job_id is not None
@@ -138,7 +134,7 @@ class Database:
             if r.rowcount != 1:
                 raise Exception("Setting a job into finished state failed")
             if message is not None:
-                self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name="!message", data=message.encode(), data_type=DataType.TEXT))
+                self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name="!message", data=message.encode(), mime=consts.MIME_TEXT))
 
     def get_entry_job_id_and_state(self, builder_name, key):
         c = self.jobs.c
@@ -150,10 +146,10 @@ class Database:
 
     def get_blob(self, job_id, name):
         c = self.blobs.c
-        r = self.conn.execute(sa.select([c.data]).where(sa.and_(c.job_id == job_id, c.name == name))).fetchone()
+        r = self.conn.execute(sa.select([c.data, c.mime]).where(sa.and_(c.job_id == job_id, c.name == name))).fetchone()
         if r is None:
-            return r
-        return r[0]
+            return None, None
+        return r.data, r.mime
 
     def create_job_with_value(self, builder_name, key, config, value, repr_value):
         c = self.jobs.c
@@ -179,7 +175,7 @@ class Database:
             job_id = r.lastrowid
             assert job_id is not None
             if value is not None:
-                self._insert_blob(job_id, None, value, DataType.PICKLE, repr_value)
+                self.insert_blob(job_id, None, value, consts.MIME_PICKLE, repr_value)
             return True
 
     def announce_jobs(self, plan):
@@ -302,9 +298,9 @@ class Database:
 
     def blob_summaries(self, job_id):
         c = self.blobs.c
-        query = sa.select([c.name, c.repr, c.data_type,
+        query = sa.select([c.name, c.repr, c.mime,
                            sa.func.length(c.data).label("size"),
-                           sa.case([(c.data_type == DataType.TEXT, c.data)], else_=sa.null()).label("value")
+                           sa.case([(c.mime == consts.MIME_TEXT, c.data)], else_=sa.null()).label("value")
                            ]).where(c.job_id == job_id)
         return [
             {
@@ -312,7 +308,7 @@ class Database:
                 "repr": row.repr,
                 "size": row.size,
                 "value": row.value.decode() if row.value else None,
-                "data_type": row.data_type.value,
+                "mime": row.mime,
             }
             for row in self.conn.execute(query)
         ]
@@ -351,4 +347,7 @@ class Database:
             "errors": errors,
         }
 
-
+    def get_blob_names(self, job_id):
+        c = self.blobs.c
+        query = sa.select([c.name]).where(c.job_id == job_id).order_by(c.name.asc())
+        return [r[0] for r in self.conn.execute(query) if r[0] is not None]
