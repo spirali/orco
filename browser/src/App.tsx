@@ -9,7 +9,6 @@ import {
 import { Nav, Navbar, NavbarBrand, NavItem, NavLink } from "reactstrap";
 import Builders from "./Builders";
 import Builder from "./Builder";
-import Executors from "./Executors";
 import Status from "./Status";
 import { ErrorDisplay, ErrorContainer } from "./Error";
 import { Subscribe, Provider } from 'unstated';
@@ -48,7 +47,6 @@ class App extends React.Component {
           <ErrorDisplay err={err}/>
           <div className="container">
             <Switch>
-              <Route path="/executors" component={(p: any) => <Executors err={err} {...p} />}/>
               <Route path="/builder/:name" component={(p: any) => <Builder err={err} {...p} />}/>
               <Route path="/builders" component={(p: any) => <Builders err={err} {...p} />} />
               <Route path="/status" component={(p: any) => <Status err={err} {...p} />} />
