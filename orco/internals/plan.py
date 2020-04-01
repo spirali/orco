@@ -45,6 +45,17 @@ class Plan:
     def nodes(self):
         return self._nodes.values()
 
+    def _create_for_testing(self):
+        self._nodes = {}
+        for entry in self.leaf_entries:
+            plan_node = PlanNode(entry.builder_name,
+                                 entry.key,
+                                 entry.config,
+                                 "XXX",
+                                 [],
+                                 [])
+            self._nodes[entry.make_entry_key()] = plan_node
+
     def create(self, runtime):
         conflicts = set()
         self.conflicts = conflicts

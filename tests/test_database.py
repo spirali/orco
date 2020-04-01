@@ -11,22 +11,30 @@ def make_pn(entry):
     return PlanNode(entry.builder_name, entry.key, entry.config, None, [], [])
 
 
-def test_xdb_announce(env):
+def announce(rt, entries):
+    plan = Plan(entries, False)
+    plan._create_for_testing()
+    r = rt.db.announce_jobs(plan)
+    plan.fill_job_ids(rt)
+    return r
+
+def test_xdb_announce_basic(env):
     r = env.test_runtime()
-    c = r.register_builder(Builder(None, "col1"))
-    assert r.db.announce_jobs([make_pn(c(x="test1")), make_pn(c(x="test2"))])
-    assert not r.db.announce_jobs([make_pn(c(x="test2")), make_pn(c(x="test3"))])
-    assert not r.db.announce_jobs([make_pn(c(x="test2")), make_pn(c(x="test3"))])
-    assert r.db.announce_jobs([make_pn(c(x="test3"))])
+    c = r.register_builder(Builder(lambda x: x, "col1"))
+
+    assert announce(r, [c(x="test1"), c(x="test2")])
+    assert not announce(r, [c(x="test2"), c(x="test3")])
+    assert not announce(r, [c(x="test2"), c(x="test3")])
+    not announce(r, [c(x="test3")])
     assert r.db.get_entry_state(c.name, make_key({'x': "test1"})) == JobState.ANNOUNCED
 
     r.db.fix_crashed_jobs()
 
     assert r.db.get_entry_state(c.name, make_key({'x': "test1"})) == JobState.NONE
-    assert r.db.announce_jobs([make_pn(c(x="test2"))])
-    assert not r.db.announce_jobs([make_pn(c(x="test2")), make_pn(c(x="test3"))])
-    assert not r.db.announce_jobs([make_pn(c(x="test2"))])
-    assert r.db.announce_jobs([make_pn(c(x="test3"))])
+    assert announce(r, [c(x="test2")])
+    assert not announce(r, [c(x="test2"), c(x="test3")])
+    assert not announce(r, [c(x="test2")])
+    assert announce(r, [c(x="test3")])
 
 
 def test_xdb_set_result(env):

@@ -26,6 +26,9 @@ class Database:
         engine = sa.create_engine(url)
         if "sqlite" in engine.dialect.name:
             sa.event.listen(engine, "connect", _set_sqlite_pragma)
+            self.is_sqlite = True
+        else:
+            self.is_sqlite = False
         self.url = url
 
         metadata = sa.MetaData()
@@ -45,21 +48,30 @@ class Database:
             sa.Index("finished_date_idx", "finished_date"),
         )
 
+        self.announcements = sa.Table("announcements", metadata,
+                                      sa.Column("builder", sa.String(80)),
+                                      sa.Column("key", sa.String),
+                                      sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="cascade")),
+                                      sa.Index("builder", "key", unique=True))
+
         self.job_deps = sa.Table(
             "job_deps",
             metadata,
             sa.Column("source_id", sa.Integer(), sa.ForeignKey("jobs.id", ondelete="cascade")),
             sa.Column("target_id", sa.Integer(), sa.ForeignKey("jobs.id", ondelete="cascade")))
 
+
         self.blobs = sa.Table(
             "blobs",
             metadata,
-            sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="cascade"), primary_key=True, nullable=False),
-            # None = primary result
-            sa.Column("name", sa.String, nullable=True, primary_key=True),
+            sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="cascade")),
+            sa.Column("name", sa.String, nullable=True),
             sa.Column("data", sa.LargeBinary, nullable=False),
             sa.Column("mime", sa.String(255), nullable=False),
             sa.Column("repr", sa.String(85), nullable=True),
+            # !!! (job_id, name) CANNOT be primary_key because postgresql do not allow None in primary key
+            # !!! but unqiue is ok
+            sa.UniqueConstraint("job_id", "name")
         )
 
         self.metadata = metadata
@@ -195,27 +207,34 @@ class Database:
             c.job_setup,
         ]
         conn = self.conn
+        announces = []
         with conn.begin() as transaction:
             # Try to announce entries
             for pn in plan.nodes:
-                assert pn.job_id is None
-                test_existing = sa.exists([c.id]).where(
-                    sa.and_(c.builder == pn.builder_name,
-                            c.key == pn.key,
-                            c.state != JobState.ERROR))
-                create_data = sa.select([sa.literal(JobState.ANNOUNCED, sa.Enum(JobState)),
-                                         sa.literal(pn.builder_name),
-                                         sa.literal(pn.key),
-                                         sa.literal(pn.config, sa.PickleType),
-                                         sa.literal(pn.job_setup, sa.PickleType)]).where(~test_existing)
-                r = conn.execute(self.jobs.insert().from_select(columns, create_data))
-                if r.rowcount != 1:
-                    transaction.rollback()
-                    return False
-                # ???? For some reason r.inserted_primary_key does not work here
-                job_id = r.lastrowid
+                r = conn.execute(self.jobs.insert().values(
+                    state=JobState.ANNOUNCED,
+                    builder=pn.builder_name,
+                    key=pn.key,
+                    config=pn.config,
+                    job_setup=pn.job_setup
+                ))
+                job_id = r.inserted_primary_key[0]
                 assert job_id is not None
                 pn.job_id = job_id
+                announces.append({
+                    "builder": pn.builder_name,
+                    "key": pn.key,
+                    "job_id": job_id,
+                })
+
+            try:
+                r = conn.execute(self.announcements.insert(), announces)
+            except sa.exc.IntegrityError:
+                transaction.rollback()
+                for pn in plan.nodes:
+                    pn.job_id = None
+                return False
+            assert r.rowcount == len(plan.nodes)
 
             # Announce deps
             deps = []
@@ -253,7 +272,7 @@ class Database:
 
     def builder_summaries(self, registered_builders):
         c = self.jobs.c
-        query = sa.select([c.builder, sa.func.total(sa.func.length(c.config)).label("size")]).group_by(c.builder)
+        query = sa.select([c.builder, sa.func.sum(sa.func.length(c.config)).label("size")]).group_by(c.builder)
         #sa.func.length(c.config)
 
         result = {
@@ -271,7 +290,7 @@ class Database:
         for r in self.conn.execute(query):
             result[r.builder][switch[r.state]] = r.count
 
-        query = sa.select([c.builder, sa.func.total(sa.func.length(self.blobs.c.data)).label("size")]) \
+        query = sa.select([c.builder, sa.func.sum(sa.func.length(self.blobs.c.data)).label("size")]) \
                 .select_from(self.blobs.join(self.jobs)).group_by(c.builder)
         for row in self.conn.execute(query):
             result[row.builder]["size"] += row.size
@@ -283,8 +302,8 @@ class Database:
 
     def entry_summaries(self, builder_name):
         c = self.jobs.c
-        query = sa.select([c.id, c.key, c.state, c.config, c.created_date, c.finished_date, c.computation_time, sa.func.total(sa.func.length(c.config)).label("size")])\
-                .select_from(self.jobs.join(self.blobs, isouter=True)).where(c.builder == builder_name).group_by(c.key)
+        query = sa.select([c.id, c.key, c.state, c.config, c.created_date, c.finished_date, c.computation_time, sa.func.sum(sa.func.length(c.config)).label("size")])\
+                .select_from(self.jobs.join(self.blobs, isouter=True)).where(c.builder == builder_name).group_by(c.id)
         return [
             {
                 "id": row.id,
