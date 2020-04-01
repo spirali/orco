@@ -7,6 +7,8 @@ def test_blob_attach(env):
     @builder()
     def bb(x):
         attach_object("object", x * 100)
+        with pytest.raises(Exception, match="already exists"):
+            attach_object("object", x * 101)
         attach_object("a-object", x)
 
     @builder()

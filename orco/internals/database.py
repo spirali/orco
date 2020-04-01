@@ -54,7 +54,7 @@ class Database:
         self.blobs = sa.Table(
             "blobs",
             metadata,
-            sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="RESTRICT"), primary_key=True, nullable=False),
+            sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="cascade"), primary_key=True, nullable=False),
             # None = primary result
             sa.Column("name", sa.String, nullable=True, primary_key=True),
             sa.Column("data", sa.LargeBinary, nullable=False),
@@ -112,7 +112,10 @@ class Database:
         return job.job_setup, job.config, keys_to_job_ids
 
     def insert_blob(self, job_id, name, value, mime, repr_value):
-        self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name=name, data=value, mime=mime, repr=repr_value))
+        try:
+            self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name=name, data=value, mime=mime, repr=repr_value))
+        except sa.exc.IntegrityError:
+            raise Exception("Blob '{}' already exists".format(name))
 
     def set_finished(self, job_id, value, repr_value, computation_time):
         assert job_id is not None

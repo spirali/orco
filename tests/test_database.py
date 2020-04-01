@@ -1,4 +1,4 @@
-from orco import Builder, builder
+from orco import Builder, builder, consts
 from orco.internals.key import make_key
 from orco.internals.plan import PlanNode, Plan
 from orco.internals.database import JobState
@@ -83,7 +83,7 @@ def test_xdb_running_window(env):
     e3 = c(x="test3")
     e4 = c(x="test4")
     plan = Plan([e3, e4], False)
-    plan.compute(rt)
+    plan.create(rt)
     assert rt.db.announce_jobs(plan)
 
     plan.fill_job_ids(rt)
@@ -97,3 +97,25 @@ def test_xdb_running_window(env):
     assert ids == set(r[0] for r in rt.db.conn.execute(sa.select([rt.db._get_current_jobs()])))
     rt.db.set_finished(e4._job_id, None, "", 1)
     assert set() == set(r[0] for r in rt.db.conn.execute(sa.select([rt.db._get_current_jobs()])))
+
+
+def test_xdb_unannounce_with_blobs(env):
+
+    @builder()
+    def c(x):
+        pass
+
+    rt = env.test_runtime()
+
+    e1 = c(x="test1")
+    e2 = c(x="test2")
+    plan = Plan([e1, e2], False)
+    plan.create(rt)
+    assert rt.db.announce_jobs(plan)
+    plan.fill_job_ids(rt)
+
+    job_id = e1._job_id
+    rt.db.set_running(job_id)
+    rt.db.insert_blob(job_id, "hello", b"1234", consts.MIME_BYTES, "xxx")
+
+    rt.db.unannounce_jobs(plan)
