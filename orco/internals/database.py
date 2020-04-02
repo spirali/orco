@@ -2,6 +2,7 @@
 from orco import consts
 import sqlalchemy as sa
 import enum
+import base64
 
 from orco.entry import EntryKey, EntryMetadata
 
@@ -145,7 +146,7 @@ class Database:
         c = self.jobs.c
         with self.conn.begin():
             cond = sa.and_(c.id == job_id, c.state.in_((JobState.RUNNING, JobState.ANNOUNCED)))
-            self.conn.execute(self.announcements.delete().where(self.announcements.c.id == job_id))
+            self.conn.execute(self.announcements.delete().where(self.announcements.c.job_id == job_id))
             r = self.conn.execute(sa.update(self.jobs).where(cond).values(state=JobState.ERROR, computation_time=computation_time, finished_date=sa.func.now()))
             if r.rowcount != 1:
                 raise Exception("Setting a job into finished state failed")
@@ -319,17 +320,25 @@ class Database:
         ]
 
     def blob_summaries(self, job_id):
+        def process_value(value, mime):
+            if value is None:
+                return None
+            if mime == consts.MIME_TEXT:
+                return value.decode()
+            return base64.b64encode(value).decode()
+
         c = self.blobs.c
         query = sa.select([c.name, c.repr, c.mime,
                            sa.func.length(c.data).label("size"),
-                           sa.case([(c.mime == consts.MIME_TEXT, c.data)], else_=sa.null()).label("value")
+                           sa.case([(c.mime == consts.MIME_TEXT, c.data),
+                                    (c.mime == "image/png", c.data)], else_=sa.null()).label("value")
                            ]).where(c.job_id == job_id)
         return [
             {
                 "name": row.name,
                 "repr": row.repr,
                 "size": row.size,
-                "value": row.value.decode() if row.value else None,
+                "value": process_value(row.value, row.mime),
                 "mime": row.mime,
             }
             for row in self.conn.execute(query)

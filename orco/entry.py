@@ -3,6 +3,9 @@ import collections
 from .jobsetup import JobSetup
 from orco.consts import MIME_PICKLE
 import pickle
+import tarfile
+import io
+import os
 
 
 EntryMetadata = collections.namedtuple("EntryMetadata", ["created_date", "computation_time", "finished_date"])
@@ -82,6 +85,17 @@ class Entry:
                 raise Exception("Blob '{}' not found".format(name))
             return default
         return value, data_type
+
+    def extract_tar(self, name, target=None):
+        value, data_type = self.get_blob(name)
+        if data_type != "application/tar":
+            raise Exception("Blob is not tar archive")
+        if target is None:
+            target = name
+        if not os.path.isdir(target):
+            os.makedirs(target)
+        with tarfile.TarFile(fileobj=io.BytesIO(value)) as tf:
+            tf.extractall(target)
 
     def __repr__(self):
         return "<Entry {}/{}>".format(self.builder_name, self.key)

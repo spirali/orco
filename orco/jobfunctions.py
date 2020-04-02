@@ -4,6 +4,9 @@ from .internals.utils import make_repr
 
 import pickle
 import mimetypes
+import tarfile
+import io
+import os
 
 
 def _get_job_context(caller):
@@ -29,6 +32,21 @@ def attach_bytes(name, data, mime=MIME_BYTES, repr=None):
     _validate_name(name)
     jc = _get_job_context("attach_bytes")
     jc.db.insert_blob(jc.job_id, name, data, mime, repr)
+
+
+def attach_directory(path, name=None, repr=None):
+    jc = _get_job_context("attach_directory")
+    if not os.path.isdir(path):
+        raise Exception("Path '{}' is not a directory.".format(path))
+    if name is None:
+        name = path
+    _validate_name(name)
+    buf = io.BytesIO()
+    with tarfile.TarFile(mode="x", fileobj=buf) as tf:
+        for f in os.listdir(path):
+            tf.add(os.path.join(path, f), f)
+    buf.seek(0)
+    jc.db.insert_blob(jc.job_id, name, buf.read(), "application/tar", repr)
 
 
 def attach_file(filename, name=None, mime=None, repr=None):

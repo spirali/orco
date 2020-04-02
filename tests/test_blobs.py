@@ -1,5 +1,6 @@
-from orco import builder, attach_object, attach_file
+from orco import builder, attach_object, attach_file, attach_directory
 import pytest
+import os
 
 
 def test_blob_attach_object(env):
@@ -52,3 +53,47 @@ def test_blob_attach_file(env):
     v, m = a.get_blob("aaa")
     assert v == b"1234"
     assert m == "application/zzz"
+
+
+
+def test_blob_attach_directory(env):
+
+    @builder()
+    def bb(x):
+        os.mkdir("testdir")
+        os.mkdir("testdir/subdir")
+        with open("testdir/aa.txt", "w") as f:
+            f.write("Content 1")
+
+        with open("testdir/bb.txt", "w") as f:
+            f.write("Content 2")
+
+        with open("testdir/subdir/cc.txt", "w") as f:
+            f.write("Content 3")
+
+        with open("dd.txt", "w") as f:
+            f.write("Content 4")
+
+        attach_directory("testdir")
+        attach_directory("testdir", name="testdir2")
+
+    @builder()
+    def cc(x):
+        a = bb(x)
+        yield
+        assert not os.path.isfile("testdir/testdir/aa.txt")
+        a.extract_tar("testdir2")
+        assert os.path.isfile("testdir2/aa.txt")
+        assert os.path.isfile("testdir2/bb.txt")
+        assert os.path.isfile("testdir2/subdir/cc.txt")
+        assert not os.path.isfile("aa.txt")
+        a.extract_tar("testdir", target=".")
+        assert os.path.isfile("aa.txt")
+        assert os.path.isfile("bb.txt")
+        assert os.path.isfile("subdir/cc.txt")
+        return "Ok"
+
+
+    runtime = env.test_runtime()
+    a = runtime.compute(cc(x=20))
+    assert a.value == "Ok"
