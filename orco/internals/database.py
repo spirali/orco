@@ -51,8 +51,8 @@ class Database:
         self.announcements = sa.Table("announcements", metadata,
                                       sa.Column("builder", sa.String(80)),
                                       sa.Column("key", sa.String),
-                                      sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="cascade")),
-                                      sa.Index("builder", "key", unique=True))
+                                      sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="cascade"), index=True),
+                                      sa.UniqueConstraint("builder", "key", name="uq_bk"))
 
         self.job_deps = sa.Table(
             "job_deps",
@@ -145,6 +145,7 @@ class Database:
         c = self.jobs.c
         with self.conn.begin():
             cond = sa.and_(c.id == job_id, c.state.in_((JobState.RUNNING, JobState.ANNOUNCED)))
+            self.conn.execute(self.announcements.delete().where(self.announcements.c.id == job_id))
             r = self.conn.execute(sa.update(self.jobs).where(cond).values(state=JobState.ERROR, computation_time=computation_time, finished_date=sa.func.now()))
             if r.rowcount != 1:
                 raise Exception("Setting a job into finished state failed")
@@ -226,7 +227,6 @@ class Database:
                     "key": pn.key,
                     "job_id": job_id,
                 })
-
             try:
                 r = conn.execute(self.announcements.insert(), announces)
             except sa.exc.IntegrityError:

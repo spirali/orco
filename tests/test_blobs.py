@@ -1,8 +1,8 @@
-from orco import builder, attach_object
+from orco import builder, attach_object, attach_file
 import pytest
 
 
-def test_blob_attach(env):
+def test_blob_attach_object(env):
 
     @builder()
     def bb(x):
@@ -25,7 +25,6 @@ def test_blob_attach(env):
     runtime = env.test_runtime()
     a = runtime.compute(cc(x=20))
     assert a.value == 1999
-
     b = runtime.compute(bb(x=20))
     assert b.value is None
     assert b.get_object("object") == 2000
@@ -33,3 +32,23 @@ def test_blob_attach(env):
     with pytest.raises(Exception, match="xxx"):
         b.get_object("xxx")
 
+
+def test_blob_attach_file(env):
+
+    @builder()
+    def bb(x):
+        with open("test.png", "wb") as f:
+            f.write(b"1234")
+        attach_file("test.png")
+        attach_file("test.png", name="aaa", mime="application/zzz")
+
+    runtime = env.test_runtime()
+    a = runtime.compute(bb(x=20))
+    assert a.value is None
+    v, m = a.get_blob("test.png")
+    assert v == b"1234"
+    assert m == "image/png"
+
+    v, m = a.get_blob("aaa")
+    assert v == b"1234"
+    assert m == "application/zzz"
