@@ -167,9 +167,9 @@ class Runtime:
         if not r:
             raise Exception("Entry {} already exists".format(entry))
 
-    def clear(self, builder):
-        assert isinstance(builder, Builder)
-        self.db.clear_builder(builder.name)
+    def drop_builder(self, builder_name):
+        assert isinstance(builder_name, str)
+        self.db.drop_builder(builder_name)
 
     def compute(self, entry, continue_on_error=False):
         self._compute((entry,), continue_on_error)

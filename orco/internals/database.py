@@ -382,3 +382,9 @@ class Database:
         c = self.blobs.c
         query = sa.select([c.name]).where(c.job_id == job_id).order_by(c.name.asc())
         return [r[0] for r in self.conn.execute(query) if r[0] is not None]
+
+    def drop_builder(self, builder_name):
+        with self.conn.begin():
+            self.conn.execute(self.announcements.delete().where(self.announcements.c.builder == builder_name))
+            self.conn.execute(self.jobs.delete().where(self.jobs.c.builder == builder_name))
+            # TODO: Update deps

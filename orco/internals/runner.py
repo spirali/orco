@@ -117,7 +117,14 @@ def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time):
         os.chdir(original_cwd)
         _CONTEXT.on_entry = None
         _CONTEXT.job_context = None
-    _per_process_db.set_finished(job_id, pickle.dumps(value), make_repr(value), time.time() - start_time)
+
+    if value is None:
+        value_repr = None
+    else:
+        value_repr = make_repr(value)
+        value = pickle.dumps(value)
+
+    _per_process_db.set_finished(job_id, value, value_repr, time.time() - start_time)
 
 
 def _run_job(db_path, builder, job_id):

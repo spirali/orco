@@ -62,6 +62,7 @@ class CloudWrapper:
         "Get cloudpickled version of self.fn, optionally caching the result"
         if self.pickled_fn is not None:
             return self.pickled_fn
+
         pfn = cloudpickle.dumps(self.fn, protocol=self.protocol)
         if self.cache:
             self.pickled_fn = pfn

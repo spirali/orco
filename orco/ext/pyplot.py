@@ -1,11 +1,11 @@
 import orco
 
 
-def attach_figure(name, format="png"):
+def attach_figure(name, format="png", **kwargs):
     import matplotlib.pyplot as plt
     import io
     buf = io.BytesIO()
-    plt.savefig(buf, format=format)
+    plt.savefig(buf, format=format, **kwargs)
     buf.seek(0)
     if format == "png":
         mime = "image/png"
