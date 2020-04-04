@@ -273,7 +273,7 @@ without the build function).
 A builder can be easily exported into a Pandas `DataFrame`:
 
 ```python
-from orco.export import export_builder_to_pandas
+from orco.ext.pandas import export_builder_to_pandas
 
 # Exporting builder with name "builder1"
 df = export_builder_to_pandas(runtime, "builder1")

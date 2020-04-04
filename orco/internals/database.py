@@ -4,7 +4,7 @@ import sqlalchemy as sa
 import enum
 import base64
 
-from orco.entry import EntryKey, EntryMetadata
+from orco.entry import EntryKey, EntryMetadata, Entry
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -392,3 +392,8 @@ class Database:
             self.conn.execute(self.announcements.delete().where(self.announcements.c.builder == builder_name))
             self.conn.execute(self.jobs.delete().where(self.jobs.c.builder == builder_name))
             # TODO: Update deps
+
+    def export_builder(self, builder_name):
+        c = self.jobs.c
+        query = sa.select([c.config, c.computation_time]).where(c.state == JobState.FINISHED)
+        return self.conn.execute(query)

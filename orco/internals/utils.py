@@ -16,13 +16,6 @@ def make_repr(value):
     return repr_value
 
 
-def unpack_frame(frame, unpack_column="config"):
-    import pandas as pd
-    new = pd.DataFrame(list(frame[unpack_column]))
-    new = pd.concat([frame, new], axis=1)
-    new.drop(unpack_column, inplace=True, axis=1)
-    return new
-
 import inspect
 import cloudpickle
 
