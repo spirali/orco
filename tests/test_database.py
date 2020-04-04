@@ -11,12 +11,15 @@ def make_pn(entry):
     return PlanNode(entry.builder_name, entry.key, entry.config, None, [], [])
 
 
-def announce(rt, entries):
+def announce(rt, entries, return_plan=False):
     plan = Plan(entries, False)
     plan._create_for_testing()
     r = rt.db.announce_jobs(plan)
     plan.fill_job_ids(rt)
-    return r
+    if return_plan:
+        return plan
+    else:
+        return r
 
 def test_xdb_announce_basic(env):
     r = env.test_runtime()
@@ -41,22 +44,21 @@ def test_xdb_set_result(env):
     r = env.test_runtime()
 
     c = r.register_builder(Builder(None, "col1"))
-    jn = make_pn(c(x=10))
+    e = c(x=10)
+    announce(r, [e])
 
-    assert r.db.announce_jobs([jn])
-    assert jn.job.job_id is not None
-
-    assert r.db.get_entry_state(jn.job.entry.builder_name, jn.job.entry.key) == JobState.ANNOUNCED
+    job_id = e._job_id
+    assert r.db.get_entry_state(e.builder_name, e.key) == JobState.ANNOUNCED
     with pytest.raises(Exception, match="finished state"):
-        r.db.set_finished(jn, 321)
-    r.db.set_running(jn)
-    assert r.db.get_entry_state(jn.job.entry.builder_name, jn.job.entry.key) == JobState.RUNNING
+        r.db.set_finished(job_id, b"321", None, 1)
+    r.db.set_running(job_id)
+    assert r.db.get_entry_state(e.builder_name, e.key) == JobState.RUNNING
     with pytest.raises(Exception, match="running state"):
-        r.db.set_running(jn)
-    assert r.db.get_entry_state(jn.job.entry.builder_name, jn.job.entry.key) == JobState.RUNNING
+        r.db.set_running(job_id)
+    assert r.db.get_entry_state(e.builder_name, e.key) == JobState.RUNNING
 
-    r.db.set_finished(jn, 123)
-    assert r.db.get_entry_state(jn.job.entry.builder_name, jn.job.entry.key) == JobState.FINISHED
+    r.db.set_finished(job_id, b"123", None, 1)
+    assert r.db.get_entry_state(e.builder_name, e.key) == JobState.FINISHED
 
 
 def test_xdb_running_window(env):
@@ -69,10 +71,7 @@ def test_xdb_running_window(env):
 
     e1 = c(x="test1")
     e2 = c(x="test2")
-    plan = Plan([e1, e2], False)
-    plan.compute(rt)
-    assert rt.db.announce_jobs(plan)
-    plan.fill_job_ids(rt)
+    assert announce(rt, [e1, e2])
 
     ids = set([e1._job_id, e2._job_id])
     assert ids == set(r[0] for r in rt.db.conn.execute(sa.select([rt.db._get_current_jobs()])))
@@ -90,11 +89,8 @@ def test_xdb_running_window(env):
 
     e3 = c(x="test3")
     e4 = c(x="test4")
-    plan = Plan([e3, e4], False)
-    plan.create(rt)
-    assert rt.db.announce_jobs(plan)
+    assert announce(rt, [e3, e4])
 
-    plan.fill_job_ids(rt)
     ids = set([e3._job_id, e4._job_id])
 
     rt.db.set_running(e3._job_id)
@@ -117,10 +113,7 @@ def test_xdb_unannounce_with_blobs(env):
 
     e1 = c(x="test1")
     e2 = c(x="test2")
-    plan = Plan([e1, e2], False)
-    plan.create(rt)
-    assert rt.db.announce_jobs(plan)
-    plan.fill_job_ids(rt)
+    plan = announce(rt, [e1, e2], return_plan=True)
 
     job_id = e1._job_id
     rt.db.set_running(job_id)

@@ -46,7 +46,7 @@ def test_runner_selection(env):
 
     r = runtime.compute(b2(10))
     assert r.value == 10
-    assert r.job_setup.runner_name == "local"
+    assert r.metadata().job_setup.runner_name == "local"
     r = runtime.read_entry(b1(10))
-    assert r.job_setup.runner_name == "tr"
+    assert r.metadata().job_setup.runner_name == "tr"
     assert len(testing_runner.events) == 1

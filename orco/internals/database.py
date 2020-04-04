@@ -251,10 +251,14 @@ class Database:
 
     def read_metadata(self, job_id):
         c = self.jobs.c
-        r = self.conn.execute(sa.select([c.created_date, c.finished_date, c.computation_time]).where(c.id == job_id)).fetchone()
+        r = self.conn.execute(sa.select([c.created_date, c.finished_date, c.computation_time, c.job_setup]).where(c.id == job_id)).fetchone()
         if r is None:
             return None
-        return EntryMetadata(created_date=r.created_time, finished_date=r.finished_data, computation_time=r.computation_time)
+        return EntryMetadata(
+            created_date=r.created_date,
+            finished_date=r.finished_date,
+            computation_time=r.computation_time,
+            job_setup=r.job_setup)
 
     def unannounce_jobs(self, plan):
         c = self.jobs.c

@@ -8,7 +8,7 @@ import io
 import os
 
 
-EntryMetadata = collections.namedtuple("EntryMetadata", ["created_date", "computation_time", "finished_date"])
+EntryMetadata = collections.namedtuple("EntryMetadata", ["created_date", "computation_time", "finished_date", "job_setup"])
 
 
 class _NoValue:

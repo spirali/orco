@@ -1,6 +1,5 @@
 from orco import Builder
 from orco.export import export_builder_to_pandas
-import pandas as pd
 
 
 def test_builder_to_pandas(env):
