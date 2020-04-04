@@ -6,20 +6,8 @@ import pickle
 from .entry import Entry
 from .internals.context import _CONTEXT
 from .internals.key import make_key
-from .internals.rawentry import RawEntry
 from .internals.utils import CloudWrapper
 from .jobsetup import JobSetup
-
-
-def _default_make_raw_entry(builder_name, key, config, value, job_setup, comp_time):
-    value_repr = repr(value)
-    if len(value_repr) > 85:
-        value_repr = value_repr[:80] + " ..."
-    if config is not None:
-        config = pickle.dumps(config)
-    if job_setup is not None:
-        job_setup = pickle.dumps(job_setup)
-    return RawEntry(builder_name, key, config, pickle.dumps(value), value_repr, job_setup, comp_time)
 
 
 def _generic_kwargs_fn(**_kwargs):
@@ -45,9 +33,8 @@ class Builder:
         if fn is not None and not isinstance(fn, CloudWrapper):
             fn = CloudWrapper(fn)
         self._fn = fn
-        self.make_raw_entry = CloudWrapper(_default_make_raw_entry)
-        if callable(job_setup) and not isinstance(job_setup, CloudWrapper):
-            job_setup = CloudWrapper(job_setup)
+        #if callable(job_setup) and not isinstance(job_setup, CloudWrapper):
+        #    job_setup = CloudWrapper(job_setup)
         self.job_setup = job_setup
 
         # Name resolution
