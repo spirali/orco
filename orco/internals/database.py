@@ -255,8 +255,15 @@ class Database:
             self._remove_jobs(cond)
 
     def get_run_stats(self, builder_name):
-        # TODO: UPDAE THIS
-        return {"avg": 1.0, "stdev": 1.0, "count": 1}
+        c = self.jobs.c
+        count, avg = self.conn.execute(sa.select([sa.func.count(c.id), sa.func.avg(c.computation_time)]).where(sa.and_(c.builder == builder_name, c.computation_time != None))).fetchone()
+        if avg is not None and count > 2:
+            d = c.computation_time - avg
+            r = self.conn.execute(sa.select([sa.func.sum(d * d)]).where(c.computation_time != None)).fetchone()
+            stdev = r[0] / (count - 1)
+        else:
+            stdev = 0
+        return {"avg": avg, "stdev": stdev, "count": count}
 
     def get_all_configs(self, builder_name):
         c = self.jobs.c
