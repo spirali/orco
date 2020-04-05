@@ -4,8 +4,7 @@ import os
 
 import pytest
 
-from orco import Builder, builder
-
+from orco import Builder, builder, JobState
 
 def adder(a, b):
     return a + b
@@ -210,7 +209,7 @@ def test_builder_deps(env):
     assert counter == [5, 2]
     assert e.value == 60
 
-    runtime.remove_many([col1(0), col1(3)])
+    runtime.drop_many([col1(0), col1(3)])
 
     e = runtime.compute(col2(6))
     counter = counter_file.read()
@@ -222,7 +221,7 @@ def test_builder_deps(env):
     assert counter == [8, 3]
     assert e.value == 150
 
-    runtime.remove(col2(6))
+    runtime.drop(col2(6))
     e = runtime.compute(col2(5))
     counter = counter_file.read()
     assert counter == [8, 4]
@@ -273,67 +272,49 @@ def test_builder_stored_deps(env):
     c2_2 = col2(**cc2_2)
     c2_3 = col2(**cc2_3)
 
-    assert runtime.get_entry_state(col3(10)) == "finished"
-    assert runtime.get_entry_state(c2_2) == "finished"
-    assert runtime.get_entry_state(c2_3) == "finished"
-    assert runtime.get_entry_state(col1(0)) == "finished"
-    assert runtime.get_entry_state(col1(2)) == "finished"
+    assert runtime.get_entry_state(col3(10)) == JobState.FINISHED
+    assert runtime.get_entry_state(c2_2) == JobState.FINISHED
+    assert runtime.get_entry_state(c2_3) == JobState.FINISHED
+    assert runtime.get_entry_state(col1(0)) == JobState.FINISHED
+    assert runtime.get_entry_state(col1(2)) == JobState.FINISHED
 
-    assert set(runtime.db.get_recursive_consumers(col1.name, "{'c':2,}")) == {
-        ("col1", "{'c':2,}"), ('col2', "{'end':10,'start':0,'step':2,}"), ('col3', "{'end':10,}")
-    }
+    runtime.drop(col1(6))
+    assert runtime.get_entry_state(col3(10)) == JobState.NONE
+    assert runtime.get_entry_state(c2_2) == JobState.NONE
+    assert runtime.get_entry_state(c2_3) == JobState.NONE
+    assert runtime.get_entry_state(col1(0)) == JobState.FINISHED
+    assert runtime.get_entry_state(col1(6)) == JobState.NONE
+    assert runtime.get_entry_state(col1(2)) == JobState.FINISHED
 
-    assert set(runtime.db.get_recursive_consumers(col1.name, "{'c':6,}")) == {("col1", "{'c':6,}"),
-                                                                       ('col2', c2_2.key),
-                                                                       ("col2", c2_3.key),
-                                                                       ('col3', "{'end':10,}")}
-
-    assert set(runtime.db.get_recursive_consumers(col1.name, "{'c':9,}")) == {("col1", "{'c':9,}"),
-                                                                       ("col2", c2_3.key),
-                                                                       ('col3', "{'end':10,}")}
-
-    assert set(runtime.db.get_recursive_consumers(col2.name, c2_3.key)) == {("col2", c2_3.key),
-                                                                            ('col3', "{'end':10,}")}
-
-    assert set(runtime.db.get_recursive_consumers(col3.name, col3(10).key)) == {('col3', "{'end':10,}")}
-
-    runtime.remove(col1(6))
-    assert runtime.get_entry_state(col3(10)) is None
-    assert runtime.get_entry_state(c2_2) is None
-    assert runtime.get_entry_state(c2_3) is None
-    assert runtime.get_entry_state(col1(0)) == "finished"
-    assert runtime.get_entry_state(col1(6)) is None
-    assert runtime.get_entry_state(col1(2)) == "finished"
-
-    runtime.remove(col1(0))
-    assert runtime.get_entry_state(col3(10)) is None
-    assert runtime.get_entry_state(c2_2) is None
-    assert runtime.get_entry_state(c2_3) is None
-    assert runtime.get_entry_state(col1(0)) is None
-    assert runtime.get_entry_state(col1(6)) is None
-    assert runtime.get_entry_state(col1(2)) == "finished"
+    runtime.drop(col1(0))
+    assert runtime.get_entry_state(col3(10)) == JobState.NONE
+    assert runtime.get_entry_state(c2_2) == JobState.NONE
+    assert runtime.get_entry_state(c2_3) == JobState.NONE
+    assert runtime.get_entry_state(col1(0)) == JobState.NONE
+    assert runtime.get_entry_state(col1(6)) == JobState.NONE
+    assert runtime.get_entry_state(col1(2)) == JobState.FINISHED
 
     assert runtime.compute(col3(10)).value == 380
 
-    assert runtime.get_entry_state(col3(10)) == "finished"
-    assert runtime.get_entry_state(c2_2) == "finished"
-    assert runtime.get_entry_state(c2_3) == "finished"
-    assert runtime.get_entry_state(col1(0)) == "finished"
-    assert runtime.get_entry_state(col1(2)) == "finished"
+    assert runtime.get_entry_state(col3(10)) == JobState.FINISHED
+    assert runtime.get_entry_state(c2_2) == JobState.FINISHED
+    assert runtime.get_entry_state(c2_3) == JobState.FINISHED
+    assert runtime.get_entry_state(col1(0)) == JobState.FINISHED
+    assert runtime.get_entry_state(col1(2)) == JobState.FINISHED
 
-    runtime.remove(col1(2))
+    runtime.drop(col1(2))
 
-    assert runtime.get_entry_state(col3(10)) is None
-    assert runtime.get_entry_state(c2_2) is None
-    assert runtime.get_entry_state(c2_3) == "finished"
-    assert runtime.get_entry_state(col1(0)) == "finished"
-    assert runtime.get_entry_state(col1(6)) == "finished"
-    assert runtime.get_entry_state(col1(2)) is None
+    assert runtime.get_entry_state(col3(10)) == JobState.NONE
+    assert runtime.get_entry_state(c2_2) == JobState.NONE
+    assert runtime.get_entry_state(c2_3) == JobState.FINISHED
+    assert runtime.get_entry_state(col1(0)) == JobState.FINISHED
+    assert runtime.get_entry_state(col1(6)) == JobState.FINISHED
+    assert runtime.get_entry_state(col1(2)) == JobState.NONE
 
-    runtime.remove(col1(2))
+    runtime.drop(col1(2))
 
 
-def test_builder_clear(env):
+def test_builder_drop(env):
     runtime = env.test_runtime()
 
     col1 = runtime.register_builder(Builder(lambda c: c, "col1"))
@@ -346,10 +327,22 @@ def test_builder_clear(env):
     col2 = runtime.register_builder(Builder(b2, "col2"))
 
     runtime.compute(col2(1))
-    runtime.clear(col1)
-    assert runtime.get_entry_state(col1(1)) is None
-    assert runtime.get_entry_state(col2(1)) is None
-    assert runtime.get_entry_state(col2(2)) is None
+    runtime.drop_builder("col1")
+    assert runtime.get_entry_state(col1(1)) == JobState.NONE
+    assert runtime.get_entry_state(col2(1)) == JobState.NONE
+    assert runtime.get_entry_state(col2(2)) == JobState.NONE
+
+    runtime.compute(col2(1))
+    runtime.drop_builder("col2")
+    assert runtime.get_entry_state(col1(1)) == JobState.FINISHED
+    assert runtime.get_entry_state(col2(1)) == JobState.NONE
+    assert runtime.get_entry_state(col2(2)) == JobState.NONE
+
+    runtime.compute(col2(1))
+    runtime.drop_builder("col2", drop_inputs=True)
+    assert runtime.get_entry_state(col1(1)) == JobState.NONE
+    assert runtime.get_entry_state(col2(1)) == JobState.NONE
+    assert runtime.get_entry_state(col2(2)) == JobState.NONE
 
 
 def test_builder_remove_inputs(env):
@@ -373,11 +366,11 @@ def test_builder_remove_inputs(env):
 
     runtime.compute(col4(1))
     runtime.compute(col3(1))
-    runtime.remove(col2(1), remove_inputs=True)
-    assert runtime.get_entry_state(col1(1)) is None
-    assert runtime.get_entry_state(col2(1)) is None
-    assert runtime.get_entry_state(col3(1)) is None
-    assert runtime.get_entry_state(col4(1)) is None
+    runtime.drop(col2(1), drop_inputs=True)
+    assert runtime.get_entry_state(col1(1)) == JobState.NONE
+    assert runtime.get_entry_state(col2(1)) == JobState.NONE
+    assert runtime.get_entry_state(col3(1)) == JobState.NONE
+    assert runtime.get_entry_state(col4(1)) == JobState.NONE
 
 
 def test_builder_computed(env):

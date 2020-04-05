@@ -169,30 +169,23 @@ class Database:
         return r.data, r.mime
 
     def create_job_with_value(self, builder_name, key, config, value, repr_value):
-        raise Exception("NEED CHANGE TO ANNOUNCE!")
-
-        c = self.jobs.c
         conn = self.conn
-        columns = [
-            c.state,
-            c.builder,
-            c.key,
-            c.config,
-        ]
-        with conn.begin():
-            test_existing = sa.exists([c.id]).where(
-                sa.and_(c.builder == builder_name,
-                        c.key == key,
-                        c.state != JobState.ERROR))
-            create_data = sa.select([sa.literal(JobState.FINISHED, sa.Enum(JobState)),
-                                     sa.literal(builder_name),
-                                     sa.literal(key),
-                                     sa.literal(config, sa.PickleType)]).where(~test_existing)
-            r = conn.execute(self.jobs.insert().from_select(columns, create_data))
-            if r.rowcount != 1:
-                return False
-            job_id = r.lastrowid
+        with conn.begin() as transaction:
+            r = conn.execute(self.jobs.insert().values(
+                state=JobState.FINISHED,
+                builder=builder_name,
+                key=key,
+                config=config,
+                job_setup=None,
+                finished_date=sa.func.now(),
+            ))
+            job_id = r.inserted_primary_key[0]
             assert job_id is not None
+            try:
+                conn.execute(self.announcements.insert().values(key=key, job_id=job_id))
+            except sa.exc.IntegrityError:
+                transaction.rollback()
+                return False
             if value is not None:
                 self.insert_blob(job_id, None, value, consts.MIME_PICKLE, repr_value)
             return True
@@ -203,13 +196,6 @@ class Database:
             rather complicated way :(
         """
         c = self.jobs.c
-        columns = [
-            c.state,
-            c.builder,
-            c.key,
-            c.config,
-            c.job_setup,
-        ]
         conn = self.conn
         announces = []
         with conn.begin() as transaction:
@@ -274,7 +260,7 @@ class Database:
 
     def get_all_configs(self, builder_name):
         c = self.jobs.c
-        return [r[0] for r in self.conn.execute(sa.select([c.config]).where(sa.and_(c.builder == builder_name, c.state == JobState.FINISHED)))]
+        return [(r.key, r.config) for r in self.conn.execute(sa.select([c.key, c.config]).where(sa.and_(c.builder == builder_name, c.state == JobState.FINISHED)))]
 
     def builder_summaries(self, registered_builders):
         c = self.jobs.c
@@ -388,24 +374,40 @@ class Database:
         query = sa.select([c.name]).where(c.job_id == job_id).order_by(c.name.asc())
         return [r[0] for r in self.conn.execute(query) if r[0] is not None]
 
-    def drop_builder(self, builder_name):
+    def drop_builder(self, builder_name, drop_inputs):
         with self.conn.begin():
-            self.conn.execute(self.announcements.delete().where(self.announcements.c.builder == builder_name))
-            self.conn.execute(self.jobs.delete().where(self.jobs.c.builder == builder_name))
-            # TODO: Update deps
+            c = self.jobs.c
+            base_query = sa.select([c.id]).where(c.builder == builder_name)
+            self.conn.execute(self.jobs.delete().where(c.id.in_(self._closure(base_query, drop_inputs))))
 
-    """
     def _downstream(self, base_query):
-        q = base_query.cte("rec", recusive=True)
-        q = q.union(sa.select())
+        c = self.job_deps.c
+        q = base_query.cte("down_rec", recursive=True)
+        return sa.select([q.union(sa.select([c.target_id]).select_from(self.job_deps).where(q.c.id == c.source_id))])
 
-    def drop_job(self, key):
+    def _upstream(self, base_query):
+        c = self.job_deps.c
+        q = base_query.cte("up_rec", recursive=True)
+        return sa.select([q.union(sa.select([c.source_id]).select_from(self.job_deps).where(q.c.id == c.target_id))])
+
+    def _closure(self, base_query, include_inputs):
+        if include_inputs:
+            base_query = self._upstream(base_query)
+        return self._downstream(base_query)
+
+    def drop_jobs_by_key(self, keys, drop_inputs):
         c = self.jobs.c
-        sa.select(c.key == key)
-            self.conn.execute()
-    """
+        base_query = sa.select([c.id]).where(c.key.in_(keys))
+        self.conn.execute(self.jobs.delete().where(c.id.in_(self._closure(base_query, drop_inputs))))
 
     def export_builder(self, builder_name):
         c = self.jobs.c
-        query = sa.select([c.config, c.computation_time]).where(c.state == JobState.FINISHED)
+        query = sa.select([c.config, c.computation_time]).where(sa.and_(builder_name == builder_name, c.state == JobState.FINISHED))
         return self.conn.execute(query)
+
+    def upgrade_builder(self, data):
+        with self.conn.begin():
+            stmt = self.jobs.update().where(self.jobs.c.key == sa.bindparam('key')).values(key=sa.bindparam("new_key"), config=sa.bindparam("config"))
+            self.conn.execute(stmt, data)
+            stmt = self.jobs.update().where(self.announcements.key == sa.bindparam('key')).values(key=sa.bindparam("new_key"))
+            self.conn.execute(stmt, data)

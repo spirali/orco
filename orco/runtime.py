@@ -140,7 +140,7 @@ class Runtime:
         assert not include_announced  # TODO TODO
         job_id, state = self.db.get_entry_job_id_and_state(entry.key)
         if state != JobState.FINISHED:
-            return False
+            return None
         entry.set_job_id(job_id, self.db)
         return entry
 
@@ -153,23 +153,20 @@ class Runtime:
                 results.append(None)
         return results
 
-    def remove(self, entry, remove_inputs=False):
-        return self.remove_many([entry], remove_inputs)
+    def drop(self, entry, drop_inputs=False):
+        return self.drop_many([entry], drop_inputs)
 
-    def remove_many(self, entries, remove_inputs=False):
-        if remove_inputs:
-            self.db.invalidate_entries_by_key(entries)
-        else:
-            self.db.remove_entries_by_key(entries)
+    def drop_many(self, entries, drop_inputs=False):
+        self.db.drop_jobs_by_key([e.key for e in entries], drop_inputs)
 
     def insert(self, entry, value):
         r = self.db.create_job_with_value(entry.builder_name, entry.key, entry.config, pickle.dumps(value), make_repr(value))
         if not r:
             raise Exception("Entry {} already exists".format(entry))
 
-    def drop_builder(self, builder_name):
+    def drop_builder(self, builder_name, drop_inputs=False):
         assert isinstance(builder_name, str)
-        self.db.drop_builder(builder_name)
+        self.db.drop_builder(builder_name, drop_inputs)
 
     def compute(self, entry, continue_on_error=False):
         self._compute((entry,), continue_on_error)
@@ -186,20 +183,22 @@ class Runtime:
         return self._builders[builder_name]
 
     def upgrade_builder(self, builder, upgrade_fn):
-        configs = self.db.get_all_configs(builder.name)
+        if isinstance(builder, Builder):
+            builder_name = builder.name
+        else:
+            builder_name = builder
+        configs = self.db.get_all_configs(builder_name)
         to_update = []
-        builder_name = builder.name
         keys = set()
-        for config in configs:
-            key = make_key(config)
+        for key, config in configs:
             config = upgrade_fn(config)
-            new_key = make_key(config)
+            new_key = make_key(builder_name, config)
             if new_key in keys:
                 raise Exception("Key collision in upgrade, config={}".format(repr(config)))
             if new_key != key:
-                to_update.append((builder_name, key, new_key, pickle.dumps(config)))
+                to_update.append({"key": key, "new_key": new_key, "config": config})
             keys.add(new_key)
-        self.db.upgrade_builder(builder.name, to_update)
+        self.db.upgrade_builder(to_update)
 
     def _check_stopped(self):
         if self.stopped:
