@@ -30,7 +30,7 @@ def test_rest_builders(env):
 
         r = client.get("rest/entries/hello")
         rr = r.get_json()
-        rr.sort(key=lambda x: x["key"])
+        rr.sort(key=lambda x: x["id"])
         job_ids = []
         for item in rr:
             assert item.get("key")
@@ -39,10 +39,10 @@ def test_rest_builders(env):
             del item["size"]
             job_ids.append(item.pop("id"))
         assert len(rr) == 2
-        assert rr[0]["config"] == {'e': "e2"}
-        assert rr[1]["config"] == {'x': 1, 'y': [1, 2, 3]}
+        assert rr[1]["config"] == {'e': "e2"}
+        assert rr[0]["config"] == {'x': 1, 'y': [1, 2, 3]}
 
-        r = client.get("rest/blobs/" + str(job_ids[0])).get_json()
+        r = client.get("rest/blobs/" + str(job_ids[1])).get_json()
         assert len(r) == 1
         v = r[0]
         assert 50 < len(v["repr"]) <= 85
