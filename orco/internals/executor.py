@@ -19,15 +19,6 @@ class JobFailedException(Exception):
     pass
 
 
-"""
-def _heartbeat(runtime, id, event, heartbeat_interval):
-    while not event.is_set():
-        runtime.db.update_heartbeat(id)
-        time.sleep(heartbeat_interval)
-"""
-
-# TODO: Remove heartbeat
-
 class Executor:
     """
     Executor that performs computations locally.
@@ -35,31 +26,18 @@ class Executor:
     All methods of executor are considered internal. Users should use it only
     via runtime.
 
-    User may decrease heartbeat_interval (in seconds) if faster detection of
-    hard-crash of executor is desired. But it should not be lesser than 1s
-    otherwise performance issues may raises because of hammering DB. Note that
-    it serves only for detecting crashes when whole Python interpreter is lost,
-    it is not needed for normal exceptions.
-
     Executor spawns LocalProcessRunner as default. By default it spawns at most N
     build functions where N is number of cpus of the local machine. This can be
     configured via argument `n_processes` in the constructor.
     """
 
-    _debug_do_not_start_heartbeat = False
-
-    def __init__(self, runtime, runners=None, name=None, heartbeat_interval=7, n_processes=None):
+    def __init__(self, runtime, runners=None, name=None, n_processes=None):
         self.name = name or "unnamed"
         self.hostname = platform.node() or "unknown"
         self.created = None
         self.id = None
         self.runtime = runtime
         self.stats = {}
-        assert heartbeat_interval >= 1
-        self.heartbeat_interval = heartbeat_interval
-        self.heartbeat_thread = None
-        self.heartbeat_stop_event = None
-
         self.n_processes = n_processes
 
         if runners is None:
@@ -78,8 +56,6 @@ class Executor:
 
     def stop(self):
         #self.runtime.db.stop_executor(self.id)
-        if self.heartbeat_stop_event:
-            self.heartbeat_stop_event.set()
         for runner in self.runners.values():
             runner.stop()
         self.runtime = None
@@ -95,16 +71,6 @@ class Executor:
 
         for runner in self.runners.values():
             runner.start()
-
-        """
-        if not self._debug_do_not_start_heartbeat:
-            self.heartbeat_stop_event = threading.Event()
-            self.heartbeat_thread = threading.Thread(
-                target=_heartbeat,
-                args=(self.runtime, self.id, self.heartbeat_stop_event, self.heartbeat_interval))
-            self.heartbeat_thread.daemon = True
-            self.heartbeat_thread.start()
-        """
 
     def _init(self, plan):
         consumers = {}

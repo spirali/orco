@@ -105,8 +105,7 @@ def test_fixed_builder(env):
 
 
 def test_builder_upgrade(env):
-    runtime = env.test_runtime()
-    runtime.configure_executor(n_processes=1)
+    runtime = env.test_runtime(n_processes=1)
 
     def creator(a):
         return a * 10
@@ -147,8 +146,7 @@ def test_builder_upgrade(env):
 
 
 def test_builder_compute(env):
-    runtime = env.test_runtime()
-    runtime.configure_executor(n_processes=1)
+    runtime = env.test_runtime(n_processes=1)
 
     counter = env.file_storage("counter", 0)
 
@@ -176,8 +174,7 @@ def test_builder_compute(env):
 
 
 def test_builder_deps(env):
-    runtime = env.test_runtime()
-    runtime.configure_executor(n_processes=1)
+    runtime = env.test_runtime(n_processes=1)
 
     counter_file = env.file_storage("counter", [0, 0])
 
@@ -374,8 +371,7 @@ def test_builder_remove_inputs(env):
 
 
 def test_builder_computed(env):
-    runtime = env.test_runtime()
-    runtime.configure_executor(n_processes=1)
+    runtime = env.test_runtime(n_processes=1)
 
     def build_fn(x):
         return x * 10

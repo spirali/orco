@@ -32,7 +32,7 @@ class Runtime:
     >>> runtime = Runtime("/path/to/dbfile.db")
     """
 
-    def __init__(self, db_path: str, global_builders=True):
+    def __init__(self, db_path: str, global_builders=True, executor_name=None, n_processes=None):
         self.db = Database(db_path)
         self.db.init()
 
@@ -41,7 +41,10 @@ class Runtime:
 
         self.executor = None
         self.stopped = False
-        self.executor_args = {}
+        self.executor_args = {
+            "name": executor_name,
+            "n_processes": n_processes,
+        }
         self.runners = {}
 
         logging.debug("Starting runtime %s (db=%s)", self, db_path)
@@ -68,13 +71,6 @@ class Runtime:
         if name in self.runners:
             raise Exception("Runner under name '{}' is already registered".format(name))
         self.runners[name] = runner
-
-    def configure_executor(self, name=None, n_processes=None, heartbeat_interval=7):
-        self.executor_args = {
-            "name": name,
-            "n_processes": n_processes,
-            "heartbeat_interval": heartbeat_interval,
-        }
 
     def stop(self):
         self._check_stopped()
