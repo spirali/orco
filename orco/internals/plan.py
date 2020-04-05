@@ -77,7 +77,7 @@ class Plan:
             if job_node is not None:
                 return job_node
             builder = runtime.get_builder(entry.builder_name)
-            job_id, state = runtime.db.get_entry_job_id_and_state(entry.builder_name, entry.key)
+            job_id, state = runtime.db.get_entry_job_id_and_state(entry.key)
             if state == JobState.FINISHED:
                 assert isinstance(job_id, int)
                 existing_jobs[entry_key] = job_id

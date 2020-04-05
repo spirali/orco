@@ -128,7 +128,7 @@ class Runtime:
                 run_app()
 
     def get_entry_state(self, entry):
-        return self.db.get_entry_state(entry.builder_name, entry.key)
+        return self.db.get_entry_state(entry.key)
 
     def read_entry(self, entry, include_announced=False):
         r = self.try_read_entry(entry, include_announced)
@@ -138,7 +138,7 @@ class Runtime:
 
     def try_read_entry(self, entry, include_announced=False):
         assert not include_announced  # TODO TODO
-        job_id, state = self.db.get_entry_job_id_and_state(entry.builder_name, entry.key)
+        job_id, state = self.db.get_entry_job_id_and_state(entry.key)
         if state != JobState.FINISHED:
             return False
         entry.set_job_id(job_id, self.db)

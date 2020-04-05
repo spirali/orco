@@ -39,21 +39,21 @@ class Database:
             sa.Column("id", sa.Integer, primary_key=True),
             sa.Column("state", sa.Enum(JobState)),
             sa.Column("builder", sa.String(80)),
-            sa.Column("key", sa.String),
+            sa.Column("key", sa.String(56)),  # 56 = hexdigest of sha224
             sa.Column("config", sa.PickleType),
             sa.Column("job_setup", sa.PickleType, nullable=True),
             sa.Column("created_date", sa.DateTime(timezone=True), nullable=False, server_default=sa.sql.func.now()),
             sa.Column("finished_date", sa.DateTime(timezone=True), nullable=True),
             sa.Column("computation_time", sa.Integer(), nullable=True),
-            sa.Index("builder_key_idx", "builder", "key"),
+            sa.Index("builder_idx", "builder"),
+            sa.Index("key_idx", "key"),
             sa.Index("finished_date_idx", "finished_date"),
         )
 
         self.announcements = sa.Table("announcements", metadata,
-                                      sa.Column("builder", sa.String(80)),
-                                      sa.Column("key", sa.String),
+                                      sa.Column("key", sa.String(56)),  # 56 = hexdigest of sha224
                                       sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="cascade"), index=True),
-                                      sa.UniqueConstraint("builder", "key", name="uq_bk"))
+                                      sa.UniqueConstraint("key", name="uq_bk"))
 
         self.job_deps = sa.Table(
             "job_deps",
@@ -85,9 +85,9 @@ class Database:
     def init(self):
         self.metadata.create_all(self.engine)
 
-    def get_entry_state(self, builder_name, key):
+    def get_entry_state(self, key):
         js = self.jobs
-        r = self.conn.execute(sa.select([js.c.state]).where(sa.and_(js.c.builder == builder_name, js.c.key == key, js.c.state != JobState.ERROR))).fetchone()
+        r = self.conn.execute(sa.select([js.c.state]).where(sa.and_(js.c.key == key, js.c.state != JobState.ERROR))).fetchone()
         if r is None:
             return JobState.NONE
         else:
@@ -153,9 +153,9 @@ class Database:
             if message is not None:
                 self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name="!message", data=message.encode(), mime=consts.MIME_TEXT))
 
-    def get_entry_job_id_and_state(self, builder_name, key):
+    def get_entry_job_id_and_state(self, key):
         c = self.jobs.c
-        r = self.conn.execute(sa.select([c.id, c.state]).where(sa.and_(c.builder == builder_name, c.key == key, c.state != JobState.ERROR))).fetchone()
+        r = self.conn.execute(sa.select([c.id, c.state]).where(sa.and_(c.key == key, c.state != JobState.ERROR))).fetchone()
         if r is None:
             return None, JobState.NONE
         else:
@@ -169,6 +169,8 @@ class Database:
         return r.data, r.mime
 
     def create_job_with_value(self, builder_name, key, config, value, repr_value):
+        raise Exception("NEED CHANGE TO ANNOUNCE!")
+
         c = self.jobs.c
         conn = self.conn
         columns = [
@@ -224,7 +226,6 @@ class Database:
                 assert job_id is not None
                 pn.job_id = job_id
                 announces.append({
-                    "builder": pn.builder_name,
                     "key": pn.key,
                     "job_id": job_id,
                 })
@@ -392,6 +393,17 @@ class Database:
             self.conn.execute(self.announcements.delete().where(self.announcements.c.builder == builder_name))
             self.conn.execute(self.jobs.delete().where(self.jobs.c.builder == builder_name))
             # TODO: Update deps
+
+    """
+    def _downstream(self, base_query):
+        q = base_query.cte("rec", recusive=True)
+        q = q.union(sa.select())
+
+    def drop_job(self, key):
+        c = self.jobs.c
+        sa.select(c.key == key)
+            self.conn.execute()
+    """
 
     def export_builder(self, builder_name):
         c = self.jobs.c

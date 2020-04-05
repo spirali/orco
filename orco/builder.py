@@ -81,7 +81,7 @@ class Builder:
 
         Calls `_CONTEXT.on_entry` to register/check dependencies etc.
         """
-        entry = Entry(self.name, make_key(config), config)
+        entry = Entry(self.name, make_key(self.name, config), config)
         if not hasattr(_CONTEXT, "on_entry"):
             return entry
         on_entry = _CONTEXT.on_entry

@@ -1,3 +1,5 @@
+from hashlib import sha224
+
 def _make_key_helper(obj, stream):
     if isinstance(obj, str) or isinstance(obj, int) or isinstance(obj, float):
         stream.append(repr(obj))
@@ -24,7 +26,7 @@ def _make_key_helper(obj, stream):
         raise Exception("Invalid item in config: '{}', type: {}".format(repr(obj), type(obj)))
 
 
-def make_key(config):
-    stream = []
+def make_key(builder_name, config):
+    stream = [builder_name, "!"]
     _make_key_helper(config, stream)
-    return "".join(stream)
+    return sha224("".join(stream).encode()).hexdigest()
