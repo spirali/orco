@@ -1,4 +1,4 @@
-from orco import builder, attach_object, attach_file, attach_directory
+from orco import builder, attach_object, attach_file, attach_directory, attach_text
 import pytest
 import os
 
@@ -54,6 +54,17 @@ def test_blob_attach_file(env):
     assert v == b"1234"
     assert m == "application/zzz"
 
+
+def test_blob_attach_text(env):
+    @builder()
+    def bb(x):
+        attach_text("mytext", "Hello world!")
+
+    runtime = env.test_runtime()
+    a = runtime.compute(bb(x=20))
+    assert a.value is None
+    v = a.get_text("mytext")
+    assert v == "Hello world!"
 
 
 def test_blob_attach_directory(env):

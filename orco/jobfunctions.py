@@ -1,5 +1,5 @@
 from .internals.context import _CONTEXT
-from .consts import MIME_PICKLE, MIME_BYTES
+from .consts import MIME_PICKLE, MIME_BYTES, MIME_TEXT
 from .internals.utils import make_repr
 
 import pickle
@@ -32,6 +32,12 @@ def attach_bytes(name, data, mime=MIME_BYTES, repr=None):
     _validate_name(name)
     jc = _get_job_context("attach_bytes")
     jc.db.insert_blob(jc.job_id, name, data, mime, repr)
+
+
+def attach_text(name, text):
+    _validate_name(name)
+    jc = _get_job_context("attach_text")
+    jc.db.insert_blob(jc.job_id, name, text.encode(), MIME_TEXT, None)
 
 
 def attach_directory(path, name=None, repr=None):
