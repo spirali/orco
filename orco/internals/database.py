@@ -85,6 +85,15 @@ class Database:
     def init(self):
         self.metadata.create_all(self.engine)
 
+    def read_entry_all(self, entry):
+        c = self.jobs.c
+        result = []
+        for r in self.conn.execute(sa.select([c.id, c.config]).where(c.key == entry.key)):
+            entry = Entry(entry.builder_name, entry.key, r.config)
+            entry.set_job_id(r.id, self)
+            result.append(entry)
+        return result
+
     def get_entry_state(self, key):
         js = self.jobs
         r = self.conn.execute(sa.select([js.c.state]).where(sa.and_(js.c.key == key, js.c.state != JobState.ERROR))).fetchone()
@@ -130,7 +139,7 @@ class Database:
         except sa.exc.IntegrityError:
             raise Exception("Blob '{}' already exists".format(name))
 
-    def set_finished(self, job_id, value, repr_value, computation_time):
+    def set_finished(self, job_id, value, repr_value, computation_time, output=None):
         assert job_id is not None
         c = self.jobs.c
         with self.conn.begin():
@@ -140,8 +149,10 @@ class Database:
                 raise Exception("Setting a job into finished state failed")
             if value is not None:
                 self.insert_blob(job_id, None, value, consts.MIME_PICKLE, repr_value)
+            if output:
+                self.insert_blob(job_id, "!output", output, consts.MIME_TEXT, None)
 
-    def set_error(self, job_id, message, computation_time):
+    def set_error(self, job_id, message, computation_time, output):
         assert job_id is not None
         c = self.jobs.c
         with self.conn.begin():
@@ -152,6 +163,8 @@ class Database:
                 raise Exception("Setting a job into finished state failed")
             if message is not None:
                 self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name="!message", data=message.encode(), mime=consts.MIME_TEXT))
+            if output:
+                self.insert_blob(job_id, "!output", output, consts.MIME_TEXT, None)
 
     def get_entry_job_id_and_state(self, key):
         c = self.jobs.c

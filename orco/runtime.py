@@ -132,6 +132,9 @@ class Runtime:
             raise Exception("Entry {} is not in database".format(entry))
         return r
 
+    def read_entry_all_states(self, entry):
+        return self.db.read_entry_all(entry)
+
     def try_read_entry(self, entry, include_announced=False):
         assert not include_announced  # TODO TODO
         job_id, state = self.db.get_entry_job_id_and_state(entry.key)

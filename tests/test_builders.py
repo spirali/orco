@@ -1,6 +1,7 @@
 import pickle
 import random
 import os
+import sys
 
 import pytest
 
@@ -459,3 +460,32 @@ def test_builder_workdir(env):
     assert not os.path.isdir(a.value)
     assert not os.path.isdir(b.value)
     assert a.value != b.value
+
+
+def test_builder_stdout(env):
+
+    @builder()
+    def bb(x):
+        print("ABC")
+        print("spam", file=sys.stderr)
+        yield
+        print("XYZ")
+        if x:
+            raise Exception("MyError")
+
+    runtime = env.test_runtime()
+    a = runtime.compute(bb(False))
+    text = a.get_text("!output")
+    assert "ABC" in text
+    assert "spam" in text
+    assert "XYZ" in text
+
+    with pytest.raises(Exception, match="MyError"):
+        runtime.compute(bb(True))
+
+    entries = runtime.read_entry_all_states(bb(True))
+    assert len(entries) == 1
+    text = entries[0].get_text("!output")
+    assert "ABC" in text
+    assert "spam" in text
+    assert "XYZ" in text

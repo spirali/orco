@@ -1,7 +1,7 @@
 import collections
 
 from .jobsetup import JobSetup
-from orco.consts import MIME_PICKLE
+from orco.consts import MIME_PICKLE, MIME_TEXT
 import pickle
 import tarfile
 import io
@@ -67,9 +67,16 @@ class Entry:
         return self._db.read_metadata(self._job_id)
 
     def get_object(self, name, default=_NO_VALUE):
-        value, data_type = self.get_blob(name, default)
-        assert data_type == MIME_PICKLE
+        value, mime = self.get_blob(name, default)
+        if mime != MIME_PICKLE:
+            raise Exception("Blob exists, but is not pickled object, but {}".format(mime))
         return pickle.loads(value)
+
+    def get_text(self, name):
+        value, mime = self.get_blob(name)
+        if mime != MIME_TEXT:
+            raise Exception("Blob exists, but is not text, but {}".format(mime))
+        return value.decode()
 
     def get_names(self):
         if self._job_id is None:

@@ -5,11 +5,13 @@ import traceback
 import pickle
 import tempfile
 import collections
+import capturer
 from concurrent.futures.process import ProcessPoolExecutor
 
 from .context import _CONTEXT
 from .database import Database
 from .utils import make_repr
+from ..consts import MIME_TEXT
 
 JobContext = collections.namedtuple("JobContext", ["db", "job_id"])
 
@@ -93,7 +95,7 @@ class LocalProcessRunner(PoolJobRunner):
 _per_process_db = None
 
 
-def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time):
+def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time, cpt):
     deps = []
 
     def block_new_entries(_):
@@ -117,25 +119,28 @@ def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time):
         os.chdir(original_cwd)
         _CONTEXT.on_entry = None
         _CONTEXT.job_context = None
+        cpt.finish_capture()
 
     if value is None:
         value_repr = None
     else:
         value_repr = make_repr(value)
         value = pickle.dumps(value)
-
-    _per_process_db.set_finished(job_id, value, value_repr, time.time() - start_time)
+    _per_process_db.set_finished(job_id, value, value_repr, time.time() - start_time, cpt.get_bytes())
 
 
 def _run_job(db_path, builder, job_id):
     start_time = time.time()
+    cpt = None
     try:
         global _per_process_db
         if _per_process_db is None:
             _per_process_db = Database(db_path)
         job_setup, config, keys_to_job_ids = _per_process_db.set_running(job_id)
+        cpt = capturer.CaptureOutput(relay=job_setup.relay)
+        cpt.start_capture()
         if job_setup.timeout is not None:
-            thread = threading.Thread(target=_run_job_timed, args=(_per_process_db, job_id, builder, config, keys_to_job_ids, start_time))
+            thread = threading.Thread(target=_run_job_timed, args=(_per_process_db, job_id, builder, config, keys_to_job_ids, start_time, cpt))
             thread.daemon = True
             thread.start()
             thread.join(job_setup.timeout)
@@ -144,9 +149,9 @@ def _run_job(db_path, builder, job_id):
                 _per_process_db.set_error(job_id, t.message(), time.time() - start_time)
                 return t
         else:
-            _run_job_timed(_per_process_db, job_id, builder, config, keys_to_job_ids, start_time)
+            _run_job_timed(_per_process_db, job_id, builder, config, keys_to_job_ids, start_time, cpt)
         return job_id
     except Exception as exception:
         t = JobError(job_id, str(exception), traceback.format_exc())
-        _per_process_db.set_error(job_id, t.message(), time.time() - start_time)
+        _per_process_db.set_error(job_id, t.message(), time.time() - start_time, cpt.get_bytes() if cpt else None)
         return t
