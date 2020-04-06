@@ -46,7 +46,7 @@ class Entry:
         value = self._value
         if value is not _NO_VALUE:
             return value
-        value, data_type = self._db.get_blob(self._job_id, None)
+        value, mime = self._db.get_blob(self._job_id, None)
         if value is None:
             self._value = None
             return None
@@ -86,16 +86,23 @@ class Entry:
     def get_blob(self, name, default=_NO_VALUE):
         if self._job_id is None:
             raise Exception("Entry is not attached")
-        value, data_type = self._db.get_blob(self._job_id, name)
+        value, mime = self._db.get_blob(self._job_id, name)
         if value is None:
             if default is _NO_VALUE:
                 raise Exception("Blob '{}' not found".format(name))
             return default
-        return value, data_type
+        return value, mime
+
+    def get_blob_as_file(self, name, target=None):
+        value, _ = self.get_blob(name)
+        if target is None:
+            target = name
+        with open(target, "wb") as f:
+            f.write(value)
 
     def extract_tar(self, name, target=None):
-        value, data_type = self.get_blob(name)
-        if data_type != "application/tar":
+        value, mime = self.get_blob(name)
+        if mime != "application/tar":
             raise Exception("Blob is not tar archive")
         if target is None:
             target = name

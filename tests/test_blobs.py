@@ -43,6 +43,19 @@ def test_blob_attach_file(env):
         attach_file("test.png")
         attach_file("test.png", name="aaa", mime="application/zzz")
 
+    @builder()
+    def cc(x):
+        b = bb(x)
+        yield
+        b.get_blob_as_file("test.png")
+        with open("test.png", "rb") as f:
+            assert f.read() == b"1234"
+        b.get_blob_as_file("aaa", "ddd")
+        assert not os.path.isfile("aaa")
+        with open("ddd", "rb") as f:
+            assert f.read() == b"1234"
+        return "Ok"
+
     runtime = env.test_runtime()
     a = runtime.compute(bb(x=20))
     assert a.value is None
@@ -53,6 +66,8 @@ def test_blob_attach_file(env):
     v, m = a.get_blob("aaa")
     assert v == b"1234"
     assert m == "application/zzz"
+    a = runtime.compute(cc(x=20))
+    assert a.value == "Ok"
 
 
 def test_blob_attach_text(env):
