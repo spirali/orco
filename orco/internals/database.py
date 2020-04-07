@@ -19,6 +19,19 @@ class JobState(enum.Enum):
     RUNNING = "r"
     FINISHED = "f"
     ERROR = "e"
+    ARCHIVED = "a"
+    FREED = "d"
+
+
+ACTIVE_STATES = (JobState.ANNOUNCED, JobState.RUNNING, JobState.FINISHED, JobState.FREED)
+STATE_COUNTERS = {
+    JobState.FINISHED: "n_finished",
+    JobState.ERROR: "n_failed",
+    JobState.RUNNING: "n_in_progress",
+    JobState.ANNOUNCED: "n_in_progress",
+    JobState.ARCHIVED: "n_archived",
+    JobState.FREED: "n_freed",
+}
 
 
 class Database:
@@ -96,7 +109,7 @@ class Database:
 
     def get_entry_state(self, key):
         js = self.jobs
-        r = self.conn.execute(sa.select([js.c.state]).where(sa.and_(js.c.key == key, js.c.state != JobState.ERROR))).fetchone()
+        r = self.conn.execute(sa.select([js.c.state]).where(sa.and_(js.c.key == key, js.c.state.in_(ACTIVE_STATES)))).fetchone()
         if r is None:
             return JobState.NONE
         else:
@@ -168,7 +181,7 @@ class Database:
 
     def get_entry_job_id_and_state(self, key):
         c = self.jobs.c
-        r = self.conn.execute(sa.select([c.id, c.state]).where(sa.and_(c.key == key, c.state != JobState.ERROR))).fetchone()
+        r = self.conn.execute(sa.select([c.id, c.state]).where(sa.and_(c.key == key, c.state.in_(ACTIVE_STATES)))).fetchone()
         if r is None:
             return None, JobState.NONE
         else:
@@ -287,20 +300,20 @@ class Database:
         query = sa.select([c.builder, sa.func.sum(sa.func.length(c.config)).label("size")]).group_by(c.builder)
         #sa.func.length(c.config)
 
+        def create_counter(name, size):
+            d = {name: 0 for name in STATE_COUNTERS.values()}
+            d["name"] = name
+            d["size"] = size
+            return d
+
         result = {
-            row.builder: {"name": row.builder, "n_finished": 0, "n_failed": 0, "n_in_progress": 0, "size": row.size}
+            create_counter(row.builder, row.size)
             for row in self.conn.execute(query)
         }
 
-        switch = {
-            JobState.FINISHED: "n_finished",
-            JobState.ERROR: "n_failed",
-            JobState.RUNNING: "n_in_progress",
-            JobState.ANNOUNCED: "n_in_progress",
-        }
         query = sa.select([c.builder, c.state, sa.func.count(c.key).label("count")]).group_by(c.builder, c.state)
         for r in self.conn.execute(query):
-            result[r.builder][switch[r.state]] = r.count
+            result[r.builder][STATE_COUNTERS[r.state]] += r.count
 
         query = sa.select([c.builder, sa.func.sum(sa.func.length(self.blobs.c.data)).label("size")]) \
                 .select_from(self.blobs.join(self.jobs)).group_by(c.builder)
@@ -309,7 +322,7 @@ class Database:
 
         for builder in registered_builders:
             if builder.name not in result:
-                result[builder.name] = {"name": builder.name, "n_finished": 0, "n_failed": 0, "n_in_progress": 0, "size": 0}
+                result[builder.name] = create_counter(builder.name, 0)
         return sorted(result.values(), key=lambda r: r["name"])
 
     def entry_summaries(self, builder_name):

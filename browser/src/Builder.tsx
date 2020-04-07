@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactTable, {CellInfo, Column} from 'react-table';
 import {fetchJsonFromServer} from './service';
-import {FaHourglassEnd, FaCheck, FaTimes} from 'react-icons/fa';
+import {FaHourglassEnd, FaCheck, FaTimes, FaArchive, FaTrashAlt} from 'react-icons/fa';
 import {formatSize, formatTime} from './utils';
 import {ErrorContainer} from './Error';
 import {JobDetail} from "./JobDetail";
@@ -49,6 +49,10 @@ class Builder extends React.Component<Props, State> {
             return <span style={{color: "orange"}}><FaHourglassEnd/></span>
         } else if (v === "e") {
             return <span style={{color: "red"}}><FaTimes/></span>
+        } else if (v === "a") {
+            return <span style={{color: "blue"}}><FaArchive/></span>
+        } else if (v === "d") {
+            return <span style={{color: "brown"}}><FaTrashAlt/></span>
         } else {
             return <span>?</span>
         }
