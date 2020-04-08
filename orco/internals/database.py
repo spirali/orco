@@ -1,10 +1,9 @@
 
 from orco import consts
 import sqlalchemy as sa
-import enum
 import base64
 
-from orco.job import JobMetadata, Job
+from orco.job import JobMetadata, Job, JobState, ACTIVE_STATES
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -13,17 +12,6 @@ def _set_sqlite_pragma(dbapi_connection, _connection_record):
     cursor.close()
 
 
-class JobState(enum.Enum):
-    NONE = "n"
-    ANNOUNCED = "a"
-    RUNNING = "r"
-    FINISHED = "f"
-    ERROR = "e"
-    ARCHIVED = "a"
-    FREED = "d"
-
-
-ACTIVE_STATES = (JobState.ANNOUNCED, JobState.RUNNING, JobState.FINISHED, JobState.FREED)
 STATE_COUNTERS = {
     JobState.FINISHED: "n_finished",
     JobState.ERROR: "n_failed",
@@ -101,13 +89,13 @@ class Database:
     def read_jobs(self, key, builder=None):
         c = self.jobs.c
         result = []
-        for r in self.conn.execute(sa.select([c.id, c.builder, c.config]).where(c.key == key)):
+        for r in self.conn.execute(sa.select([c.id, c.builder, c.config, c.state]).where(c.key == key)):
             if builder is None:
                 builder = r.builder
             else:
                 assert builder == r.builder
             job = Job(builder, key, r.config)
-            job.set_job_id(r.id, self)
+            job.set_job_id(r.id, self, r.state)
             result.append(job)
         return result
 
@@ -118,6 +106,13 @@ class Database:
             return JobState.NONE
         else:
             return r[0]
+
+    def get_states(self, job_ids):
+        js = self.jobs
+        return {
+            r.id: r.state
+            for r in self.conn.execute(sa.select([js.c.id, js.c.state]).where(sa.and_(js.c.id.in_(job_ids))))
+        }
 
     def get_active_job_id_and_state(self, key):
         c = self.jobs.c
@@ -417,25 +412,46 @@ class Database:
             base_query = sa.select([c.id]).where(c.builder == builder_name)
             self.conn.execute(self.jobs.delete().where(c.id.in_(self._closure(base_query, drop_inputs))))
 
-    def _downstream(self, base_query):
+    def _downstream(self, base_query, state=None):
         c = self.job_deps.c
         q = base_query.cte("down_rec", recursive=True)
-        return sa.select([q.union(sa.select([c.target_id]).select_from(self.job_deps).where(q.c.id == c.source_id))])
+        query = sa.select([c.target_id])
+        if state is None:
+            union = query.select_from(self.job_deps).where(q.c.id == c.source_id)
+        else:
+            union = query.select_from(q.join(self.job_deps, q.c.id == c.source_id).join(self.jobs, self.jobs.c.id == c.target_id))\
+                        .where(sa.and_(self.jobs.c.state == state))
+        return sa.select([q.union(union)])
 
-    def _upstream(self, base_query):
+    def _upstream(self, base_query, state=None):
         c = self.job_deps.c
         q = base_query.cte("up_rec", recursive=True)
-        return sa.select([q.union(sa.select([c.source_id]).select_from(self.job_deps).where(q.c.id == c.target_id))])
+        query = sa.select([c.source_id])
+        if state is None:
+            union = query.select_from(self.job_deps).where(q.c.id == c.target_id)
+        else:
+            union = query.select_from(q.join(self.job_deps, q.c.id == c.target_id).join(self.jobs, self.jobs.c.id == c.source_id))\
+                        .where(sa.and_(self.jobs.c.state == state))
+        return sa.select([q.union(union)])
+        #  return sa.select([q.union(sa.select([c.source_id]).select_from(self.job_deps).where(q.c.id == c.target_id))])
 
-    def _closure(self, base_query, include_inputs):
+    def _closure(self, base_query, include_inputs, state=None):
         if include_inputs:
-            base_query = self._upstream(base_query)
-        return self._downstream(base_query)
+            base_query = self._upstream(base_query, state)
+        return self._downstream(base_query, state)
 
     def drop_jobs_by_key(self, keys, drop_inputs):
         c = self.jobs.c
         base_query = sa.select([c.id]).where(c.key.in_(keys))
         self.conn.execute(self.jobs.delete().where(c.id.in_(self._closure(base_query, drop_inputs))))
+
+    def archive_jobs_by_key(self, keys, archive_inputs):
+        c = self.jobs.c
+        with self.conn.begin():
+            base_query = sa.select([c.id]).where(sa.and_(c.key.in_(keys), c.state == JobState.FINISHED))
+            job_ids = self._closure(base_query, archive_inputs, JobState.FINISHED)
+            self.conn.execute(self.announcements.delete().where(self.announcements.c.job_id.in_(job_ids)))
+            self.conn.execute(self.jobs.update().where(c.id.in_(job_ids)).values(state=JobState.ARCHIVED))
 
     def export_builder(self, builder_name):
         c = self.jobs.c

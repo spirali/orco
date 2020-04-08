@@ -11,6 +11,7 @@ from concurrent.futures.process import ProcessPoolExecutor
 from .context import _CONTEXT
 from .database import Database
 from .utils import make_repr
+from .database import JobState
 from ..consts import MIME_TEXT
 
 JobContext = collections.namedtuple("JobContext", ["db", "job_id"])
@@ -107,7 +108,7 @@ def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time, cpt
         if set(e.key for e in deps) != set(keys_to_job_ids):
             raise Exception("Builder function does not consistently return dependencies")
         for e in deps:
-            e.set_job_id(keys_to_job_ids[e.key], db)
+            e.set_job_id(keys_to_job_ids[e.key], db, JobState.FINISHED)
 
     original_cwd = os.getcwd()
     try:

@@ -23,6 +23,15 @@ from .report import Report
 logger = logging.getLogger(__name__)
 
 
+def _check_unattached_job(obj, reattach):
+    if not isinstance(obj, Job):
+        raise Exception("'{!r}' is not an job".format(obj))
+    if reattach:
+        obj.detach()
+    elif obj.is_attached():
+        raise Exception("'{!r}' is already attached".format(obj))
+
+
 class Runtime:
     """
     Core class of ORCO.
@@ -126,27 +135,28 @@ class Runtime:
     def get_state(self, job):
         return self.db.get_active_state(job.key)
 
-    def read(self, job):
-        r = self.try_read(job)
+    def read(self, job, *, reattach=False):
+        r = self.try_read(job, reattach)
         if r is None:
-            raise Exception("Not finished job for {}".format(job))
+            raise Exception("No finished job for {}".format(job))
         return r
 
-    def try_read(self, job):
+    def try_read(self, job, reattach=False):
+        _check_unattached_job(job, reattach)
         job_id, state = self.db.get_active_job_id_and_state(job.key)
         if state != JobState.FINISHED:
             return None
-        job.set_job_id(job_id, self.db)
+        job.set_job_id(job_id, self.db, state)
         return job
 
     def read_jobs(self, job):
         return self.db.read_jobs(job.key, job.builder_name)
 
-    def read_many(self, jobs, drop_missing=False):
+    def read_many(self, jobs, *, reattach=False, drop_missing=False):
         # TODO: Read from DB in one query
         results = []
         for job in jobs:
-            if self.try_read(job):
+            if self.try_read(job, reattach):
                 results.append(job)
             elif not drop_missing:
                 results.append(None)
@@ -158,6 +168,14 @@ class Runtime:
     def drop_many(self, jobs, drop_inputs=False):
         self.db.drop_jobs_by_key([job.key for job in jobs], drop_inputs)
 
+    def archive(self, job, archive_inputs=False):
+        self.archive_many([job], archive_inputs=archive_inputs)
+
+    def archive_many(self, jobs, archive_inputs=False):
+        for job in jobs:
+            _check_unattached_job(job, False)
+        self.db.archive_jobs_by_key([job.key for job in jobs], archive_inputs)
+
     def insert(self, job, value):
         r = self.db.create_job_with_value(job.builder_name, job.key, job.config, pickle.dumps(value), make_repr(value))
         if not r:
@@ -167,12 +185,12 @@ class Runtime:
         assert isinstance(builder_name, str)
         self.db.drop_builder(builder_name, drop_inputs)
 
-    def compute(self, job, continue_on_error=False):
-        self._compute((job,), continue_on_error)
+    def compute(self, job, *, reattach=False, continue_on_error=False):
+        self._compute((job,), reattach, continue_on_error)
         return job
 
-    def compute_many(self, jobs, continue_on_error=False):
-        self._compute(jobs, continue_on_error)
+    def compute_many(self, jobs, *, reattach=False, continue_on_error=False):
+        self._compute(jobs, reattach, continue_on_error)
         return jobs
 
     def get_builder(self, builder_name):
@@ -224,13 +242,12 @@ class Runtime:
                 return "next"
         except:
             self.db.unannounce_jobs(plan)
-            plan.fill_job_ids(self)
+            plan.fill_job_ids(self, False)
             raise
 
-    def _compute(self, jobs, continue_on_error=False):
+    def _compute(self, jobs, reattach, continue_on_error):
         for job in jobs:
-            if not isinstance(job, Job):
-                raise Exception("'{!r}' is not an job".format(job))
+            _check_unattached_job(job, reattach)
 
         if self.executor is None:
             self.start_executor()
@@ -248,7 +265,7 @@ class Runtime:
                 continue
             else:
                 assert 0
-        plan.fill_job_ids(self)
+        plan.fill_job_ids(self, not continue_on_error)
         if plan.error_keys:
             print("During computation, {} errors occured, see reports for details".format(
                 len(plan.error_keys)))

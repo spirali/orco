@@ -380,16 +380,16 @@ def test_builder_computed(env):
     builder = runtime.register_builder(Builder(build_fn, "col1"))
     tasks = [builder(b) for b in [2, 3, 4, 0, 5]]
     assert len(tasks) == 5
-    assert runtime.read_many(tasks) == [None] * len(tasks)
-    assert runtime.read_many(tasks, drop_missing=True) == []
+    assert runtime.read_many(tasks, reattach=True) == [None] * len(tasks)
+    assert runtime.read_many(tasks, reattach=True, drop_missing=True) == []
 
-    runtime.compute_many(tasks)
-    assert [e.value for e in runtime.read_many(tasks)] == [20, 30, 40, 0, 50]
-    assert [e.value if e else "missing" for e in runtime.read_many(tasks + [builder(123)])
+    runtime.compute_many(tasks, reattach=True)
+    assert [e.value for e in runtime.read_many(tasks, reattach=True)] == [20, 30, 40, 0, 50]
+    assert [e.value if e else "missing" for e in runtime.read_many(tasks + [builder(123)], reattach=True)
             ] == [20, 30, 40, 0, 50, "missing"]
     assert [
                e.value if e else "missing"
-               for e in runtime.read_many(tasks + [builder(123)], drop_missing=True)
+               for e in runtime.read_many(tasks + [builder(123)], drop_missing=True, reattach=True)
            ] == [20, 30, 40, 0, 50]
 
 
@@ -489,3 +489,20 @@ def test_builder_stdout(env):
     assert "ABC" in text
     assert "spam" in text
     assert "XYZ" in text
+
+
+def test_already_attached(env):
+
+    @builder()
+    def bb(x):
+        return x
+
+    runtime = env.test_runtime()
+    b = bb(10)
+    runtime.compute(b)
+
+    with pytest.raises(Exception, match="is already attached"):
+        runtime.compute(b)
+
+    with pytest.raises(Exception, match="is already attached"):
+        runtime.read(b)

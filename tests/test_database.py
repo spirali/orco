@@ -15,7 +15,7 @@ def announce(rt, jobs, return_plan=False):
     plan = Plan(jobs, False)
     plan._create_for_testing()
     r = rt.db.announce_jobs(plan)
-    plan.fill_job_ids(rt)
+    plan._testing_fill_job_ids(rt)
     if return_plan:
         return plan
     else:

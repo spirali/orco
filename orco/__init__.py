@@ -5,4 +5,4 @@ from .internals.executor import Executor, JobFailedException  # noqa
 from .runtime import Runtime  # noqa
 from .jobsetup import JobSetup  # noqa
 from .jobfunctions import attach_object, attach_bytes, attach_file, attach_directory, attach_text  # noqa
-from .internals.database import JobState  # noqa
+from .job import JobState  # noqa

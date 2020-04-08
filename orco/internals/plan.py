@@ -78,7 +78,7 @@ class Plan:
                 assert isinstance(job_id, int)
                 existing_jobs[key] = job_id
                 return job_id
-            if state == JobState.ANNOUNCED or state == JobState.RUNNING:
+            elif state == JobState.ANNOUNCED or state == JobState.RUNNING:
                 conflicts.add(key)
                 return None
             assert job_id is None
@@ -116,16 +116,49 @@ class Plan:
         for job in self.leaf_jobs:
             traverse(job)
 
-    def fill_job_ids(self, runtime):
+    def _testing_fill_job_ids(self, runtime):
+        db = runtime.db
         for job in self.leaf_jobs:
             key = job.key
+            job_id = self.existing_jobs.get(key)
+            if job_id:
+                job.set_job_id(job_id, db, JobState.FINISHED)
+
             node = self._nodes.get(key)
             if node:
-                job_id = node.job_id
-            else:
-                job_id = self.existing_jobs.get(key)
+                job.set_job_id(node.job_id, db, None)
+
+
+    def fill_job_ids(self, runtime, set_finish):
+        """
+            if set_finish is True then all leaf nodes is set as finished
+            if set_finish is False then state of leaf nodes is read from db
+        """
+        read_jobs = []
+        db = runtime.db
+        nodes = self._nodes
+        for job in self.leaf_jobs:
+            key = job.key
+            job_id = self.existing_jobs.get(key)
             if job_id:
-                job.set_job_id(job_id, runtime.db)
+                job.set_job_id(job_id, db, JobState.FINISHED)
+
+            node = nodes.get(key)
+            if node:
+                if set_finish:
+                    job.set_job_id(node.job_id, db, JobState.FINISHED)
+                else:
+                    read_jobs.append(job)
+
+        if read_jobs:
+            job_ids = [nodes[job.key].job_id for job in read_jobs]
+            state_map = db.get_states(job_ids)
+            for job in read_jobs:
+                job_id = nodes[job.key].job_id
+                state = state_map.get(job_id)
+                if state:
+                    assert state == JobState.FINISHED or state == JobState.ERROR
+                    job.set_job_id(job_id, db, state)
 
     def print_report(self, runtime):
         jobs_per_builder = collections.Counter([pn.builder_name for pn in self.nodes])
