@@ -11,7 +11,7 @@ interface Props {
     err: ErrorContainer
 }
 
-interface EntrySummary {
+interface JobSummary {
     key: string,
     size: number,
     comp_time: number,
@@ -19,7 +19,7 @@ interface EntrySummary {
 }
 
 interface State {
-    data: EntrySummary[],
+    data: JobSummary[],
     columns: Column[],
     loading: boolean,
 }
@@ -58,12 +58,12 @@ class Builder extends React.Component<Props, State> {
         }
     };
 
-    _formatSize = (entry : EntrySummary) => formatSize(entry.size);
-    _formatTime = (entry: EntrySummary) => formatTime(entry.comp_time);
+    _formatSize = (job : JobSummary) => formatSize(job.size);
+    _formatTime = (job: JobSummary) => formatTime(job.comp_time);
 
     componentDidMount() {
         if (this.props.err.isOk) {
-            fetchJsonFromServer("entries/" + this.name, null, "GET").then((data) => {
+            fetchJsonFromServer("jobs/" + this.name, null, "GET").then((data) => {
                 let cfgColumns = new Set();
                 let nonObjectConfig = false;
                 for (let e of data) {

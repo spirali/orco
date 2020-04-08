@@ -7,5 +7,5 @@ def test_global_builders(env):
         return config + 1
 
     runtime = env.test_runtime(global_builders=True)
-    entry = runtime.compute(compute1(10))
-    assert entry.value == 11
+    job = runtime.compute(compute1(10))
+    assert job.value == 11

@@ -8,7 +8,7 @@ import time
 from orco.internals.context import _CONTEXT
 
 from .builder import Builder
-from .entry import Entry
+from .job import Job
 from .internals.database import Database, JobState
 from .internals.executor import Executor
 from .internals.plan import Plan
@@ -123,60 +123,57 @@ class Runtime:
             else:
                 run_app()
 
-    def get_entry_state(self, entry):
-        return self.db.get_entry_state(entry.key)
+    def get_state(self, job):
+        return self.db.get_active_state(job.key)
 
-    def read_entry(self, entry, include_announced=False):
-        r = self.try_read_entry(entry, include_announced)
+    def read(self, job):
+        r = self.try_read(job)
         if r is None:
-            raise Exception("Entry {} is not in database".format(entry))
+            raise Exception("Not finished job for {}".format(job))
         return r
 
-    def read_entry_all_states(self, entry):
-        return self.db.read_entry_all(entry)
-
-    def try_read_entry(self, entry, include_announced=False):
-        assert not include_announced  # TODO TODO
-        job_id, state = self.db.get_entry_job_id_and_state(entry.key)
+    def try_read(self, job):
+        job_id, state = self.db.get_active_job_id_and_state(job.key)
         if state != JobState.FINISHED:
             return None
-        entry.set_job_id(job_id, self.db)
-        return entry
+        job.set_job_id(job_id, self.db)
+        return job
 
-    def read_entries(self, entries, include_announced=False, drop_missing=False):
+    def read_jobs(self, job):
+        return self.db.read_jobs(job.key, job.builder_name)
+
+    def read_many(self, jobs, drop_missing=False):
+        # TODO: Read from DB in one query
         results = []
-        for entry in entries:
-            if self.try_read_entry(entry, include_announced):
-                results.append(entry)
+        for job in jobs:
+            if self.try_read(job):
+                results.append(job)
             elif not drop_missing:
                 results.append(None)
         return results
 
-    def drop(self, entry, drop_inputs=False):
-        return self.drop_many([entry], drop_inputs)
+    def drop(self, job, drop_inputs=False):
+        return self.drop_many([job], drop_inputs)
 
-    def drop_many(self, entries, drop_inputs=False):
-        self.db.drop_jobs_by_key([e.key for e in entries], drop_inputs)
+    def drop_many(self, jobs, drop_inputs=False):
+        self.db.drop_jobs_by_key([job.key for job in jobs], drop_inputs)
 
-    def insert(self, entry, value):
-        r = self.db.create_job_with_value(entry.builder_name, entry.key, entry.config, pickle.dumps(value), make_repr(value))
+    def insert(self, job, value):
+        r = self.db.create_job_with_value(job.builder_name, job.key, job.config, pickle.dumps(value), make_repr(value))
         if not r:
-            raise Exception("Entry {} already exists".format(entry))
+            raise Exception("Job {} already exists".format(job))
 
     def drop_builder(self, builder_name, drop_inputs=False):
         assert isinstance(builder_name, str)
         self.db.drop_builder(builder_name, drop_inputs)
 
-    def compute(self, entry, continue_on_error=False):
-        self._compute((entry,), continue_on_error)
-        return entry
+    def compute(self, job, continue_on_error=False):
+        self._compute((job,), continue_on_error)
+        return job
 
-    def compute_many(self, entries, continue_on_error=False):
-        self._compute(entries, continue_on_error)
-        return entries
-
-    def get_reports(self, count=100):
-        return self.db.get_reports(count)
+    def compute_many(self, jobs, continue_on_error=False):
+        self._compute(jobs, continue_on_error)
+        return jobs
 
     def get_builder(self, builder_name):
         return self._builders[builder_name]
@@ -211,7 +208,7 @@ class Runtime:
         if plan.need_wait():
             print("Waiting for computation on another executor ...")
             return "wait"
-        logger.debug("Announcing entries %s at executor %s", len(plan.nodes), executor.id)
+        logger.debug("Announcing jobs %s at executor %s", len(plan.nodes), executor.id)
         if not self.db.announce_jobs(plan):
             return "wait"
         try:
@@ -230,15 +227,15 @@ class Runtime:
             plan.fill_job_ids(self)
             raise
 
-    def _compute(self, entries, continue_on_error=False):
-        for entry in entries:
-            if not isinstance(entry, Entry):
-                raise Exception("'{!r}' is not an entry".format(entry))
+    def _compute(self, jobs, continue_on_error=False):
+        for job in jobs:
+            if not isinstance(job, Job):
+                raise Exception("'{!r}' is not an job".format(job))
 
         if self.executor is None:
             self.start_executor()
 
-        plan = Plan(entries, continue_on_error)
+        plan = Plan(jobs, continue_on_error)
 
         while True:
             status = self._run_computation(plan)

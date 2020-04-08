@@ -98,26 +98,26 @@ _per_process_db = None
 def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time, cpt):
     deps = []
 
-    def block_new_entries(_):
+    def block_new_jobs(_):
         raise Exception("Builders cannot be called during computation phase")
 
     def after_deps():
-        _CONTEXT.on_entry = block_new_entries
+        _CONTEXT.on_job = block_new_jobs
         _CONTEXT.job_context = JobContext(db, job_id)
-        if set(e.make_entry_key() for e in deps) != set(keys_to_job_ids):
+        if set(e.key for e in deps) != set(keys_to_job_ids):
             raise Exception("Builder function does not consistently return dependencies")
         for e in deps:
-            e.set_job_id(keys_to_job_ids[e.make_entry_key()], db)
+            e.set_job_id(keys_to_job_ids[e.key], db)
 
     original_cwd = os.getcwd()
     try:
-        _CONTEXT.on_entry = deps.append
+        _CONTEXT.on_job = deps.append
         with tempfile.TemporaryDirectory() as tmp_dir:
             os.chdir(tmp_dir)
             value = builder.run_with_config(config, only_deps=False, after_deps=after_deps)
     finally:
         os.chdir(original_cwd)
-        _CONTEXT.on_entry = None
+        _CONTEXT.on_job = None
         _CONTEXT.job_context = None
         cpt.finish_capture()
 

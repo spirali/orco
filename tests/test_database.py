@@ -7,12 +7,12 @@ import sqlalchemy as sa
 import time
 
 
-def make_pn(entry):
-    return PlanNode(entry.builder_name, entry.key, entry.config, None, [], [])
+def make_pn(job):
+    return PlanNode(job.builder_name, job.key, job.config, None, [], [])
 
 
-def announce(rt, entries, return_plan=False):
-    plan = Plan(entries, False)
+def announce(rt, jobs, return_plan=False):
+    plan = Plan(jobs, False)
     plan._create_for_testing()
     r = rt.db.announce_jobs(plan)
     plan.fill_job_ids(rt)
@@ -29,11 +29,11 @@ def test_xdb_announce_basic(env):
     assert not announce(r, [c(x="test2"), c(x="test3")])
     assert not announce(r, [c(x="test2"), c(x="test3")])
     not announce(r, [c(x="test3")])
-    assert r.db.get_entry_state(make_key(c.name, {'x': "test1"})) == JobState.ANNOUNCED
+    assert r.db.get_active_state(make_key(c.name, {'x': "test1"})) == JobState.ANNOUNCED
 
     r.db.fix_crashed_jobs()
 
-    assert r.db.get_entry_state(make_key(c.name, {'x': "test1"})) == JobState.NONE
+    assert r.db.get_active_state(make_key(c.name, {'x': "test1"})) == JobState.NONE
     assert announce(r, [c(x="test2")])
     assert not announce(r, [c(x="test2"), c(x="test3")])
     assert not announce(r, [c(x="test2")])
@@ -48,17 +48,17 @@ def test_xdb_set_result(env):
     announce(r, [e])
 
     job_id = e._job_id
-    assert r.db.get_entry_state(e.key) == JobState.ANNOUNCED
+    assert r.db.get_active_state(e.key) == JobState.ANNOUNCED
     with pytest.raises(Exception, match="finished state"):
         r.db.set_finished(job_id, b"321", None, 1)
     r.db.set_running(job_id)
-    assert r.db.get_entry_state(e.key) == JobState.RUNNING
+    assert r.db.get_active_state(e.key) == JobState.RUNNING
     with pytest.raises(Exception, match="running state"):
         r.db.set_running(job_id)
-    assert r.db.get_entry_state(e.key) == JobState.RUNNING
+    assert r.db.get_active_state(e.key) == JobState.RUNNING
 
     r.db.set_finished(job_id, b"123", None, 1)
-    assert r.db.get_entry_state(e.key) == JobState.FINISHED
+    assert r.db.get_active_state(e.key) == JobState.FINISHED
 
 
 def test_xdb_running_window(env):

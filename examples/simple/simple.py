@@ -15,7 +15,7 @@ def make_experiment(difficulty):
     data = [do_something(x) for x in range(difficulty)]
     yield
     time.sleep(difficulty)  # Simulate computation
-    return sum(entry.value for entry in data)
+    return sum(job.value for job in data)
 
 
 orco.run_cli()

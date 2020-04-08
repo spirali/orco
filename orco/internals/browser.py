@@ -30,13 +30,13 @@ class Builders(Resource):
 api.add_resource(Builders, '/builders')
 
 
-class Entries(Resource):
+class Jobs(Resource):
 
     def get(self, builder_name):
-        return get_db().entry_summaries(builder_name)
+        return get_db().job_summaries(builder_name)
 
 
-api.add_resource(Entries, '/entries/<string:builder_name>')
+api.add_resource(Jobs, '/jobs/<string:builder_name>')
 
 
 class Blobs(Resource):

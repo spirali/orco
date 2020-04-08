@@ -131,19 +131,19 @@ def test_builder_upgrade(env):
     runtime.compute(col1(123))
     runtime.compute_many([col2(**c) for c in [{"a": 10, "b": 12}, {"a": 14, "b": 11}, {"a": 17, "b": 12}]])
 
-    assert runtime.read_entry(col2(a=10, b=12)).value == 220
+    assert runtime.read(col2(a=10, b=12)).value == 220
 
     with pytest.raises(Exception, match=".* collision.*"):
         runtime.upgrade_builder(col2, upgrade_confict)
 
-    assert runtime.read_entry(col2(a=10, b=12)).value == 220
+    assert runtime.read(col2(a=10, b=12)).value == 220
 
     runtime.upgrade_builder(col2, upgrade)
 
-    assert runtime.try_read_entry(col2(a=10, b=12)) is None
-    assert runtime.read_entry(col2(a=10, b=12, c=22)).value == 220
-    assert runtime.try_read_entry(col2(a=14, b=11)) is None
-    assert runtime.read_entry(col2(a=14, b=11, c=25)).value == 250
+    assert runtime.try_read(col2(a=10, b=12)) is None
+    assert runtime.read(col2(a=10, b=12, c=22)).value == 220
+    assert runtime.try_read(col2(a=14, b=11)) is None
+    assert runtime.read(col2(a=14, b=11, c=25)).value == 250
 
 
 def test_builder_compute(env):
@@ -157,20 +157,20 @@ def test_builder_compute(env):
 
     bld = runtime.register_builder(Builder(adder2, "col1"))
 
-    entry = runtime.compute(bld(10, 30))
-    assert entry.config["a"] == 10
-    assert entry.config["b"] == 30
-    assert entry.value == 40
-    assert entry.metadata().computation_time >= 0
+    job = runtime.compute(bld(10, 30))
+    assert job.config["a"] == 10
+    assert job.config["b"] == 30
+    assert job.value == 40
+    assert job.metadata().computation_time >= 0
     assert counter.read() == 1
 
     result = runtime.compute_many([bld(b=30, a=10)])
     assert len(result) == 1
-    entry = result[0]
-    assert entry.config["a"] == 10
-    assert entry.config["b"] == 30
-    assert entry.value == 40
-    assert entry.metadata().computation_time >= 0
+    job = result[0]
+    assert job.config["a"] == 10
+    assert job.config["b"] == 30
+    assert job.value == 40
+    assert job.metadata().computation_time >= 0
     assert counter.read() == 1
 
 
@@ -270,44 +270,44 @@ def test_builder_stored_deps(env):
     c2_2 = col2(**cc2_2)
     c2_3 = col2(**cc2_3)
 
-    assert runtime.get_entry_state(col3(10)) == JobState.FINISHED
-    assert runtime.get_entry_state(c2_2) == JobState.FINISHED
-    assert runtime.get_entry_state(c2_3) == JobState.FINISHED
-    assert runtime.get_entry_state(col1(0)) == JobState.FINISHED
-    assert runtime.get_entry_state(col1(2)) == JobState.FINISHED
+    assert runtime.get_state(col3(10)) == JobState.FINISHED
+    assert runtime.get_state(c2_2) == JobState.FINISHED
+    assert runtime.get_state(c2_3) == JobState.FINISHED
+    assert runtime.get_state(col1(0)) == JobState.FINISHED
+    assert runtime.get_state(col1(2)) == JobState.FINISHED
 
     runtime.drop(col1(6))
-    assert runtime.get_entry_state(col3(10)) == JobState.NONE
-    assert runtime.get_entry_state(c2_2) == JobState.NONE
-    assert runtime.get_entry_state(c2_3) == JobState.NONE
-    assert runtime.get_entry_state(col1(0)) == JobState.FINISHED
-    assert runtime.get_entry_state(col1(6)) == JobState.NONE
-    assert runtime.get_entry_state(col1(2)) == JobState.FINISHED
+    assert runtime.get_state(col3(10)) == JobState.NONE
+    assert runtime.get_state(c2_2) == JobState.NONE
+    assert runtime.get_state(c2_3) == JobState.NONE
+    assert runtime.get_state(col1(0)) == JobState.FINISHED
+    assert runtime.get_state(col1(6)) == JobState.NONE
+    assert runtime.get_state(col1(2)) == JobState.FINISHED
 
     runtime.drop(col1(0))
-    assert runtime.get_entry_state(col3(10)) == JobState.NONE
-    assert runtime.get_entry_state(c2_2) == JobState.NONE
-    assert runtime.get_entry_state(c2_3) == JobState.NONE
-    assert runtime.get_entry_state(col1(0)) == JobState.NONE
-    assert runtime.get_entry_state(col1(6)) == JobState.NONE
-    assert runtime.get_entry_state(col1(2)) == JobState.FINISHED
+    assert runtime.get_state(col3(10)) == JobState.NONE
+    assert runtime.get_state(c2_2) == JobState.NONE
+    assert runtime.get_state(c2_3) == JobState.NONE
+    assert runtime.get_state(col1(0)) == JobState.NONE
+    assert runtime.get_state(col1(6)) == JobState.NONE
+    assert runtime.get_state(col1(2)) == JobState.FINISHED
 
     assert runtime.compute(col3(10)).value == 380
 
-    assert runtime.get_entry_state(col3(10)) == JobState.FINISHED
-    assert runtime.get_entry_state(c2_2) == JobState.FINISHED
-    assert runtime.get_entry_state(c2_3) == JobState.FINISHED
-    assert runtime.get_entry_state(col1(0)) == JobState.FINISHED
-    assert runtime.get_entry_state(col1(2)) == JobState.FINISHED
+    assert runtime.get_state(col3(10)) == JobState.FINISHED
+    assert runtime.get_state(c2_2) == JobState.FINISHED
+    assert runtime.get_state(c2_3) == JobState.FINISHED
+    assert runtime.get_state(col1(0)) == JobState.FINISHED
+    assert runtime.get_state(col1(2)) == JobState.FINISHED
 
     runtime.drop(col1(2))
 
-    assert runtime.get_entry_state(col3(10)) == JobState.NONE
-    assert runtime.get_entry_state(c2_2) == JobState.NONE
-    assert runtime.get_entry_state(c2_3) == JobState.FINISHED
-    assert runtime.get_entry_state(col1(0)) == JobState.FINISHED
-    assert runtime.get_entry_state(col1(6)) == JobState.FINISHED
-    assert runtime.get_entry_state(col1(2)) == JobState.NONE
+    assert runtime.get_state(col3(10)) == JobState.NONE
+    assert runtime.get_state(c2_2) == JobState.NONE
+    assert runtime.get_state(c2_3) == JobState.FINISHED
+    assert runtime.get_state(col1(0)) == JobState.FINISHED
+    assert runtime.get_state(col1(6)) == JobState.FINISHED
+    assert runtime.get_state(col1(2)) == JobState.NONE
 
     runtime.drop(col1(2))
 
@@ -326,21 +326,21 @@ def test_builder_drop(env):
 
     runtime.compute(col2(1))
     runtime.drop_builder("col1")
-    assert runtime.get_entry_state(col1(1)) == JobState.NONE
-    assert runtime.get_entry_state(col2(1)) == JobState.NONE
-    assert runtime.get_entry_state(col2(2)) == JobState.NONE
+    assert runtime.get_state(col1(1)) == JobState.NONE
+    assert runtime.get_state(col2(1)) == JobState.NONE
+    assert runtime.get_state(col2(2)) == JobState.NONE
 
     runtime.compute(col2(1))
     runtime.drop_builder("col2")
-    assert runtime.get_entry_state(col1(1)) == JobState.FINISHED
-    assert runtime.get_entry_state(col2(1)) == JobState.NONE
-    assert runtime.get_entry_state(col2(2)) == JobState.NONE
+    assert runtime.get_state(col1(1)) == JobState.FINISHED
+    assert runtime.get_state(col2(1)) == JobState.NONE
+    assert runtime.get_state(col2(2)) == JobState.NONE
 
     runtime.compute(col2(1))
     runtime.drop_builder("col2", drop_inputs=True)
-    assert runtime.get_entry_state(col1(1)) == JobState.NONE
-    assert runtime.get_entry_state(col2(1)) == JobState.NONE
-    assert runtime.get_entry_state(col2(2)) == JobState.NONE
+    assert runtime.get_state(col1(1)) == JobState.NONE
+    assert runtime.get_state(col2(1)) == JobState.NONE
+    assert runtime.get_state(col2(2)) == JobState.NONE
 
 
 def test_builder_remove_inputs(env):
@@ -365,10 +365,10 @@ def test_builder_remove_inputs(env):
     runtime.compute(col4(1))
     runtime.compute(col3(1))
     runtime.drop(col2(1), drop_inputs=True)
-    assert runtime.get_entry_state(col1(1)) == JobState.NONE
-    assert runtime.get_entry_state(col2(1)) == JobState.NONE
-    assert runtime.get_entry_state(col3(1)) == JobState.NONE
-    assert runtime.get_entry_state(col4(1)) == JobState.NONE
+    assert runtime.get_state(col1(1)) == JobState.NONE
+    assert runtime.get_state(col2(1)) == JobState.NONE
+    assert runtime.get_state(col3(1)) == JobState.NONE
+    assert runtime.get_state(col4(1)) == JobState.NONE
 
 
 def test_builder_computed(env):
@@ -380,16 +380,16 @@ def test_builder_computed(env):
     builder = runtime.register_builder(Builder(build_fn, "col1"))
     tasks = [builder(b) for b in [2, 3, 4, 0, 5]]
     assert len(tasks) == 5
-    assert runtime.read_entries(tasks) == [None] * len(tasks)
-    assert runtime.read_entries(tasks, drop_missing=True) == []
+    assert runtime.read_many(tasks) == [None] * len(tasks)
+    assert runtime.read_many(tasks, drop_missing=True) == []
 
     runtime.compute_many(tasks)
-    assert [e.value for e in runtime.read_entries(tasks)] == [20, 30, 40, 0, 50]
-    assert [e.value if e else "missing" for e in runtime.read_entries(tasks + [builder(123)])
+    assert [e.value for e in runtime.read_many(tasks)] == [20, 30, 40, 0, 50]
+    assert [e.value if e else "missing" for e in runtime.read_many(tasks + [builder(123)])
             ] == [20, 30, 40, 0, 50, "missing"]
     assert [
                e.value if e else "missing"
-               for e in runtime.read_entries(tasks + [builder(123)], drop_missing=True)
+               for e in runtime.read_many(tasks + [builder(123)], drop_missing=True)
            ] == [20, 30, 40, 0, 50]
 
 
@@ -483,9 +483,9 @@ def test_builder_stdout(env):
     with pytest.raises(Exception, match="MyError"):
         runtime.compute(bb(True))
 
-    entries = runtime.read_entry_all_states(bb(True))
-    assert len(entries) == 1
-    text = entries[0].get_text("!output")
+    jobs = runtime.read_jobs(bb(True))
+    assert len(jobs) == 1
+    text = jobs[0].get_text("!output")
     assert "ABC" in text
     assert "spam" in text
     assert "XYZ" in text

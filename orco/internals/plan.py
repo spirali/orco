@@ -2,7 +2,6 @@ from .context import _CONTEXT
 from .database import JobState
 import collections
 from .utils import format_time
-from ..entry import EntryKey
 
 
 class PlanNode:
@@ -18,14 +17,11 @@ class PlanNode:
         self.existing_dep_ids = existing_dep_ids
         self.job_id = None
 
-    def make_entry_key(self):
-        return EntryKey(self.builder_name, self.key)
-
 
 class Plan:
 
-    def __init__(self, leaf_entries, continue_on_error):
-        self.leaf_entries = leaf_entries
+    def __init__(self, leaf_jobs, continue_on_error):
+        self.leaf_jobs = leaf_jobs
         self.existing_jobs = {}
         self.continue_on_error = continue_on_error
         if continue_on_error:
@@ -47,14 +43,14 @@ class Plan:
 
     def _create_for_testing(self):
         self._nodes = {}
-        for entry in self.leaf_entries:
-            plan_node = PlanNode(entry.builder_name,
-                                 entry.key,
-                                 entry.config,
+        for job in self.leaf_jobs:
+            plan_node = PlanNode(job.builder_name,
+                                 job.key,
+                                 job.config,
                                  "XXX",
                                  [],
                                  [])
-            self._nodes[entry.make_entry_key()] = plan_node
+            self._nodes[job.key] = plan_node
 
     def create(self, runtime):
         conflicts = set()
@@ -64,40 +60,40 @@ class Plan:
         existing_jobs = self.existing_jobs
         error_keys = self.error_keys
 
-        assert not hasattr(_CONTEXT, "on_entry") or _CONTEXT.on_entry is None
+        assert not hasattr(_CONTEXT, "on_job") or _CONTEXT.on_job is None
 
-        def traverse(entry):
-            entry_key = entry.make_entry_key()
-            job_id = existing_jobs.get(entry_key)
+        def traverse(job):
+            key = job.key
+            job_id = existing_jobs.get(key)
             if job_id:
                 return job_id
-            if entry_key in conflicts or (error_keys and entry_key in error_keys):
+            if key in conflicts or (error_keys and key in error_keys):
                 return None
-            job_node = nodes.get(entry_key)
-            if job_node is not None:
-                return job_node
-            builder = runtime.get_builder(entry.builder_name)
-            job_id, state = runtime.db.get_entry_job_id_and_state(entry.key)
+            plan_node = nodes.get(key)
+            if plan_node is not None:
+                return plan_node
+            builder = runtime.get_builder(job.builder_name)
+            job_id, state = runtime.db.get_active_job_id_and_state(job.key)
             if state == JobState.FINISHED:
                 assert isinstance(job_id, int)
-                existing_jobs[entry_key] = job_id
+                existing_jobs[key] = job_id
                 return job_id
             if state == JobState.ANNOUNCED or state == JobState.RUNNING:
-                conflicts.add(entry_key)
+                conflicts.add(key)
                 return None
             assert job_id is None
 
             if builder.fn is None:
                 raise Exception(
                     "Computation depends on a missing configuration '{}' in a fixed builder"
-                        .format(entry))
+                        .format(job))
 
             deps = []
             try:
-                _CONTEXT.on_entry = deps.append
-                builder.run_with_config(entry.config, only_deps=True)
+                _CONTEXT.on_job = deps.append
+                builder.run_with_config(job.config, only_deps=True)
             finally:
-                _CONTEXT.on_entry = None
+                _CONTEXT.on_job = None
             unfinished_inputs = []
             existing_ids = []
             for e in deps:
@@ -108,32 +104,32 @@ class Plan:
                     existing_ids.append(j)
                     continue
                 unfinished_inputs.append(j)
-            plan_node = PlanNode(entry.builder_name,
-                                 entry.key,
-                                 entry.config,
-                                 builder._create_job_setup(entry.config),
+            plan_node = PlanNode(job.builder_name,
+                                 job.key,
+                                 job.config,
+                                 builder._create_job_setup(job.config),
                                  unfinished_inputs,
                                  existing_ids)
-            nodes[entry_key] = plan_node
+            nodes[key] = plan_node
             return plan_node
 
-        for entry in self.leaf_entries:
-            traverse(entry)
+        for job in self.leaf_jobs:
+            traverse(job)
 
     def fill_job_ids(self, runtime):
-        for entry in self.leaf_entries:
-            key = entry.make_entry_key()
+        for job in self.leaf_jobs:
+            key = job.key
             node = self._nodes.get(key)
             if node:
                 job_id = node.job_id
             else:
                 job_id = self.existing_jobs.get(key)
             if job_id:
-                entry.set_job_id(job_id, runtime.db)
+                job.set_job_id(job_id, runtime.db)
 
     def print_report(self, runtime):
         jobs_per_builder = collections.Counter([pn.builder_name for pn in self.nodes])
-        print("Scheduled jobs   |     # | Expected comp. time (per entry)\n"
+        print("Scheduled jobs   |     # | Expected comp. time (per job)\n"
               "-----------------+-------+--------------------------------")
         for col, count in sorted(jobs_per_builder.items()):
             stats = runtime.db.get_run_stats(col)

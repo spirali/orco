@@ -3,7 +3,7 @@ import functools
 import inspect
 import pickle
 
-from .entry import Entry
+from .job import Job
 from .internals.context import _CONTEXT
 from .internals.key import make_key
 from .internals.utils import CloudWrapper
@@ -70,24 +70,24 @@ class Builder:
         """
         Create an unresolved Entry for this builder from function arguments.
 
-        Calls `_CONTEXT.on_entry` to register/check dependencies etc.
+        Calls `_CONTEXT.on_job` to register/check dependencies etc.
         """
         config = self._create_config_from_args(args, kwargs)
-        return self.entry_from_config(config)
+        return self.job_from_config(config)
 
-    def entry_from_config(self, config):
+    def job_from_config(self, config):
         """
         Create an unresolved Entry for this builder from config dict.
 
-        Calls `_CONTEXT.on_entry` to register/check dependencies etc.
+        Calls `_CONTEXT.on_job` to register/check dependencies etc.
         """
-        entry = Entry(self.name, make_key(self.name, config), config)
-        if not hasattr(_CONTEXT, "on_entry"):
-            return entry
-        on_entry = _CONTEXT.on_entry
-        if on_entry:
-            on_entry(entry)
-        return entry
+        job = Job(self.name, make_key(self.name, config), config)
+        if not hasattr(_CONTEXT, "on_job"):
+            return job
+        on_job = _CONTEXT.on_job
+        if on_job:
+            on_job(job)
+        return job
 
     def run_with_config(self, config, only_deps=False, after_deps=None):
         """

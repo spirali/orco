@@ -28,7 +28,7 @@ def test_rest_builders(env):
         assert rr["n_finished"] == 2
         assert (1024 * 1024) < rr["size"] < (1024 * 1024 + 2000)
 
-        r = client.get("rest/entries/hello")
+        r = client.get("rest/jobs/hello")
         rr = r.get_json()
         rr.sort(key=lambda x: x["id"])
         job_ids = []

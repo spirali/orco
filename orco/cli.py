@@ -17,9 +17,9 @@ def _command_compute(runtime, args):
     cfg = build_config(cfg)
     print(cfg)
     if isinstance(cfg, list):
-        tasks = [builder.entry_from_config(c) for c in cfg]
+        tasks = [builder.job_from_config(c) for c in cfg]
     elif isinstance(cfg, dict):
-        tasks = [builder.entry_from_config(cfg)]
+        tasks = [builder.job_from_config(cfg)]
     else:
         raise Exception("Expanded config has type {!r}, list (many tasks) or dict (one task) expected.".format(type(cfg)))
     res = runtime.compute_many(tasks)

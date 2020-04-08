@@ -7,9 +7,9 @@ def export_builder(runtime, builder_name, missing=pd.NA, arg_prefix="arg."):
     """
 
     cols = {"comp_time": []}
-    for i, entry in enumerate(runtime.db.export_builder(builder_name)):
-        cols["comp_time"].append(entry.computation_time)
-        for k, v in entry.config.items():
+    for i, job in enumerate(runtime.db.export_builder(builder_name)):
+        cols["comp_time"].append(job.computation_time)
+        for k, v in job.config.items():
             n = arg_prefix + k
             if n not in cols:
                 cols[n] = [missing] * i

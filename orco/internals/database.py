@@ -4,7 +4,7 @@ import sqlalchemy as sa
 import enum
 import base64
 
-from orco.entry import EntryKey, EntryMetadata, Entry
+from orco.job import JobMetadata, Job
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -98,22 +98,34 @@ class Database:
     def init(self):
         self.metadata.create_all(self.engine)
 
-    def read_entry_all(self, entry):
+    def read_jobs(self, key, builder=None):
         c = self.jobs.c
         result = []
-        for r in self.conn.execute(sa.select([c.id, c.config]).where(c.key == entry.key)):
-            entry = Entry(entry.builder_name, entry.key, r.config)
-            entry.set_job_id(r.id, self)
-            result.append(entry)
+        for r in self.conn.execute(sa.select([c.id, c.builder, c.config]).where(c.key == key)):
+            if builder is None:
+                builder = r.builder
+            else:
+                assert builder == r.builder
+            job = Job(builder, key, r.config)
+            job.set_job_id(r.id, self)
+            result.append(job)
         return result
 
-    def get_entry_state(self, key):
+    def get_active_state(self, key):
         js = self.jobs
         r = self.conn.execute(sa.select([js.c.state]).where(sa.and_(js.c.key == key, js.c.state.in_(ACTIVE_STATES)))).fetchone()
         if r is None:
             return JobState.NONE
         else:
             return r[0]
+
+    def get_active_job_id_and_state(self, key):
+        c = self.jobs.c
+        r = self.conn.execute(sa.select([c.id, c.state]).where(sa.and_(c.key == key, c.state.in_(ACTIVE_STATES)))).fetchone()
+        if r is None:
+            return None, JobState.NONE
+        else:
+            return r
 
     def _remove_jobs(self, cond):
         self.conn.execute(sa.delete(self.jobs).where(cond))
@@ -136,11 +148,11 @@ class Database:
         job = self.conn.execute(sa.select([c.config, c.job_setup]).where(c.id == job_id)).fetchone()
 
         d = self.job_deps.c
-        query = sa.select([c.id, c.builder, c.key])\
+        query = sa.select([c.id, c.key])\
             .where(c.id.in_(sa.select([d.source_id]).where(d.target_id == job_id)))
 
         keys_to_job_ids = {
-            EntryKey(r.builder, r.key): r.id
+            r.key: r.id
             for r in self.conn.execute(query)
         }
 
@@ -178,14 +190,6 @@ class Database:
                 self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name="!message", data=message.encode(), mime=consts.MIME_TEXT))
             if output:
                 self.insert_blob(job_id, "!output", output, consts.MIME_TEXT, None)
-
-    def get_entry_job_id_and_state(self, key):
-        c = self.jobs.c
-        r = self.conn.execute(sa.select([c.id, c.state]).where(sa.and_(c.key == key, c.state.in_(ACTIVE_STATES)))).fetchone()
-        if r is None:
-            return None, JobState.NONE
-        else:
-            return r
 
     def get_blob(self, job_id, name):
         c = self.blobs.c
@@ -225,7 +229,7 @@ class Database:
         conn = self.conn
         announces = []
         with conn.begin() as transaction:
-            # Try to announce entries
+            # Try to announce new jobs
             for pn in plan.nodes:
                 r = conn.execute(self.jobs.insert().values(
                     state=JobState.ANNOUNCED,
@@ -267,7 +271,7 @@ class Database:
         r = self.conn.execute(sa.select([c.created_date, c.finished_date, c.computation_time, c.job_setup]).where(c.id == job_id)).fetchone()
         if r is None:
             return None
-        return EntryMetadata(
+        return JobMetadata(
             created_date=r.created_date,
             finished_date=r.finished_date,
             computation_time=r.computation_time,
@@ -307,7 +311,7 @@ class Database:
             return d
 
         result = {
-            create_counter(row.builder, row.size)
+            row.builder: create_counter(row.builder, row.size)
             for row in self.conn.execute(query)
         }
 
@@ -325,7 +329,7 @@ class Database:
                 result[builder.name] = create_counter(builder.name, 0)
         return sorted(result.values(), key=lambda r: r["name"])
 
-    def entry_summaries(self, builder_name):
+    def job_summaries(self, builder_name):
         c = self.jobs.c
         query = sa.select([c.id, c.key, c.state, c.config, c.created_date, c.finished_date, c.computation_time, sa.func.sum(sa.func.length(c.config)).label("size")])\
                 .select_from(self.jobs.join(self.blobs, isouter=True)).where(c.builder == builder_name).group_by(c.id)

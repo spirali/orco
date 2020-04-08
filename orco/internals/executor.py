@@ -1,15 +1,11 @@
 import logging
 import platform
-import threading
-import time
 from concurrent.futures import wait, FIRST_COMPLETED
 from datetime import datetime
 
 import tqdm
 
-from orco.entry import EntryKey
 from orco.internals.runner import LocalProcessRunner, JobFailure
-from orco.report import Report
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +116,7 @@ class Executor:
                         pn = nodes_by_id[result.job_id]
                         message = result.message()
                         if plan.continue_on_error:
-                            plan.error_keys.append(pn.make_entry_key())
+                            plan.error_keys.append(pn.key)
                         else:
                             raise JobFailedException("{} ({}/{})".format(
                                 message, pn.builder_name, repr(pn.config)))
