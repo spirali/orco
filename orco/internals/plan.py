@@ -81,6 +81,9 @@ class Plan:
             elif state == JobState.ANNOUNCED or state == JobState.RUNNING:
                 conflicts.add(key)
                 return None
+            elif state == JobState.FREED:
+                raise Exception("Computation depends on a job in freed state ({}). "
+                                "You need to drop or archive the job to run the computation".format(job))
             assert job_id is None
 
             if builder.fn is None:

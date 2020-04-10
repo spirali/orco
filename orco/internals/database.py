@@ -17,7 +17,8 @@ STATE_COUNTERS = {
     JobState.ERROR: "n_failed",
     JobState.RUNNING: "n_in_progress",
     JobState.ANNOUNCED: "n_in_progress",
-    JobState.ARCHIVED: "n_archived",
+    JobState.A_FINISHED: "n_archived",
+    JobState.A_FREED: "n_freed",
     JobState.FREED: "n_freed",
 }
 
@@ -412,33 +413,33 @@ class Database:
             base_query = sa.select([c.id]).where(c.builder == builder_name)
             self.conn.execute(self.jobs.delete().where(c.id.in_(self._closure(base_query, drop_inputs))))
 
-    def _downstream(self, base_query, state=None):
+    def _downstream(self, base_query, states=None):
         c = self.job_deps.c
         q = base_query.cte("down_rec", recursive=True)
         query = sa.select([c.target_id])
-        if state is None:
+        if states is None:
             union = query.select_from(self.job_deps).where(q.c.id == c.source_id)
         else:
             union = query.select_from(q.join(self.job_deps, q.c.id == c.source_id).join(self.jobs, self.jobs.c.id == c.target_id))\
-                        .where(sa.and_(self.jobs.c.state == state))
+                        .where(sa.and_(self.jobs.c.state.in_(states)))
         return sa.select([q.union(union)])
 
-    def _upstream(self, base_query, state=None):
+    def _upstream(self, base_query, states=None):
         c = self.job_deps.c
         q = base_query.cte("up_rec", recursive=True)
         query = sa.select([c.source_id])
-        if state is None:
+        if states is None:
             union = query.select_from(self.job_deps).where(q.c.id == c.target_id)
         else:
             union = query.select_from(q.join(self.job_deps, q.c.id == c.target_id).join(self.jobs, self.jobs.c.id == c.source_id))\
-                        .where(sa.and_(self.jobs.c.state == state))
+                        .where(sa.and_(self.jobs.c.state.in_(states)))
         return sa.select([q.union(union)])
         #  return sa.select([q.union(sa.select([c.source_id]).select_from(self.job_deps).where(q.c.id == c.target_id))])
 
-    def _closure(self, base_query, include_inputs, state=None):
+    def _closure(self, base_query, include_inputs, states=None):
         if include_inputs:
-            base_query = self._upstream(base_query, state)
-        return self._downstream(base_query, state)
+            base_query = self._upstream(base_query, states)
+        return self._downstream(base_query, states)
 
     def drop_jobs_by_key(self, keys, drop_inputs):
         c = self.jobs.c
@@ -449,9 +450,38 @@ class Database:
         c = self.jobs.c
         with self.conn.begin():
             base_query = sa.select([c.id]).where(sa.and_(c.key.in_(keys), c.state == JobState.FINISHED))
-            job_ids = self._closure(base_query, archive_inputs, JobState.FINISHED)
+            job_ids = self._closure(base_query, archive_inputs, [JobState.FINISHED, JobState.FREED])
             self.conn.execute(self.announcements.delete().where(self.announcements.c.job_id.in_(job_ids)))
-            self.conn.execute(self.jobs.update().where(c.id.in_(job_ids)).values(state=JobState.ARCHIVED))
+
+            state_enum = sa.Enum(JobState)
+            self.conn.execute(self.jobs.update().where(c.id.in_(job_ids)).values(
+                state=sa.case([(c.state == JobState.FINISHED, sa.literal(JobState.A_FINISHED, state_enum))],
+                              else_=sa.literal(JobState.A_FREED, state_enum)
+            )))
+
+            #self.conn.execute(self.jobs.update().where(sa.and_(c.id.in_(job_ids), c.state == JobState.FINISHED)).values(
+            #    state=JobState.A_FINISHED
+            #))
+
+    def free_jobs_by_key(self, keys):
+        #self._debug_jobs()
+        c = self.jobs.c
+        with self.conn.begin():
+            query = sa.select([c.id]).where(sa.and_(c.key.in_(keys), c.state == JobState.FINISHED))
+            self.conn.execute(self.blobs.delete().where(self.blobs.c.job_id.in_(query)))
+            self.conn.execute(self.jobs.update().where(c.id.in_(query)).values(
+                state=JobState.FREED
+            ))
+        #self._debug_jobs()
+
+    def _debug_jobs(self):
+        print("=== JOBS ===")
+        for r in self.conn.execute(sa.select([self.jobs])):
+            print("{} ({}) {}".format(r.id, r.key[:4], r.state))
+        print("=== BLOBS ===")
+        for r in self.conn.execute(sa.select([self.blobs])):
+            print("{}: {}".format(r.job_id, r.name))
+        print("============")
 
     def export_builder(self, builder_name):
         c = self.jobs.c

@@ -176,6 +176,14 @@ class Runtime:
             _check_unattached_job(job, False)
         self.db.archive_jobs_by_key([job.key for job in jobs], archive_inputs)
 
+    def free(self, job):
+        self.free_many([job])
+
+    def free_many(self, jobs):
+        for job in jobs:
+            _check_unattached_job(job, False)
+        self.db.free_jobs_by_key([job.key for job in jobs])
+
     def insert(self, job, value):
         r = self.db.create_job_with_value(job.builder_name, job.key, job.config, pickle.dumps(value), make_repr(value))
         if not r:

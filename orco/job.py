@@ -14,8 +14,9 @@ class JobState(enum.Enum):
     RUNNING = "r"
     FINISHED = "f"
     ERROR = "e"
-    ARCHIVED = "v"
     FREED = "d"
+    A_FINISHED = "F"  # ARCHIVED ITEM
+    A_FREED = "D"     # ARCHIVED ITEM
 
 
 ACTIVE_STATES = (JobState.ANNOUNCED, JobState.RUNNING, JobState.FINISHED, JobState.FREED)
@@ -136,4 +137,4 @@ class Job:
             raise Exception("Job is not attached")
 
     def __repr__(self):
-        return "<Entry {}/{}>".format(self.builder_name, self.key)
+        return "<Job {}/{}>".format(self.builder_name, self.config)
