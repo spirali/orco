@@ -31,6 +31,8 @@ def state_demo(x):
     if x > 0:
         state_demo(x - 1)
     yield
+    if x == 5:
+        raise Exception("This is an error")
     attach_object("data1", "Hello!")
 
 rt = Runtime(url)
@@ -62,7 +64,7 @@ rt.insert(c(cfg="e1"), "ABC")
 rt.insert(c(cfg="e2"), "A" * (7 * 1024 * 1024 + 200000))
 
 c = Builder(None, name="estee")
-rt.register_builder(c)
+c = rt.register_builder(c)
 graphs = ["crossv", "fastcrossv", "gridcat"]
 models = ["simple", "maxmin"]
 scheduler = [
@@ -79,9 +81,12 @@ for g, m, s in itertools.product(graphs, models, scheduler):
 
 c = rt.register_builder(Builder(None, name="builder_long_name"))
 
-rt.compute(state_demo(4))
+try:
+    rt.compute(state_demo(5))
+except:
+    pass
 rt.free_many([state_demo(2), state_demo(3)])
-rt.archive([state_demo(3)])
+rt.archive(state_demo(3))
 
 print("SERVE")
 print("=" * 80)

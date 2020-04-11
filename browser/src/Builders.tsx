@@ -69,6 +69,16 @@ class Builders extends React.Component<Props, State> {
             maxWidth: 100,
         },
         {
+            Header: "Archived",
+            accessor: "n_archived",
+            maxWidth: 100,
+        },
+        {
+            Header: "Freed",
+            accessor: "n_freed",
+            maxWidth: 100,
+        },
+        {
             id: "Size",
             Header: "Total Size",
             accessor: this._formatSize,

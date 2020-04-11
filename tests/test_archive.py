@@ -80,6 +80,25 @@ def test_archive(env):
     assert {JobState.A_FINISHED, JobState.A_FREED} == set(j.state for j in jobs)
 
 
+def test_archive_recusive(env):
+    @builder()
+    def state_demo(x):
+        if x > 0:
+            state_demo(x - 1)
+        yield
+        attach_object("data1", "Hello!")
+
+    rt = env.test_runtime()
+    rt.compute(state_demo(4))
+    rt.free_many([state_demo(2), state_demo(3)])
+    rt.archive(state_demo(3))
+
+    jobs = rt.read_jobs(state_demo(4))
+    assert len(jobs) == 1
+    assert jobs[0].state == JobState.A_FINISHED
+
+
+
 def test_free(env):
 
     @builder()

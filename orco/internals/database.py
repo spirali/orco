@@ -449,7 +449,7 @@ class Database:
     def archive_jobs_by_key(self, keys, archive_inputs):
         c = self.jobs.c
         with self.conn.begin():
-            base_query = sa.select([c.id]).where(sa.and_(c.key.in_(keys), c.state == JobState.FINISHED))
+            base_query = sa.select([c.id]).where(sa.and_(c.key.in_(keys), c.state.in_([JobState.FINISHED, JobState.FREED])))
             job_ids = self._closure(base_query, archive_inputs, [JobState.FINISHED, JobState.FREED])
             self.conn.execute(self.announcements.delete().where(self.announcements.c.job_id.in_(job_ids)))
 

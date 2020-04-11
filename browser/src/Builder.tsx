@@ -1,10 +1,11 @@
 import React from 'react';
 import ReactTable, {CellInfo, Column} from 'react-table';
 import {fetchJsonFromServer} from './service';
-import {FaHourglassEnd, FaCheck, FaTimes, FaArchive, FaTrashAlt} from 'react-icons/fa';
+import {FaHourglassEnd, FaCheck, FaTimes, FaTrashAlt, FaFolderMinus, FaFolder} from 'react-icons/fa';
 import {formatSize, formatTime} from './utils';
 import {ErrorContainer} from './Error';
 import {JobDetail} from "./JobDetail";
+import {Button, ButtonGroup} from "reactstrap";
 
 interface Props {
     match: any,
@@ -16,19 +17,41 @@ interface JobSummary {
     size: number,
     comp_time: number,
     config: any,
+    state: string,
 }
 
 interface State {
     data: JobSummary[],
     columns: Column[],
     loading: boolean,
+    state_filter: string | null,
+}
+
+function state_icon(name: string) {
+    if (name === "f") {
+        return <span style={{color: "green"}}><FaCheck/></span>
+    } else if (name === "a") {
+        return <span style={{color: "orange"}}><FaHourglassEnd/></span>
+    } else if (name === "r") {
+        return <span style={{color: "green"}}><FaHourglassEnd/></span>
+    } else if (name === "e") {
+        return <span style={{color: "red"}}><FaTimes/></span>
+    } else if (name === "F") {
+        return <span style={{color: "green"}}><FaFolder/></span>
+    } else if (name === "d") {
+        return <span style={{color: "gray"}}><FaTrashAlt/></span>
+    } else if (name === "D") {
+        return <span style={{color: "gray"}}><FaFolderMinus/></span>
+    } else {
+        return <span>?</span>
+    }
 }
 
 class Builder extends React.Component<Props, State> {
 
     constructor(props : Props) {
         super(props);
-        this.state = {data: [], columns: [], loading: true}
+        this.state = {data: [], columns: [], loading: true, state_filter: null}
     }
 
     _cellConfigItem = (cellInfo : CellInfo) => {
@@ -43,19 +66,7 @@ class Builder extends React.Component<Props, State> {
 
     _cellStateRepr = (cellInfo: CellInfo) => {
         const v = cellInfo.value;
-        if (v === "f") {
-            return <span style={{color: "green"}}><FaCheck/></span>
-        } else if (v === "r" || v === "a") {
-            return <span style={{color: "orange"}}><FaHourglassEnd/></span>
-        } else if (v === "e") {
-            return <span style={{color: "red"}}><FaTimes/></span>
-        } else if (v === "a") {
-            return <span style={{color: "blue"}}><FaArchive/></span>
-        } else if (v === "d") {
-            return <span style={{color: "brown"}}><FaTrashAlt/></span>
-        } else {
-            return <span>?</span>
-        }
+        return state_icon(v);
     };
 
     _formatSize = (job : JobSummary) => formatSize(job.size);
@@ -162,12 +173,31 @@ class Builder extends React.Component<Props, State> {
         );
     };
 
+    setFilter = (name: string | null) => {
+        this.setState({...this.state, state_filter: name});
+    }
+
     render() {
+        let data = this.state.data;
+        let state_filter = this.state.state_filter;
+        if (state_filter !== null) {
+            data = data.filter(r => r.state === state_filter);
+        }
         return (
             <div>
                 <h1>Builder '{this.name}'</h1>
+                <ButtonGroup>
+                    <Button outline onClick={() => this.setFilter(null)} active={this.state.state_filter === null}>All states</Button>
+                    <Button outline onClick={() => this.setFilter("f")} active={this.state.state_filter === "f"}>{state_icon('f')} Finished</Button>
+                    <Button outline onClick={() => this.setFilter("e")} active={this.state.state_filter === "e"}>{state_icon('e')} Failed</Button>
+                    <Button outline onClick={() => this.setFilter("r")} active={this.state.state_filter === "r"}>{state_icon('r')} Running</Button>
+                    <Button outline onClick={() => this.setFilter("a")} active={this.state.state_filter === "a"}>{state_icon('a')} Announced</Button>
+                    <Button outline onClick={() => this.setFilter("F")} active={this.state.state_filter === "F"}>{state_icon('F')} Archived</Button>
+                    <Button outline onClick={() => this.setFilter("d")} active={this.state.state_filter === "d"}>{state_icon('d')} Freed</Button>
+                    <Button outline onClick={() => this.setFilter("D")} active={this.state.state_filter === "D"}>{state_icon('D')} Freed archived</Button>
+                </ButtonGroup>
                 <ReactTable
-                    data={this.state.data}
+                    data={data}
                     loading={this.state.loading}
                     columns={this.state.columns}
                     SubComponent={this.renderSubcomponent} />
