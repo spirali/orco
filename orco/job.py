@@ -1,11 +1,11 @@
 import collections
-
-from orco.consts import MIME_PICKLE, MIME_TEXT
-import pickle
-import tarfile
+import enum
 import io
 import os
-import enum
+import pickle
+import tarfile
+
+from orco.consts import MIME_PICKLE, MIME_TEXT
 
 
 class JobState(enum.Enum):
@@ -16,12 +16,19 @@ class JobState(enum.Enum):
     ERROR = "e"
     FREED = "d"
     A_FINISHED = "F"  # ARCHIVED ITEM
-    A_FREED = "D"     # ARCHIVED ITEM
+    A_FREED = "D"  # ARCHIVED ITEM
 
 
-ACTIVE_STATES = (JobState.ANNOUNCED, JobState.RUNNING, JobState.FINISHED, JobState.FREED)
+ACTIVE_STATES = (
+    JobState.ANNOUNCED,
+    JobState.RUNNING,
+    JobState.FINISHED,
+    JobState.FREED,
+)
 
-JobMetadata = collections.namedtuple("EntryMetadata", ["created_date", "computation_time", "finished_date", "job_setup"])
+JobMetadata = collections.namedtuple(
+    "EntryMetadata", ["created_date", "computation_time", "finished_date", "job_setup"]
+)
 
 
 class _NoValue:
@@ -92,7 +99,9 @@ class Job:
     def get_object(self, name, default=_NO_VALUE):
         value, mime = self.get_blob(name, default)
         if mime != MIME_PICKLE:
-            raise Exception("Blob exists, but is not pickled object, but {}".format(mime))
+            raise Exception(
+                "Blob exists, but is not pickled object, but {}".format(mime)
+            )
         return pickle.loads(value)
 
     def get_text(self, name):

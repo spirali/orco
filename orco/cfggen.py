@@ -68,7 +68,7 @@ OPS_SWITCH = {
     "$range": _resolve_range,
     "$+": _resolve_concat,
     "$product": _resolve_product,
-    "$zip": _resolve_zip
+    "$zip": _resolve_zip,
 }
 
 

@@ -1,6 +1,7 @@
-from orco import Runtime, Builder, builder, JobFailedException, consts
-import time
 import threading
+import time
+
+from orco import Runtime, Builder, builder, JobFailedException, consts
 
 
 def test_rest_builders(env):
@@ -39,8 +40,8 @@ def test_rest_builders(env):
             del item["size"]
             job_ids.append(item.pop("id"))
         assert len(rr) == 2
-        assert rr[1]["config"] == {'e': "e2"}
-        assert rr[0]["config"] == {'x': 1, 'y': [1, 2, 3]}
+        assert rr[1]["config"] == {"e": "e2"}
+        assert rr[0]["config"] == {"x": 1, "y": [1, 2, 3]}
 
         r = client.get("rest/blobs/" + str(job_ids[1])).get_json()
         assert len(r) == 1
@@ -51,11 +52,11 @@ def test_rest_builders(env):
 
 
 def test_rest_status(env):
-
     def compute1(url):
         @builder()
         def ff(x=0):
             time.sleep(0.5)
+
         new_rt = Runtime(url)
         try:
             new_rt.compute(ff(0))
@@ -66,7 +67,6 @@ def test_rest_status(env):
         pass
 
     def compute2(url):
-
         @builder()
         def aa(x=1):
             return x
@@ -136,6 +136,7 @@ def test_rest_status(env):
             "n_failed": 0,
         }
         assert len(r["errors"]) == 1
+
 
 """
 def test_rest_executors(env):

@@ -1,10 +1,11 @@
 import argparse
-import json5
 import sys
 
+import json5
+
 from .builder import Builder
-from .runtime import Runtime
 from .cfggen import build_config
+from .runtime import Runtime
 
 
 def _command_serve(runtime, args):
@@ -21,7 +22,11 @@ def _command_compute(runtime, args):
     elif isinstance(cfg, dict):
         tasks = [builder.job_from_config(cfg)]
     else:
-        raise Exception("Expanded config has type {!r}, list (many tasks) or dict (one task) expected.".format(type(cfg)))
+        raise Exception(
+            "Expanded config has type {!r}, list (many tasks) or dict (one task) expected.".format(
+                type(cfg)
+            )
+        )
     res = runtime.compute_many(tasks)
     for e in res:
         print("{:40s}   {!r}".format(e.key, e.value))
@@ -65,7 +70,6 @@ def _parse_args():
     p.add_argument("builder")
     p.set_defaults(command=_command_drop)
 
-
     return parser.parse_args()
 
 
@@ -87,7 +91,10 @@ def run_cli(runtime=None, db_path=None):
             runtime = Runtime(db_path)
         else:
             if args.db is not None:
-                print("Warning: --db ignored (only used with the default runtime)", file=sys.stderr)
+                print(
+                    "Warning: --db ignored (only used with the default runtime)",
+                    file=sys.stderr,
+                )
 
         if args.command is None:
             print("No command provided", file=sys.stderr)

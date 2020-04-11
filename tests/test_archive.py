@@ -1,10 +1,11 @@
-from orco import builder, attach_object, attach_file, attach_directory, attach_text, JobState
-import pytest
 import random
+
+import pytest
+
+from orco import builder, attach_object, JobState
 
 
 def test_archive(env):
-
     @builder()
     def aa(x):
         return random.random()
@@ -98,9 +99,7 @@ def test_archive_recusive(env):
     assert jobs[0].state == JobState.A_FINISHED
 
 
-
 def test_free(env):
-
     @builder()
     def aa(x):
         attach_object("Hello", 1234)

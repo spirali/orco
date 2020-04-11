@@ -1,11 +1,12 @@
+import os
 import pickle
 import random
-import os
 import sys
 
 import pytest
 
 from orco import Builder, builder, JobState
+
 
 def adder(a, b):
     return a + b
@@ -24,10 +25,10 @@ def test_builder_args(env):
 
     runtime = env.test_runtime()
     assert runtime.compute(f(1)).value == (1, (), 2, {})
-    assert runtime.compute(f(1, 2, 3, 4, f=3)).value == (1, (2, 3, 4), 2, {'f': 3})
+    assert runtime.compute(f(1, 2, 3, 4, f=3)).value == (1, (2, 3, 4), 2, {"f": 3})
     assert runtime.compute(f(e=3, a=42)).value == (42, (), 3, {})
 
-    assert runtime.compute(g(1, 2, 3, 4, f=3)).value == (1, (2, 3, 4), 2, {'f': 3})
+    assert runtime.compute(g(1, 2, 3, 4, f=3)).value == (1, (2, 3, 4), 2, {"f": 3})
 
 
 def test_pickle_builder():
@@ -39,12 +40,11 @@ def test_pickle_builder():
     print(f)
     s = pickle.dumps(bf)
     f2 = pickle.loads(s)
-    assert f2.run_with_config({'x': 42}) == 43
-    assert f2.run_with_args((44, ), {}) == 45
+    assert f2.run_with_config({"x": 42}) == 43
+    assert f2.run_with_args((44,), {}) == 45
 
 
 def test_builder_init(env):
-
     @builder(name="foo")
     def bar(conf):
         "bleurghsff"
@@ -57,6 +57,7 @@ def test_builder_init(env):
     @builder()
     def baz(conf):
         return conf
+
     assert baz.name == "baz"
     assert baz.__name__ == "baz"
 
@@ -129,7 +130,12 @@ def test_builder_upgrade(env):
     col2 = runtime.register_builder(Builder(adder2, "col2"))
 
     runtime.compute(col1(123))
-    runtime.compute_many([col2(**c) for c in [{"a": 10, "b": 12}, {"a": 14, "b": 11}, {"a": 17, "b": 12}]])
+    runtime.compute_many(
+        [
+            col2(**c)
+            for c in [{"a": 10, "b": 12}, {"a": 14, "b": 11}, {"a": 17, "b": 12}]
+        ]
+    )
 
     assert runtime.read(col2(a=10, b=12)).value == 220
 
@@ -384,13 +390,23 @@ def test_builder_computed(env):
     assert runtime.read_many(tasks, reattach=True, drop_missing=True) == []
 
     runtime.compute_many(tasks, reattach=True)
-    assert [e.value for e in runtime.read_many(tasks, reattach=True)] == [20, 30, 40, 0, 50]
-    assert [e.value if e else "missing" for e in runtime.read_many(tasks + [builder(123)], reattach=True)
-            ] == [20, 30, 40, 0, 50, "missing"]
+    assert [e.value for e in runtime.read_many(tasks, reattach=True)] == [
+        20,
+        30,
+        40,
+        0,
+        50,
+    ]
     assert [
-               e.value if e else "missing"
-               for e in runtime.read_many(tasks + [builder(123)], drop_missing=True, reattach=True)
-           ] == [20, 30, 40, 0, 50]
+        e.value if e else "missing"
+        for e in runtime.read_many(tasks + [builder(123)], reattach=True)
+    ] == [20, 30, 40, 0, 50, "missing"]
+    assert [
+        e.value if e else "missing"
+        for e in runtime.read_many(
+            tasks + [builder(123)], drop_missing=True, reattach=True
+        )
+    ] == [20, 30, 40, 0, 50]
 
 
 def test_builder_error_in_deps(env):
@@ -441,13 +457,12 @@ def test_builder_inconsistent_deps(env):
     runtime = env.test_runtime()
     col0 = runtime.register_builder(Builder(lambda c: 123, "col0"))
     bld = runtime.register_builder(Builder(builder_fn, "col1"))
-    
+
     with pytest.raises(Exception, match="dependencies"):
         runtime.compute(bld())
 
 
 def test_builder_workdir(env):
-
     @builder()
     def bb(x):
         with open("test", "x"):
@@ -463,7 +478,6 @@ def test_builder_workdir(env):
 
 
 def test_builder_stdout(env):
-
     @builder()
     def bb(x):
         print("ABC")
@@ -492,7 +506,6 @@ def test_builder_stdout(env):
 
 
 def test_already_attached(env):
-
     @builder()
     def bb(x):
         return x

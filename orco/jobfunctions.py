@@ -1,17 +1,21 @@
-from .internals.context import _CONTEXT
-from .consts import MIME_PICKLE, MIME_BYTES, MIME_TEXT
-from .internals.utils import make_repr
-
-import pickle
-import mimetypes
-import tarfile
 import io
+import mimetypes
 import os
+import pickle
+import tarfile
+
+from .consts import MIME_PICKLE, MIME_BYTES, MIME_TEXT
+from .internals.context import _CONTEXT
+from .internals.utils import make_repr
 
 
 def _get_job_context(caller):
     if not hasattr(_CONTEXT, "job_context") or _CONTEXT.job_context is None:
-        raise Exception("Function '{}' cannot be called outside of computation part of a builder's function".format(caller))
+        raise Exception(
+            "Function '{}' cannot be called outside of computation part of a builder's function".format(
+                caller
+            )
+        )
     return _CONTEXT.job_context
 
 

@@ -4,8 +4,7 @@ from orco import Builder
 from orco.internals.runner import PoolJobRunner
 
 
-class NaivePool():
-
+class NaivePool:
     def __init__(self, events):
         self.events = events
 
@@ -17,7 +16,6 @@ class NaivePool():
 
 
 class NaiveRunner(PoolJobRunner):
-
     def __init__(self):
         super().__init__()
         self.events = []

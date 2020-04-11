@@ -1,5 +1,6 @@
 from hashlib import sha224
 
+
 def _make_key_helper(obj, stream):
     if isinstance(obj, str) or isinstance(obj, int) or isinstance(obj, float):
         stream.append(repr(obj))
@@ -13,8 +14,9 @@ def _make_key_helper(obj, stream):
         stream.append("{")
         for key, value in sorted(obj.items()):
             if not isinstance(key, str):
-                raise Exception("Invalid key in config: '{}', type: {}".format(
-                    repr(key), type(key)))
+                raise Exception(
+                    "Invalid key in config: '{}', type: {}".format(repr(key), type(key))
+                )
             if key.startswith("_"):
                 continue
             stream.append(repr(key))
@@ -23,7 +25,9 @@ def _make_key_helper(obj, stream):
             stream.append(",")
         stream.append("}")
     else:
-        raise Exception("Invalid item in config: '{}', type: {}".format(repr(obj), type(obj)))
+        raise Exception(
+            "Invalid item in config: '{}', type: {}".format(repr(obj), type(obj))
+        )
 
 
 def make_key(builder_name, config):

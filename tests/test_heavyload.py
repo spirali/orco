@@ -1,4 +1,3 @@
-
 import orco
 
 
@@ -21,5 +20,6 @@ def test_heavyload(env):
         data = [middle(name, s) for name, s in list]
         yield
         return [max(x.value) for x in data]
+
     runtime = env.test_runtime()
     print(runtime.compute(large([("abc", 10), ("ab", 100), ("long" * 1000, 30)])).value)

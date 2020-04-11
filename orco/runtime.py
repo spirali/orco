@@ -6,18 +6,17 @@ import threading
 import time
 
 from orco.internals.context import _CONTEXT
-
 from .builder import Builder, BuilderProxy
-from .job import Job
 from .internals.database import Database, JobState
 from .internals.executor import Executor
-from .internals.plan import Plan
 from .internals.key import make_key
+from .internals.plan import Plan
 from .internals.runner import JobRunner
-from .internals.utils import make_repr
 
 # from .internals.tasktools import collect_tasks, resolve_tasks
 from .internals.utils import format_time
+from .internals.utils import make_repr
+from .job import Job
 from .report import Report
 
 logger = logging.getLogger(__name__)
@@ -41,7 +40,9 @@ class Runtime:
     >>> runtime = Runtime("/path/to/dbfile.db")
     """
 
-    def __init__(self, db_path: str, global_builders=True, executor_name=None, n_processes=None):
+    def __init__(
+        self, db_path: str, global_builders=True, executor_name=None, n_processes=None
+    ):
         self.db = Database(db_path)
         self.db.init()
 
@@ -60,6 +61,7 @@ class Runtime:
 
         if global_builders:
             from .globals import _get_global_builders
+
             for builder in _get_global_builders():
                 logging.debug("Registering global builder %s", builder.name)
                 self.register_builder(builder)
@@ -109,12 +111,13 @@ class Runtime:
         name = builder.name
         if name in self._builders:
             raise Exception("Builder '{}' is already registered".format(name))
-        #self.db.ensure_builder(name)
+        # self.db.ensure_builder(name)
         self._builders[name] = builder
         return builder.make_proxy()
 
     def serve(self, port=8550, debug=False, testing=False, nonblocking=False):
         from .internals.browser import init_service
+
         app = init_service(self)
         if testing:
             app.testing = True
@@ -185,7 +188,9 @@ class Runtime:
         self.db.free_jobs_by_key([job.key for job in jobs])
 
     def insert(self, job, value):
-        r = self.db.create_job_with_value(job.builder_name, job.key, job.config, pickle.dumps(value), make_repr(value))
+        r = self.db.create_job_with_value(
+            job.builder_name, job.key, job.config, pickle.dumps(value), make_repr(value)
+        )
         if not r:
             raise Exception("Job {} already exists".format(job))
 
@@ -216,7 +221,9 @@ class Runtime:
             config = upgrade_fn(config)
             new_key = make_key(builder_name, config)
             if new_key in keys:
-                raise Exception("Key collision in upgrade, config={}".format(repr(config)))
+                raise Exception(
+                    "Key collision in upgrade, config={}".format(repr(config))
+                )
             if new_key != key:
                 to_update.append({"key": key, "new_key": new_key, "config": config})
             keys.add(new_key)
@@ -275,5 +282,8 @@ class Runtime:
                 assert 0
         plan.fill_job_ids(self, not continue_on_error)
         if plan.error_keys:
-            print("During computation, {} errors occured, see reports for details".format(
-                len(plan.error_keys)))
+            print(
+                "During computation, {} errors occured, see reports for details".format(
+                    len(plan.error_keys)
+                )
+            )

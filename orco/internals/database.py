@@ -1,8 +1,8 @@
-
-from orco import consts
-import sqlalchemy as sa
 import base64
 
+import sqlalchemy as sa
+
+from orco import consts
 from orco.job import JobMetadata, Job, JobState, ACTIVE_STATES
 
 
@@ -24,7 +24,6 @@ STATE_COUNTERS = {
 
 
 class Database:
-
     def __init__(self, url):
         engine = sa.create_engine(url)
         if "sqlite" in engine.dialect.name:
@@ -44,7 +43,12 @@ class Database:
             sa.Column("key", sa.String(56)),  # 56 = hexdigest of sha224
             sa.Column("config", sa.PickleType),
             sa.Column("job_setup", sa.PickleType, nullable=True),
-            sa.Column("created_date", sa.DateTime(timezone=True), nullable=False, server_default=sa.sql.func.now()),
+            sa.Column(
+                "created_date",
+                sa.DateTime(timezone=True),
+                nullable=False,
+                server_default=sa.sql.func.now(),
+            ),
             sa.Column("finished_date", sa.DateTime(timezone=True), nullable=True),
             sa.Column("computation_time", sa.Integer(), nullable=True),
             sa.Index("builder_idx", "builder"),
@@ -52,17 +56,26 @@ class Database:
             sa.Index("finished_date_idx", "finished_date"),
         )
 
-        self.announcements = sa.Table("announcements", metadata,
-                                      sa.Column("key", sa.String(56)),  # 56 = hexdigest of sha224
-                                      sa.Column("job_id", sa.ForeignKey("jobs.id", ondelete="cascade"), index=True),
-                                      sa.UniqueConstraint("key", name="uq_bk"))
+        self.announcements = sa.Table(
+            "announcements",
+            metadata,
+            sa.Column("key", sa.String(56)),  # 56 = hexdigest of sha224
+            sa.Column(
+                "job_id", sa.ForeignKey("jobs.id", ondelete="cascade"), index=True
+            ),
+            sa.UniqueConstraint("key", name="uq_bk"),
+        )
 
         self.job_deps = sa.Table(
             "job_deps",
             metadata,
-            sa.Column("source_id", sa.Integer(), sa.ForeignKey("jobs.id", ondelete="cascade")),
-            sa.Column("target_id", sa.Integer(), sa.ForeignKey("jobs.id", ondelete="cascade")))
-
+            sa.Column(
+                "source_id", sa.Integer(), sa.ForeignKey("jobs.id", ondelete="cascade")
+            ),
+            sa.Column(
+                "target_id", sa.Integer(), sa.ForeignKey("jobs.id", ondelete="cascade")
+            ),
+        )
 
         self.blobs = sa.Table(
             "blobs",
@@ -74,7 +87,7 @@ class Database:
             sa.Column("repr", sa.String(85), nullable=True),
             # !!! (job_id, name) CANNOT be primary_key because postgresql do not allow None in primary key
             # !!! but unqiue is ok
-            sa.UniqueConstraint("job_id", "name")
+            sa.UniqueConstraint("job_id", "name"),
         )
 
         self.metadata = metadata
@@ -90,7 +103,9 @@ class Database:
     def read_jobs(self, key, builder=None):
         c = self.jobs.c
         result = []
-        for r in self.conn.execute(sa.select([c.id, c.builder, c.config, c.state]).where(c.key == key)):
+        for r in self.conn.execute(
+            sa.select([c.id, c.builder, c.config, c.state]).where(c.key == key)
+        ):
             if builder is None:
                 builder = r.builder
             else:
@@ -102,7 +117,11 @@ class Database:
 
     def get_active_state(self, key):
         js = self.jobs
-        r = self.conn.execute(sa.select([js.c.state]).where(sa.and_(js.c.key == key, js.c.state.in_(ACTIVE_STATES)))).fetchone()
+        r = self.conn.execute(
+            sa.select([js.c.state]).where(
+                sa.and_(js.c.key == key, js.c.state.in_(ACTIVE_STATES))
+            )
+        ).fetchone()
         if r is None:
             return JobState.NONE
         else:
@@ -112,12 +131,18 @@ class Database:
         js = self.jobs
         return {
             r.id: r.state
-            for r in self.conn.execute(sa.select([js.c.id, js.c.state]).where(sa.and_(js.c.id.in_(job_ids))))
+            for r in self.conn.execute(
+                sa.select([js.c.id, js.c.state]).where(sa.and_(js.c.id.in_(job_ids)))
+            )
         }
 
     def get_active_job_id_and_state(self, key):
         c = self.jobs.c
-        r = self.conn.execute(sa.select([c.id, c.state]).where(sa.and_(c.key == key, c.state.in_(ACTIVE_STATES)))).fetchone()
+        r = self.conn.execute(
+            sa.select([c.id, c.state]).where(
+                sa.and_(c.key == key, c.state.in_(ACTIVE_STATES))
+            )
+        ).fetchone()
         if r is None:
             return None, JobState.NONE
         else:
@@ -129,7 +154,9 @@ class Database:
     def fix_crashed_jobs(self):
         js = self.jobs
         with self.conn.begin():
-            cond = sa.or_(js.c.state == JobState.RUNNING, js.c.state == JobState.ANNOUNCED)
+            cond = sa.or_(
+                js.c.state == JobState.RUNNING, js.c.state == JobState.ANNOUNCED
+            )
             self._remove_jobs(cond)
 
     def set_running(self, job_id):
@@ -137,26 +164,32 @@ class Database:
         c = self.jobs.c
         with self.conn.begin():
             cond = sa.and_(c.id == job_id, c.state == JobState.ANNOUNCED)
-            r = self.conn.execute(sa.update(self.jobs).where(cond).values(state=JobState.RUNNING))
+            r = self.conn.execute(
+                sa.update(self.jobs).where(cond).values(state=JobState.RUNNING)
+            )
             if r.rowcount != 1:
                 raise Exception("Setting a job into a running state failed")
 
-        job = self.conn.execute(sa.select([c.config, c.job_setup]).where(c.id == job_id)).fetchone()
+        job = self.conn.execute(
+            sa.select([c.config, c.job_setup]).where(c.id == job_id)
+        ).fetchone()
 
         d = self.job_deps.c
-        query = sa.select([c.id, c.key])\
-            .where(c.id.in_(sa.select([d.source_id]).where(d.target_id == job_id)))
+        query = sa.select([c.id, c.key]).where(
+            c.id.in_(sa.select([d.source_id]).where(d.target_id == job_id))
+        )
 
-        keys_to_job_ids = {
-            r.key: r.id
-            for r in self.conn.execute(query)
-        }
+        keys_to_job_ids = {r.key: r.id for r in self.conn.execute(query)}
 
         return job.job_setup, job.config, keys_to_job_ids
 
     def insert_blob(self, job_id, name, value, mime, repr_value):
         try:
-            self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name=name, data=value, mime=mime, repr=repr_value))
+            self.conn.execute(
+                sa.insert(self.blobs).values(
+                    job_id=job_id, name=name, data=value, mime=mime, repr=repr_value
+                )
+            )
         except sa.exc.IntegrityError:
             raise Exception("Blob '{}' already exists".format(name))
 
@@ -165,7 +198,15 @@ class Database:
         c = self.jobs.c
         with self.conn.begin():
             cond = sa.and_(c.id == job_id, c.state == JobState.RUNNING)
-            r = self.conn.execute(sa.update(self.jobs).where(cond).values(state=JobState.FINISHED, computation_time=computation_time, finished_date=sa.func.now()))
+            r = self.conn.execute(
+                sa.update(self.jobs)
+                .where(cond)
+                .values(
+                    state=JobState.FINISHED,
+                    computation_time=computation_time,
+                    finished_date=sa.func.now(),
+                )
+            )
             if r.rowcount != 1:
                 raise Exception("Setting a job into finished state failed")
             if value is not None:
@@ -177,19 +218,42 @@ class Database:
         assert job_id is not None
         c = self.jobs.c
         with self.conn.begin():
-            cond = sa.and_(c.id == job_id, c.state.in_((JobState.RUNNING, JobState.ANNOUNCED)))
-            self.conn.execute(self.announcements.delete().where(self.announcements.c.job_id == job_id))
-            r = self.conn.execute(sa.update(self.jobs).where(cond).values(state=JobState.ERROR, computation_time=computation_time, finished_date=sa.func.now()))
+            cond = sa.and_(
+                c.id == job_id, c.state.in_((JobState.RUNNING, JobState.ANNOUNCED))
+            )
+            self.conn.execute(
+                self.announcements.delete().where(self.announcements.c.job_id == job_id)
+            )
+            r = self.conn.execute(
+                sa.update(self.jobs)
+                .where(cond)
+                .values(
+                    state=JobState.ERROR,
+                    computation_time=computation_time,
+                    finished_date=sa.func.now(),
+                )
+            )
             if r.rowcount != 1:
                 raise Exception("Setting a job into finished state failed")
             if message is not None:
-                self.conn.execute(sa.insert(self.blobs).values(job_id=job_id, name="!message", data=message.encode(), mime=consts.MIME_TEXT))
+                self.conn.execute(
+                    sa.insert(self.blobs).values(
+                        job_id=job_id,
+                        name="!message",
+                        data=message.encode(),
+                        mime=consts.MIME_TEXT,
+                    )
+                )
             if output:
                 self.insert_blob(job_id, "!output", output, consts.MIME_TEXT, None)
 
     def get_blob(self, job_id, name):
         c = self.blobs.c
-        r = self.conn.execute(sa.select([c.data, c.mime]).where(sa.and_(c.job_id == job_id, c.name == name))).fetchone()
+        r = self.conn.execute(
+            sa.select([c.data, c.mime]).where(
+                sa.and_(c.job_id == job_id, c.name == name)
+            )
+        ).fetchone()
         if r is None:
             return None, None
         return r.data, r.mime
@@ -197,14 +261,16 @@ class Database:
     def create_job_with_value(self, builder_name, key, config, value, repr_value):
         conn = self.conn
         with conn.begin() as transaction:
-            r = conn.execute(self.jobs.insert().values(
-                state=JobState.FINISHED,
-                builder=builder_name,
-                key=key,
-                config=config,
-                job_setup=None,
-                finished_date=sa.func.now(),
-            ))
+            r = conn.execute(
+                self.jobs.insert().values(
+                    state=JobState.FINISHED,
+                    builder=builder_name,
+                    key=key,
+                    config=config,
+                    job_setup=None,
+                    finished_date=sa.func.now(),
+                )
+            )
             job_id = r.inserted_primary_key[0]
             assert job_id is not None
             try:
@@ -227,20 +293,21 @@ class Database:
         with conn.begin() as transaction:
             # Try to announce new jobs
             for pn in plan.nodes:
-                r = conn.execute(self.jobs.insert().values(
-                    state=JobState.ANNOUNCED,
-                    builder=pn.builder_name,
-                    key=pn.key,
-                    config=pn.config,
-                    job_setup=pn.job_setup
-                ))
+                r = conn.execute(
+                    self.jobs.insert().values(
+                        state=JobState.ANNOUNCED,
+                        builder=pn.builder_name,
+                        key=pn.key,
+                        config=pn.config,
+                        job_setup=pn.job_setup,
+                    )
+                )
                 job_id = r.inserted_primary_key[0]
                 assert job_id is not None
                 pn.job_id = job_id
-                announces.append({
-                    "key": pn.key,
-                    "job_id": job_id,
-                })
+                announces.append(
+                    {"key": pn.key, "job_id": job_id,}
+                )
             try:
                 r = conn.execute(self.announcements.insert(), announces)
             except sa.exc.IntegrityError:
@@ -264,28 +331,41 @@ class Database:
 
     def read_metadata(self, job_id):
         c = self.jobs.c
-        r = self.conn.execute(sa.select([c.created_date, c.finished_date, c.computation_time, c.job_setup]).where(c.id == job_id)).fetchone()
+        r = self.conn.execute(
+            sa.select(
+                [c.created_date, c.finished_date, c.computation_time, c.job_setup]
+            ).where(c.id == job_id)
+        ).fetchone()
         if r is None:
             return None
         return JobMetadata(
             created_date=r.created_date,
             finished_date=r.finished_date,
             computation_time=r.computation_time,
-            job_setup=r.job_setup)
+            job_setup=r.job_setup,
+        )
 
     def unannounce_jobs(self, plan):
         c = self.jobs.c
         ids = [pn.job_id for pn in plan.nodes]
         with self.conn.begin():
-            cond = sa.and_(c.id.in_(ids), c.state.in_((JobState.RUNNING, JobState.ANNOUNCED)))
+            cond = sa.and_(
+                c.id.in_(ids), c.state.in_((JobState.RUNNING, JobState.ANNOUNCED))
+            )
             self._remove_jobs(cond)
 
     def get_run_stats(self, builder_name):
         c = self.jobs.c
-        count, avg = self.conn.execute(sa.select([sa.func.count(c.id), sa.func.avg(c.computation_time)]).where(sa.and_(c.builder == builder_name, c.computation_time != None))).fetchone()
+        count, avg = self.conn.execute(
+            sa.select([sa.func.count(c.id), sa.func.avg(c.computation_time)]).where(
+                sa.and_(c.builder == builder_name, c.computation_time != None)
+            )
+        ).fetchone()
         if avg is not None and count > 2:
             d = c.computation_time - avg
-            r = self.conn.execute(sa.select([sa.func.sum(d * d)]).where(c.computation_time != None)).fetchone()
+            r = self.conn.execute(
+                sa.select([sa.func.sum(d * d)]).where(c.computation_time != None)
+            ).fetchone()
             stdev = r[0] / (count - 1)
         else:
             stdev = 0
@@ -293,12 +373,21 @@ class Database:
 
     def get_all_configs(self, builder_name):
         c = self.jobs.c
-        return [(r.key, r.config) for r in self.conn.execute(sa.select([c.key, c.config]).where(sa.and_(c.builder == builder_name, c.state == JobState.FINISHED)))]
+        return [
+            (r.key, r.config)
+            for r in self.conn.execute(
+                sa.select([c.key, c.config]).where(
+                    sa.and_(c.builder == builder_name, c.state == JobState.FINISHED)
+                )
+            )
+        ]
 
     def builder_summaries(self, registered_builders):
         c = self.jobs.c
-        query = sa.select([c.builder, sa.func.sum(sa.func.length(c.config)).label("size")]).group_by(c.builder)
-        #sa.func.length(c.config)
+        query = sa.select(
+            [c.builder, sa.func.sum(sa.func.length(c.config)).label("size")]
+        ).group_by(c.builder)
+        # sa.func.length(c.config)
 
         def create_counter(name, size):
             d = {name: 0 for name in STATE_COUNTERS.values()}
@@ -311,12 +400,22 @@ class Database:
             for row in self.conn.execute(query)
         }
 
-        query = sa.select([c.builder, c.state, sa.func.count(c.key).label("count")]).group_by(c.builder, c.state)
+        query = sa.select(
+            [c.builder, c.state, sa.func.count(c.key).label("count")]
+        ).group_by(c.builder, c.state)
         for r in self.conn.execute(query):
             result[r.builder][STATE_COUNTERS[r.state]] += r.count
 
-        query = sa.select([c.builder, sa.func.sum(sa.func.length(self.blobs.c.data)).label("size")]) \
-                .select_from(self.blobs.join(self.jobs)).group_by(c.builder)
+        query = (
+            sa.select(
+                [
+                    c.builder,
+                    sa.func.sum(sa.func.length(self.blobs.c.data)).label("size"),
+                ]
+            )
+            .select_from(self.blobs.join(self.jobs))
+            .group_by(c.builder)
+        )
         for row in self.conn.execute(query):
             result[row.builder]["size"] += row.size
 
@@ -327,8 +426,23 @@ class Database:
 
     def job_summaries(self, builder_name):
         c = self.jobs.c
-        query = sa.select([c.id, c.key, c.state, c.config, c.created_date, c.finished_date, c.computation_time, sa.func.sum(sa.func.length(c.config)).label("size")])\
-                .select_from(self.jobs.join(self.blobs, isouter=True)).where(c.builder == builder_name).group_by(c.id)
+        query = (
+            sa.select(
+                [
+                    c.id,
+                    c.key,
+                    c.state,
+                    c.config,
+                    c.created_date,
+                    c.finished_date,
+                    c.computation_time,
+                    sa.func.sum(sa.func.length(c.config)).label("size"),
+                ]
+            )
+            .select_from(self.jobs.join(self.blobs, isouter=True))
+            .where(c.builder == builder_name)
+            .group_by(c.id)
+        )
         return [
             {
                 "id": row.id,
@@ -352,11 +466,21 @@ class Database:
             return base64.b64encode(value).decode()
 
         c = self.blobs.c
-        query = sa.select([c.name, c.repr, c.mime,
-                           sa.func.length(c.data).label("size"),
-                           sa.case([(c.mime == consts.MIME_TEXT, c.data),
-                                    (c.mime == "image/png", c.data)], else_=sa.null()).label("value")
-                           ]).where(c.job_id == job_id)
+        query = sa.select(
+            [
+                c.name,
+                c.repr,
+                c.mime,
+                sa.func.length(c.data).label("size"),
+                sa.case(
+                    [
+                        (c.mime == consts.MIME_TEXT, c.data),
+                        (c.mime == "image/png", c.data),
+                    ],
+                    else_=sa.null(),
+                ).label("value"),
+            ]
+        ).where(c.job_id == job_id)
         return [
             {
                 "name": row.name,
@@ -372,7 +496,13 @@ class Database:
         # TODO: Find the real window (is it necessary?)
         c = self.jobs.c
         running = c.finished_date.is_(None)
-        return sa.select([c.id]).where(sa.or_(running, c.finished_date >= (sa.select([sa.func.min(c.created_date)]).where(running))))
+        return sa.select([c.id]).where(
+            sa.or_(
+                running,
+                c.finished_date
+                >= (sa.select([sa.func.min(c.created_date)]).where(running)),
+            )
+        )
 
     def get_running_status(self):
         c = self.jobs.c
@@ -384,7 +514,11 @@ class Database:
         }
         counts = {name: 0 for name in switch.values()}
 
-        for r in self.conn.execute(sa.select([c.state, sa.func.count(c.key).label("count")]).where(c.id.in_(self._get_current_jobs())).group_by(c.state)):
+        for r in self.conn.execute(
+            sa.select([c.state, sa.func.count(c.key).label("count")])
+            .where(c.id.in_(self._get_current_jobs()))
+            .group_by(c.state)
+        ):
             counts[switch[r.state]] = r.count
 
         errors = [
@@ -394,7 +528,12 @@ class Database:
                 "config": r.config,
                 "finished": str(r.finished_date),
             }
-            for r in self.conn.execute(sa.select([c.id, c.builder, c.config, c.finished_date]).where(c.state == JobState.ERROR).order_by(c.finished_date.desc()).limit(5))
+            for r in self.conn.execute(
+                sa.select([c.id, c.builder, c.config, c.finished_date])
+                .where(c.state == JobState.ERROR)
+                .order_by(c.finished_date.desc())
+                .limit(5)
+            )
         ]
 
         return {
@@ -411,7 +550,11 @@ class Database:
         with self.conn.begin():
             c = self.jobs.c
             base_query = sa.select([c.id]).where(c.builder == builder_name)
-            self.conn.execute(self.jobs.delete().where(c.id.in_(self._closure(base_query, drop_inputs))))
+            self.conn.execute(
+                self.jobs.delete().where(
+                    c.id.in_(self._closure(base_query, drop_inputs))
+                )
+            )
 
     def _downstream(self, base_query, states=None):
         c = self.job_deps.c
@@ -420,8 +563,11 @@ class Database:
         if states is None:
             union = query.select_from(self.job_deps).where(q.c.id == c.source_id)
         else:
-            union = query.select_from(q.join(self.job_deps, q.c.id == c.source_id).join(self.jobs, self.jobs.c.id == c.target_id))\
-                        .where(sa.and_(self.jobs.c.state.in_(states)))
+            union = query.select_from(
+                q.join(self.job_deps, q.c.id == c.source_id).join(
+                    self.jobs, self.jobs.c.id == c.target_id
+                )
+            ).where(sa.and_(self.jobs.c.state.in_(states)))
         return sa.select([q.union(union)])
 
     def _upstream(self, base_query, states=None):
@@ -431,8 +577,11 @@ class Database:
         if states is None:
             union = query.select_from(self.job_deps).where(q.c.id == c.target_id)
         else:
-            union = query.select_from(q.join(self.job_deps, q.c.id == c.target_id).join(self.jobs, self.jobs.c.id == c.source_id))\
-                        .where(sa.and_(self.jobs.c.state.in_(states)))
+            union = query.select_from(
+                q.join(self.job_deps, q.c.id == c.target_id).join(
+                    self.jobs, self.jobs.c.id == c.source_id
+                )
+            ).where(sa.and_(self.jobs.c.state.in_(states)))
         return sa.select([q.union(union)])
         #  return sa.select([q.union(sa.select([c.source_id]).select_from(self.job_deps).where(q.c.id == c.target_id))])
 
@@ -444,35 +593,60 @@ class Database:
     def drop_jobs_by_key(self, keys, drop_inputs):
         c = self.jobs.c
         base_query = sa.select([c.id]).where(c.key.in_(keys))
-        self.conn.execute(self.jobs.delete().where(c.id.in_(self._closure(base_query, drop_inputs))))
+        self.conn.execute(
+            self.jobs.delete().where(c.id.in_(self._closure(base_query, drop_inputs)))
+        )
 
     def archive_jobs_by_key(self, keys, archive_inputs):
         c = self.jobs.c
         with self.conn.begin():
-            base_query = sa.select([c.id]).where(sa.and_(c.key.in_(keys), c.state.in_([JobState.FINISHED, JobState.FREED])))
-            job_ids = self._closure(base_query, archive_inputs, [JobState.FINISHED, JobState.FREED])
-            self.conn.execute(self.announcements.delete().where(self.announcements.c.job_id.in_(job_ids)))
+            base_query = sa.select([c.id]).where(
+                sa.and_(
+                    c.key.in_(keys), c.state.in_([JobState.FINISHED, JobState.FREED])
+                )
+            )
+            job_ids = self._closure(
+                base_query, archive_inputs, [JobState.FINISHED, JobState.FREED]
+            )
+            self.conn.execute(
+                self.announcements.delete().where(
+                    self.announcements.c.job_id.in_(job_ids)
+                )
+            )
 
             state_enum = sa.Enum(JobState)
-            self.conn.execute(self.jobs.update().where(c.id.in_(job_ids)).values(
-                state=sa.case([(c.state == JobState.FINISHED, sa.literal(JobState.A_FINISHED, state_enum))],
-                              else_=sa.literal(JobState.A_FREED, state_enum)
-            )))
+            self.conn.execute(
+                self.jobs.update()
+                .where(c.id.in_(job_ids))
+                .values(
+                    state=sa.case(
+                        [
+                            (
+                                c.state == JobState.FINISHED,
+                                sa.literal(JobState.A_FINISHED, state_enum),
+                            )
+                        ],
+                        else_=sa.literal(JobState.A_FREED, state_enum),
+                    )
+                )
+            )
 
-            #self.conn.execute(self.jobs.update().where(sa.and_(c.id.in_(job_ids), c.state == JobState.FINISHED)).values(
+            # self.conn.execute(self.jobs.update().where(sa.and_(c.id.in_(job_ids), c.state == JobState.FINISHED)).values(
             #    state=JobState.A_FINISHED
-            #))
+            # ))
 
     def free_jobs_by_key(self, keys):
-        #self._debug_jobs()
+        # self._debug_jobs()
         c = self.jobs.c
         with self.conn.begin():
-            query = sa.select([c.id]).where(sa.and_(c.key.in_(keys), c.state == JobState.FINISHED))
+            query = sa.select([c.id]).where(
+                sa.and_(c.key.in_(keys), c.state == JobState.FINISHED)
+            )
             self.conn.execute(self.blobs.delete().where(self.blobs.c.job_id.in_(query)))
-            self.conn.execute(self.jobs.update().where(c.id.in_(query)).values(
-                state=JobState.FREED
-            ))
-        #self._debug_jobs()
+            self.conn.execute(
+                self.jobs.update().where(c.id.in_(query)).values(state=JobState.FREED)
+            )
+        # self._debug_jobs()
 
     def _debug_jobs(self):
         print("=== JOBS ===")
@@ -485,12 +659,22 @@ class Database:
 
     def export_builder(self, builder_name):
         c = self.jobs.c
-        query = sa.select([c.config, c.computation_time]).where(sa.and_(builder_name == builder_name, c.state == JobState.FINISHED))
+        query = sa.select([c.config, c.computation_time]).where(
+            sa.and_(builder_name == builder_name, c.state == JobState.FINISHED)
+        )
         return self.conn.execute(query)
 
     def upgrade_builder(self, data):
         with self.conn.begin():
-            stmt = self.jobs.update().where(self.jobs.c.key == sa.bindparam('key')).values(key=sa.bindparam("new_key"), config=sa.bindparam("config"))
+            stmt = (
+                self.jobs.update()
+                .where(self.jobs.c.key == sa.bindparam("key"))
+                .values(key=sa.bindparam("new_key"), config=sa.bindparam("config"))
+            )
             self.conn.execute(stmt, data)
-            stmt = self.jobs.update().where(self.announcements.key == sa.bindparam('key')).values(key=sa.bindparam("new_key"))
+            stmt = (
+                self.jobs.update()
+                .where(self.announcements.key == sa.bindparam("key"))
+                .values(key=sa.bindparam("new_key"))
+            )
             self.conn.execute(stmt, data)

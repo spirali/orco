@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class JobFailedException(Exception):
     """Exception thrown when job in an executor failed"""
+
     pass
 
 
@@ -45,13 +46,15 @@ class Executor:
         if "local" not in self.runners:
             runners["local"] = LocalProcessRunner(n_processes)
 
-        self.resources = ",".join("{} ({})".format(name, r.get_resources()) for name, r in runners.items())
+        self.resources = ",".join(
+            "{} ({})".format(name, r.get_resources()) for name, r in runners.items()
+        )
 
     def get_stats(self):
         return self.stats
 
     def stop(self):
-        #self.runtime.db.stop_executor(self.id)
+        # self.runtime.db.stop_executor(self.id)
         for runner in self.runners.values():
             runner.stop()
         self.runtime = None
@@ -62,8 +65,8 @@ class Executor:
         assert self.created is None
 
         self.created = datetime.now()
-        #self.runtime.db.register_executor(self)
-        #assert self.id is not None
+        # self.runtime.db.register_executor(self)
+        # assert self.id is not None
 
         for runner in self.runners.values():
             runner.start()
@@ -93,7 +96,11 @@ class Executor:
             runner_name = job_setup.runner_name
         runner = self.runners.get(runner_name)
         if runner is None:
-            raise Exception("Task '{}/{}' asked for unknown runner '{}'".format(plan_node.builder_name, plan_node.config, runner_name))
+            raise Exception(
+                "Task '{}/{}' asked for unknown runner '{}'".format(
+                    plan_node.builder_name, plan_node.config, runner_name
+                )
+            )
         return runner.submit(self.runtime, plan_node)
 
     def run(self, plan):
@@ -107,7 +114,10 @@ class Executor:
         try:
             while waiting:
                 wait_result = wait(
-                    waiting, return_when=FIRST_COMPLETED, timeout=1 if unprocessed else None)
+                    waiting,
+                    return_when=FIRST_COMPLETED,
+                    timeout=1 if unprocessed else None,
+                )
                 waiting = wait_result.not_done
                 for f in wait_result.done:
                     progressbar.update()
@@ -118,11 +128,16 @@ class Executor:
                         if plan.continue_on_error:
                             plan.error_keys.append(pn.key)
                         else:
-                            raise JobFailedException("{} ({}/{})".format(
-                                message, pn.builder_name, repr(pn.config)))
+                            raise JobFailedException(
+                                "{} ({}/{})".format(
+                                    message, pn.builder_name, repr(pn.config)
+                                )
+                            )
                         continue
                     pn = nodes_by_id[result]
-                    logger.debug("Job %s finished: %s/%s", pn.job_id, pn.builder_name, pn.key)
+                    logger.debug(
+                        "Job %s finished: %s/%s", pn.job_id, pn.builder_name, pn.key
+                    )
                     for c in consumers.get(pn, ()):
                         waiting_deps[c] -= 1
                         w = waiting_deps[c]

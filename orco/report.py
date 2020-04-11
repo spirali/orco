@@ -11,15 +11,24 @@ class Report:
     * timestamp - datetime when event was created
     """
 
-    __slots__ = ("report_type", "executor_id", "message", "builder_name", "config", "timestamp")
+    __slots__ = (
+        "report_type",
+        "executor_id",
+        "message",
+        "builder_name",
+        "config",
+        "timestamp",
+    )
 
-    def __init__(self,
-                 report_type,
-                 executor_id,
-                 message,
-                 builder_name=None,
-                 config=None,
-                 timestamp=None):
+    def __init__(
+        self,
+        report_type,
+        executor_id,
+        message,
+        builder_name=None,
+        config=None,
+        timestamp=None,
+    ):
         self.executor_id = executor_id
         self.timestamp = timestamp
         self.report_type = report_type
@@ -34,7 +43,7 @@ class Report:
             "type": self.report_type,
             "message": self.message,
             "builder": self.builder_name,
-            "config": self.config
+            "config": self.config,
         }
 
     def __repr__(self):

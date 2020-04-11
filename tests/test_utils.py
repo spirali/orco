@@ -70,9 +70,9 @@ def test_cloudwrapper_generator():
 
 
 def test_cloudwrapper_stateful():
-
     class Fn:
         "foobarbaz"
+
         def __init__(self, add):
             self.add = add
 

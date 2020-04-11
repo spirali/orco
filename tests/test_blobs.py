@@ -1,10 +1,11 @@
-from orco import builder, attach_object, attach_file, attach_directory, attach_text
-import pytest
 import os
+
+import pytest
+
+from orco import builder, attach_object, attach_file, attach_directory, attach_text
 
 
 def test_blob_attach_object(env):
-
     @builder()
     def bb(x):
         attach_object("object", x * 100)
@@ -35,7 +36,6 @@ def test_blob_attach_object(env):
 
 
 def test_blob_attach_file(env):
-
     @builder()
     def bb(x):
         with open("test.png", "wb") as f:
@@ -83,7 +83,6 @@ def test_blob_attach_text(env):
 
 
 def test_blob_attach_directory(env):
-
     @builder()
     def bb(x):
         os.mkdir("testdir")
@@ -118,7 +117,6 @@ def test_blob_attach_directory(env):
         assert os.path.isfile("bb.txt")
         assert os.path.isfile("subdir/cc.txt")
         return "Ok"
-
 
     runtime = env.test_runtime()
     a = runtime.compute(cc(x=20))

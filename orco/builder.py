@@ -3,10 +3,10 @@ import functools
 import inspect
 import pickle
 
-from .job import Job
 from .internals.context import _CONTEXT
 from .internals.key import make_key
 from .internals.utils import CloudWrapper
+from .job import Job
 from .jobsetup import JobSetup
 
 
@@ -15,7 +15,6 @@ def _generic_kwargs_fn(**_kwargs):
 
 
 class BuilderProxy:
-
     def __init__(self, name, has_fn, fn_signature, fn_argspec, fn_name, doc):
         self.name = name
         self.has_fn = has_fn
@@ -25,7 +24,9 @@ class BuilderProxy:
         if fn_name:
             self.__name__ = fn_name
         if doc:
-            self.__doc__ = "Builder {!r} for {!r}, original docs:\n\n{}\n".format(self.name, fn_name, doc)
+            self.__doc__ = "Builder {!r} for {!r}, original docs:\n\n{}\n".format(
+                self.name, fn_name, doc
+            )
 
     def __call__(self, *args, **kwargs):
         """
@@ -95,7 +96,11 @@ class Builder:
             name = fn.__name__
         assert isinstance(name, str)
         if not name.isidentifier():
-            raise ValueError("{!r} is not a valid name for Builder (needs a valid identifier)".format(name))
+            raise ValueError(
+                "{!r} is not a valid name for Builder (needs a valid identifier)".format(
+                    name
+                )
+            )
         self.name = name
 
         # Signature inference
@@ -107,13 +112,20 @@ class Builder:
             self.fn_argspec = inspect.getfullargspec(_generic_kwargs_fn)
 
         self.__signature__ = self.fn_signature
-        if hasattr(self.fn, '__name__'):
+        if hasattr(self.fn, "__name__"):
             self.__name__ = self.fn.__name__
 
     def make_proxy(self):
         name = self.fn.__name__ if self.fn else None
         doc = self.fn.__doc__ if self.fn else None
-        return BuilderProxy(self.name, self._fn is not None, self.fn_signature, self.fn_argspec, name, doc)
+        return BuilderProxy(
+            self.name,
+            self._fn is not None,
+            self.fn_signature,
+            self.fn_argspec,
+            name,
+            doc,
+        )
 
     @property
     def fn(self):
@@ -134,7 +146,9 @@ class Builder:
             raise Exception("Fixed builder {!r} can't be run".format(self))
 
         args, kwargs = self._create_args_from_config(config)
-        return self.run_with_args(args, kwargs, only_deps=only_deps, after_deps=after_deps)
+        return self.run_with_args(
+            args, kwargs, only_deps=only_deps, after_deps=after_deps
+        )
 
     def run_with_args(self, args, kwargs, only_deps=False, after_deps=None):
         """
@@ -148,7 +162,7 @@ class Builder:
         """
         if self.fn is None:
             raise Exception("Fixed builder {!r} can't be run".format(self))
-        
+
         if inspect.isgeneratorfunction(self.fn):
             g = self.fn(*args, **kwargs)
             try:
@@ -177,7 +191,9 @@ class Builder:
                 value = self.fn(*args, **kwargs)
 
         if inspect.isgenerator(value):
-            raise Exception("Computation function returned a generator while it seemed like an ordinary function")
+            raise Exception(
+                "Computation function returned a generator while it seemed like an ordinary function"
+            )
         return value
 
     def __eq__(self, other):

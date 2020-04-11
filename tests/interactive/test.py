@@ -10,6 +10,7 @@ url = "sqlite:///test.db"
 if os.path.isfile("test.db"):
     os.unlink("test.db")
 
+
 @builder()
 def failer(config):
     raise Exception("Here!")
@@ -26,6 +27,7 @@ def bedroom(sleepers):
     yield
     return None
 
+
 @builder()
 def state_demo(x):
     if x > 0:
@@ -34,6 +36,7 @@ def state_demo(x):
     if x == 5:
         raise Exception("This is an error")
     attach_object("data1", "Hello!")
+
 
 rt = Runtime(url)
 
@@ -46,6 +49,8 @@ except Exception as e:
 print("Failer failed (and it is ok")
 
 rt.compute(bedroom(sleepers=[0.1]))
+
+
 def thread_fn():
     rt = Runtime(url)
     try:
@@ -68,13 +73,10 @@ c = rt.register_builder(c)
 graphs = ["crossv", "fastcrossv", "gridcat"]
 models = ["simple", "maxmin"]
 scheduler = [
-    "blevel", "random", {
-        "name": "camp",
-        "iterations": 1000
-    }, {
-        "name": "camp",
-        "iterations": 2000
-    }
+    "blevel",
+    "random",
+    {"name": "camp", "iterations": 1000},
+    {"name": "camp", "iterations": 2000},
 ]
 for g, m, s in itertools.product(graphs, models, scheduler):
     rt.insert(c(graph=g, model=m, scheduler=s), random.randint(1, 30000))

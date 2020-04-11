@@ -1,4 +1,3 @@
-
 def format_time(seconds):
     if seconds < 0.8:
         return "{:.0f}ms".format(seconds * 1000)
@@ -17,6 +16,7 @@ def make_repr(value):
 
 
 import inspect
+
 import cloudpickle
 
 
@@ -24,7 +24,10 @@ class CloudWrapper:
     """
     Wraps a callable so that cloudpickle is used to pickle it, caching the pickle.
     """
-    def __init__(self, fn, pickled_fn=None, cache=True, protocol=cloudpickle.DEFAULT_PROTOCOL):
+
+    def __init__(
+        self, fn, pickled_fn=None, cache=True, protocol=cloudpickle.DEFAULT_PROTOCOL
+    ):
         if fn is None:
             if pickled_fn is None:
                 raise ValueError("Pass at least one of `fn` and `pickled_fn`")
@@ -40,8 +43,10 @@ class CloudWrapper:
         self.pickled_fn = pickled_fn
         self.cache = cache
         self.protocol = protocol
-        self.__doc__ = "CloudWrapper for {!r}. Original doc:\n\n{}".format(self.fn, self.fn.__doc__)
-        if hasattr(self.fn, '__name__'):
+        self.__doc__ = "CloudWrapper for {!r}. Original doc:\n\n{}".format(
+            self.fn, self.fn.__doc__
+        )
+        if hasattr(self.fn, "__name__"):
             self.__name__ = self.fn.__name__
         self.__signature__ = inspect.signature(self.fn)
 
@@ -65,5 +70,7 @@ class CloudWrapper:
         return self.fn(*args, **kwargs)
 
     def __reduce__(self):
-        return (self.__class__, (None, self._get_pickled_fn(), self.cache, self.protocol))
-
+        return (
+            self.__class__,
+            (None, self._get_pickled_fn(), self.cache, self.protocol),
+        )

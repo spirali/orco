@@ -1,12 +1,21 @@
+import collections
+
 from .context import _CONTEXT
 from .database import JobState
-import collections
 from .utils import format_time
 
 
 class PlanNode:
 
-    __slots__ = ("builder_name", "key", "config", "job_setup", "job_id", "inputs", "existing_dep_ids")
+    __slots__ = (
+        "builder_name",
+        "key",
+        "config",
+        "job_setup",
+        "job_id",
+        "inputs",
+        "existing_dep_ids",
+    )
 
     def __init__(self, builder_name, key, config, job_setup, inputs, existing_dep_ids):
         self.builder_name = builder_name
@@ -19,7 +28,6 @@ class PlanNode:
 
 
 class Plan:
-
     def __init__(self, leaf_jobs, continue_on_error):
         self.leaf_jobs = leaf_jobs
         self.existing_jobs = {}
@@ -44,12 +52,7 @@ class Plan:
     def _create_for_testing(self):
         self._nodes = {}
         for job in self.leaf_jobs:
-            plan_node = PlanNode(job.builder_name,
-                                 job.key,
-                                 job.config,
-                                 "XXX",
-                                 [],
-                                 [])
+            plan_node = PlanNode(job.builder_name, job.key, job.config, "XXX", [], [])
             self._nodes[job.key] = plan_node
 
     def create(self, runtime):
@@ -82,14 +85,20 @@ class Plan:
                 conflicts.add(key)
                 return None
             elif state == JobState.FREED:
-                raise Exception("Computation depends on a job in freed state ({}). "
-                                "You need to drop or archive the job to run the computation".format(job))
+                raise Exception(
+                    "Computation depends on a job in freed state ({}). "
+                    "You need to drop or archive the job to run the computation".format(
+                        job
+                    )
+                )
             assert job_id is None
 
             if builder.fn is None:
                 raise Exception(
-                    "Computation depends on a missing configuration '{}' in a fixed builder"
-                        .format(job))
+                    "Computation depends on a missing configuration '{}' in a fixed builder".format(
+                        job
+                    )
+                )
 
             deps = []
             try:
@@ -107,12 +116,14 @@ class Plan:
                     existing_ids.append(j)
                     continue
                 unfinished_inputs.append(j)
-            plan_node = PlanNode(job.builder_name,
-                                 job.key,
-                                 job.config,
-                                 builder._create_job_setup(job.config),
-                                 unfinished_inputs,
-                                 existing_ids)
+            plan_node = PlanNode(
+                job.builder_name,
+                job.key,
+                job.config,
+                builder._create_job_setup(job.config),
+                unfinished_inputs,
+                existing_ids,
+            )
             nodes[key] = plan_node
             return plan_node
 
@@ -130,7 +141,6 @@ class Plan:
             node = self._nodes.get(key)
             if node:
                 job.set_job_id(node.job_id, db, None)
-
 
     def fill_job_ids(self, runtime, set_finish):
         """
@@ -165,13 +175,21 @@ class Plan:
 
     def print_report(self, runtime):
         jobs_per_builder = collections.Counter([pn.builder_name for pn in self.nodes])
-        print("Scheduled jobs   |     # | Expected comp. time (per job)\n"
-              "-----------------+-------+--------------------------------")
+        print(
+            "Scheduled jobs   |     # | Expected comp. time (per job)\n"
+            "-----------------+-------+--------------------------------"
+        )
         for col, count in sorted(jobs_per_builder.items()):
             stats = runtime.db.get_run_stats(col)
             if stats["avg"] is None:
                 print("{:<17}| {:>5} | N/A".format(col, count))
             else:
-                print("{:<17}| {:>5} | {:>8} +- {}".format(col, count, format_time(stats["avg"]),
-                                                           format_time(stats["stdev"])))
+                print(
+                    "{:<17}| {:>5} | {:>8} +- {}".format(
+                        col,
+                        count,
+                        format_time(stats["avg"]),
+                        format_time(stats["stdev"]),
+                    )
+                )
         print("-----------------+-------+--------------------------------")
