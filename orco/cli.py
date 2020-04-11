@@ -11,7 +11,8 @@ from .runtime import Runtime
 
 
 def _command_serve(runtime, args):
-    runtime.serve()
+    print("Running ORCO browser on port {}".format(args.port))
+    runtime.serve(port=args.port)
 
 
 def _command_compute(runtime, args):
@@ -68,6 +69,7 @@ def _parse_args():
 
     # SERVE
     p = sp.add_parser("serve")
+    p.add_argument("--port", type=int, default=8550)
     p.set_defaults(command=_command_serve)
 
     # COMPUTE
