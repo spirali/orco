@@ -7,7 +7,7 @@ def builder(*, name=None, job_setup=None):
     def _register(fn):
         b = Builder(fn, name=name, job_setup=job_setup)
         _register_builder(b)
-        return b
+        return b.make_proxy()
 
     return _register
 

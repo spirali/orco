@@ -31,10 +31,10 @@ def test_builder_args(env):
 
 
 def test_pickle_builder():
-    @builder()
-    def f(x):
+    def fn(x):
         return x + 1
 
+    f = Builder(fn)
     bf = f
     print(f)
     s = pickle.dumps(bf)
@@ -521,4 +521,4 @@ def test_builder_recursive(env):
 
     runtime = env.test_runtime()
     r = runtime.compute(bb(4))
-    assert r.value == 123
+    assert r.value == 24

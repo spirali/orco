@@ -14,6 +14,57 @@ def _generic_kwargs_fn(**_kwargs):
     pass
 
 
+class BuilderProxy:
+
+    def __init__(self, name, has_fn, fn_signature, fn_argspec, fn_name, doc):
+        self.name = name
+        self.has_fn = has_fn
+        self.fn_signature = fn_signature
+        self.fn_argspec = fn_argspec
+        self.__signature__ = self.fn_signature
+        if fn_name:
+            self.__name__ = fn_name
+        if doc:
+            self.__doc__ = "Builder {!r} for {!r}, original docs:\n\n{}\n".format(self.name, fn_name, doc)
+
+    def __call__(self, *args, **kwargs):
+        """
+        Create an unresolved Entry for this builder from function arguments.
+
+        Calls `_CONTEXT.on_job` to register/check dependencies etc.
+        """
+        config = self._create_config_from_args(args, kwargs)
+        return self.job_from_config(config)
+
+    def _create_config_from_args(self, args, kwargs):
+        """
+        Return an OrderedDIct of named parameters, unpacking extra kwargs into the dict.
+        """
+        if not self.has_fn and args:
+            raise Exception("Builders with fn=None only accept keyword arguments")
+        ba = self.fn_signature.bind(*args, **kwargs)
+        ba.apply_defaults()
+        a = ba.arguments
+        if self.fn_argspec.varkw:
+            kwargs = a.pop(self.fn_argspec.varkw, {})
+            a.update(kwargs)
+        return a
+
+    def job_from_config(self, config):
+        """
+        Create an unresolved Entry for this builder from config dict.
+
+        Calls `_CONTEXT.on_job` to register/check dependencies etc.
+        """
+        job = Job(self.name, make_key(self.name, config), config)
+        if not hasattr(_CONTEXT, "on_job"):
+            return job
+        on_job = _CONTEXT.on_job
+        if on_job:
+            on_job(job)
+        return job
+
+
 class Builder:
     """
     Definition of a single task type, also a factory for an `Entry`.
@@ -33,15 +84,15 @@ class Builder:
         if fn is not None and not isinstance(fn, CloudWrapper):
             fn = CloudWrapper(fn)
         self._fn = fn
-        #if callable(job_setup) and not isinstance(job_setup, CloudWrapper):
-        #    job_setup = CloudWrapper(job_setup)
+        if callable(job_setup) and not isinstance(job_setup, CloudWrapper):
+            job_setup = CloudWrapper(job_setup)
         self.job_setup = job_setup
 
         # Name resolution
         if name is None:
             if fn is None:
                 raise ValueError("Provide at leas one of fn and name")
-            name = self.fn.__name__
+            name = fn.__name__
         assert isinstance(name, str)
         if not name.isidentifier():
             raise ValueError("{!r} is not a valid name for Builder (needs a valid identifier)".format(name))
@@ -58,36 +109,17 @@ class Builder:
         self.__signature__ = self.fn_signature
         if hasattr(self.fn, '__name__'):
             self.__name__ = self.fn.__name__
-        self.__doc__ = "Builder {!r} for {!r}, original docs:\n\n{}\nBuilde class doc:\n\n{}".format(self.name, self.fn, self.fn.__doc__, self.__doc__)
+
+    def make_proxy(self):
+        name = self.fn.__name__ if self.fn else None
+        doc = self.fn.__doc__ if self.fn else None
+        return BuilderProxy(self.name, self._fn is not None, self.fn_signature, self.fn_argspec, name, doc)
 
     @property
     def fn(self):
         if isinstance(self._fn, CloudWrapper):
             return self._fn.fn
         return self._fn
-
-    def __call__(self, *args, **kwargs):
-        """
-        Create an unresolved Entry for this builder from function arguments.
-
-        Calls `_CONTEXT.on_job` to register/check dependencies etc.
-        """
-        config = self._create_config_from_args(args, kwargs)
-        return self.job_from_config(config)
-
-    def job_from_config(self, config):
-        """
-        Create an unresolved Entry for this builder from config dict.
-
-        Calls `_CONTEXT.on_job` to register/check dependencies etc.
-        """
-        job = Job(self.name, make_key(self.name, config), config)
-        if not hasattr(_CONTEXT, "on_job"):
-            return job
-        on_job = _CONTEXT.on_job
-        if on_job:
-            on_job(job)
-        return job
 
     def run_with_config(self, config, only_deps=False, after_deps=None):
         """
@@ -172,20 +204,6 @@ class Builder:
             return job_setup
         else:
             raise TypeError("Invalid object as job_setup: {!r}".format(job_setup))
-
-    def _create_config_from_args(self, args, kwargs):
-        """
-        Return an OrderedDIct of named parameters, unpacking extra kwargs into the dict.
-        """
-        if self.fn is None and args:
-            raise Exception("Builders with fn=None only accept keyword arguments")
-        ba = self.fn_signature.bind(*args, **kwargs)
-        ba.apply_defaults()
-        a = ba.arguments
-        if self.fn_argspec.varkw:
-            kwargs = a.pop(self.fn_argspec.varkw, {})
-            a.update(kwargs)
-        return a
 
     def _create_args_from_config(self, config):
         """

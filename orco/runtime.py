@@ -7,7 +7,7 @@ import time
 
 from orco.internals.context import _CONTEXT
 
-from .builder import Builder
+from .builder import Builder, BuilderProxy
 from .job import Job
 from .internals.database import Database, JobState
 from .internals.executor import Executor
@@ -111,7 +111,7 @@ class Runtime:
             raise Exception("Builder '{}' is already registered".format(name))
         #self.db.ensure_builder(name)
         self._builders[name] = builder
-        return builder
+        return builder.make_proxy()
 
     def serve(self, port=8550, debug=False, testing=False, nonblocking=False):
         from .internals.browser import init_service
@@ -205,7 +205,7 @@ class Runtime:
         return self._builders[builder_name]
 
     def upgrade_builder(self, builder, upgrade_fn):
-        if isinstance(builder, Builder):
+        if isinstance(builder, BuilderProxy) or isinstance(builder, BuilderProxy):
             builder_name = builder.name
         else:
             builder_name = builder
