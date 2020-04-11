@@ -1,7 +1,9 @@
 import argparse
+import os
 import sys
 
 import json5
+
 
 from .builder import Builder
 from .cfggen import build_config
@@ -13,7 +15,16 @@ def _command_serve(runtime, args):
 
 
 def _command_compute(runtime, args):
-    builder = runtime.get_builder(args.builder)
+    tasks = _job_from_args(runtime, args)
+    res = runtime.compute_many(tasks)
+    for e in res:
+        print("{:40s}   {!r}".format(e.key, e.value))
+
+
+def _job_from_args(runtime, args):
+    if not runtime.has_builder(args.builder):
+        raise Exception("Unknown builder {!r}".format(args.builder))
+    builder = runtime.get_builder(args.builder).make_proxy()
     cfg = json5.loads(args.config)
     cfg = build_config(cfg)
     print(cfg)
@@ -27,19 +38,25 @@ def _command_compute(runtime, args):
                 type(cfg)
             )
         )
-    res = runtime.compute_many(tasks)
-    for e in res:
-        print("{:40s}   {!r}".format(e.key, e.value))
-
-
-def _command_remove(runtime, args):
-    builder = runtime.builders.get(args.builder)
-    if builder is None:
-        raise Exception("Unknown builder {!r}".format(args.builder))
-    builder.remove(json5.loads(args.config))
+    return tasks
 
 
 def _command_drop(runtime, args):
+    tasks = _job_from_args(runtime, args)
+    runtime.drop_many(tasks)
+
+
+def _command_archive(runtime, args):
+    tasks = _job_from_args(runtime, args)
+    runtime.archive_many(tasks)
+
+
+def _command_free(runtime, args):
+    tasks = _job_from_args(runtime, args)
+    runtime.free_many(tasks)
+
+
+def _command_drop_builder(runtime, args):
     runtime.drop_builder(args.builder)
 
 
@@ -59,16 +76,28 @@ def _parse_args():
     p.add_argument("config")
     p.set_defaults(command=_command_compute)
 
-    # REMOVE
-    p = sp.add_parser("remove")
-    p.add_argument("builder")
-    p.add_argument("config")
-    p.set_defaults(command=_command_remove)
-
     # DROP
     p = sp.add_parser("drop")
     p.add_argument("builder")
+    p.add_argument("config")
     p.set_defaults(command=_command_drop)
+
+    # ARCHIVE
+    p = sp.add_parser("archive")
+    p.add_argument("builder")
+    p.add_argument("config")
+    p.set_defaults(command=_command_archive)
+
+    # FREE
+    p = sp.add_parser("free")
+    p.add_argument("builder")
+    p.add_argument("config")
+    p.set_defaults(command=_command_free)
+
+    # DROP-BUILDER
+    p = sp.add_parser("drop-builder")
+    p.add_argument("builder")
+    p.set_defaults(command=_command_drop_builder)
 
     return parser.parse_args()
 
@@ -85,9 +114,13 @@ def run_cli(runtime=None, db_path=None):
         args = _parse_args()
         if runtime is None:
             if args.db is not None:
-                db_path = db_path
+                db_path = args.db
+            else:
+                db_path = os.environ.get("ORCO_DB")
             if db_path is None:
-                db_path = "sqlite://"
+                raise Exception(
+                    "No database is defined, use parameter '--db' or env variable 'ORCO_DB'"
+                )
             runtime = Runtime(db_path)
         else:
             if args.db is not None:

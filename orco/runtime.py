@@ -206,6 +206,9 @@ class Runtime:
         self._compute(jobs, reattach, continue_on_error)
         return jobs
 
+    def has_builder(self, builder_name):
+        return builder_name in self._builders
+
     def get_builder(self, builder_name):
         return self._builders[builder_name]
 
