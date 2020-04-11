@@ -130,18 +130,18 @@ def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time, cpt
     _per_process_db.set_finished(job_id, value, value_repr, time.time() - start_time, cpt.get_bytes())
 
 
-def _run_job(db_path, builder, job_id):
+def _run_job(db_path, builder_fn, job_id):
     start_time = time.time()
     cpt = None
+    global _per_process_db
     try:
-        global _per_process_db
         if _per_process_db is None:
             _per_process_db = Database(db_path)
         job_setup, config, keys_to_job_ids = _per_process_db.set_running(job_id)
         cpt = capturer.CaptureOutput(relay=job_setup.relay)
         cpt.start_capture()
         if job_setup.timeout is not None:
-            thread = threading.Thread(target=_run_job_timed, args=(_per_process_db, job_id, builder, config, keys_to_job_ids, start_time, cpt))
+            thread = threading.Thread(target=_run_job_timed, args=(_per_process_db, job_id, builder_fn, config, keys_to_job_ids, start_time, cpt))
             thread.daemon = True
             thread.start()
             thread.join(job_setup.timeout)
@@ -150,9 +150,10 @@ def _run_job(db_path, builder, job_id):
                 _per_process_db.set_error(job_id, t.message(), time.time() - start_time)
                 return t
         else:
-            _run_job_timed(_per_process_db, job_id, builder, config, keys_to_job_ids, start_time, cpt)
+            _run_job_timed(_per_process_db, job_id, builder_fn, config, keys_to_job_ids, start_time, cpt)
         return job_id
     except Exception as exception:
         t = JobError(job_id, str(exception), traceback.format_exc())
-        _per_process_db.set_error(job_id, t.message(), time.time() - start_time, cpt.get_bytes() if cpt else None)
+        if _per_process_db:
+            _per_process_db.set_error(job_id, t.message(), time.time() - start_time, cpt.get_bytes() if cpt else None)
         return t

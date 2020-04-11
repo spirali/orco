@@ -506,3 +506,19 @@ def test_already_attached(env):
 
     with pytest.raises(Exception, match="is already attached"):
         runtime.read(b)
+
+
+def test_builder_recursive(env):
+    @builder()
+    def bb(x):
+        if x > 0:
+            r = bb(x - 1)
+        yield
+        if x > 0:
+            return x * r.value
+        else:
+            return 1
+
+    runtime = env.test_runtime()
+    r = runtime.compute(bb(4))
+    assert r.value == 123

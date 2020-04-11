@@ -4,7 +4,7 @@ import random
 import threading
 import time
 
-from orco import Runtime, builder, Builder
+from orco import Runtime, builder, Builder, attach_object
 
 url = "sqlite:///test.db"
 if os.path.isfile("test.db"):
@@ -25,6 +25,13 @@ def bedroom(sleepers):
     [sleeper(x) for x in sleepers]
     yield
     return None
+
+@builder()
+def state_demo(x):
+    if x > 0:
+        state_demo(x - 1)
+    yield
+    attach_object("data1", "Hello!")
 
 rt = Runtime(url)
 
@@ -71,6 +78,10 @@ for g, m, s in itertools.product(graphs, models, scheduler):
     rt.insert(c(graph=g, model=m, scheduler=s), random.randint(1, 30000))
 
 c = rt.register_builder(Builder(None, name="builder_long_name"))
+
+rt.compute(state_demo(4))
+rt.free_many([state_demo(2), state_demo(3)])
+rt.archive([state_demo(3)])
 
 print("SERVE")
 print("=" * 80)
