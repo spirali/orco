@@ -1,6 +1,12 @@
 class JobSetup:
     """
-    relay = redirect output also into the executors console
+    Structure for configuring Job computation.
+
+    Attributes:
+
+    - timeout (int|None): Time limit (in seconds) for computation. If the computation is not finished
+               before the limit, an exception is thrown. Default: No time limit.
+    - relay (bool): If true, stdout/stderr, redirect output also into the executor's console.
     """
 
     __slots__ = ("runner_name", "timeout", "setup", "relay")

@@ -37,7 +37,13 @@ class Runtime:
 
     It manages database with results and starts computations
 
-    >>> runtime = Runtime("/path/to/dbfile.db")
+    For SQLite:
+
+    >>> runtime = Runtime("sqlite:///path/to/dbfile.db")
+
+    For Postgress:
+
+    >>> runtime = Runtime("postgresql://<USERNAME>:<PASSWORD>@<HOSTNAME>/<DATABASE>")
     """
 
     def __init__(

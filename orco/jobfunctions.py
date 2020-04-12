@@ -27,24 +27,43 @@ def _validate_name(name):
 
 
 def attach_object(name, obj):
+    """
+    Attach object to a current job.
+
+    Object is pickled and save under specified name.
+    Mime type is set to 'application/python.pickle'
+    """
     _validate_name(name)
     jc = _get_job_context("attach_object")
     jc.db.insert_blob(jc.job_id, name, pickle.dumps(obj), MIME_PICKLE, make_repr(obj))
 
 
 def attach_bytes(name, data, mime=MIME_BYTES, repr=None):
+    """
+        Attach 'bytes' object to a current job.
+
+        Data are saved as it is under specified name.
+    """
     _validate_name(name)
     jc = _get_job_context("attach_bytes")
     jc.db.insert_blob(jc.job_id, name, data, mime, repr)
 
 
 def attach_text(name, text):
+    """
+        Attach a text to a current job.
+
+        Text is saved as UTF-8 text with MIME type text/plain".
+    """
     _validate_name(name)
     jc = _get_job_context("attach_text")
     jc.db.insert_blob(jc.job_id, name, text.encode(), MIME_TEXT, None)
 
 
 def attach_directory(path, name=None, repr=None):
+    """
+        Attach a directory to a current job as tar archive.
+    """
     jc = _get_job_context("attach_directory")
     if not os.path.isdir(path):
         raise Exception("Path '{}' is not a directory.".format(path))
@@ -60,6 +79,9 @@ def attach_directory(path, name=None, repr=None):
 
 
 def attach_file(filename, name=None, mime=None, repr=None):
+    """
+        Attach a file to a current job.
+    """
     jc = _get_job_context("attach_file")
     with open(filename, "rb") as f:
         data = f.read()
