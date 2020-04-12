@@ -9,7 +9,11 @@ recomputation in the future.
 The database with computation results is represented by a `Runtime`, which
 receives a path to a database file where the results will be stored.
 In this chapter, we use a default 'job runner' that executes task locally.
-It is spawned automatically on demand by the runtime, so no further action is needed.
+It is spawned automatically by the runtime, so no further action is needed.
+
+As a database backend, you can use all databases supported by
+[SqlAlchemy](https://docs.sqlalchemy.org). For this text we will use SQLite, as
+it does not need any configuration.
 
 
 ```python
@@ -17,73 +21,83 @@ import orco
 
 # Create a new runtime
 # If the database file does not exist, it will be created
-runtime = orco.Runtime("./mydb")
+runtime = orco.Runtime("sqlite:///my.db")
+
+# Use can use "sqlite:////" prefix for abolute path
+
+# For using Postgress, you can use the following:
+# runtime = Runtime("postgresql://<USERNAME>:<PASSWORD>@<HOSTNAME>/<DATABASE>")
 ```
 
-Now you can start defining your computations. Computations in ORCO are stored in **builder**s.
-A builder stores the results of a single type of computation (preparing a dataset,
-training a neural network, benchmarking or compiling a program, ...). 
+Now we can start defining your computations. Computations in ORCO are defined as
+**builder**s. A builder defines and stores the results of a single type of
+computation (preparing a dataset, training a neural network, benchmarking or
+compiling a program, ...).
 
 Let's define a trivial builder that will returns of a computation which simply adds two numbers.
 
 ```python
-# You can ignore `inputs` for now, it is explained in the Advanced usage guide
 import orco
 
 @orco.builder()
-def adder(config):
-    return config["a"] + config["b"]
+def add(a, b):
+    return a + b
 
-runtime = orco.Runtime("./mydb")
+runtime = orco.Runtime("sqlite:///my.db")
 ```
 
-Builder is basically a function that takes a **configuration** and returns may return any pickable Python object.
-A configuration has to be a Python value
-that is easily serializable (i.e. JSON-like - numbers, strings, booleans, lists, tuples or dictionaries).
-The configuration should contain everything that is necessary to produce a result of the builder.
+The builder is basically a wrapper around a function which result will be automatically persisted.
+Builder has some additional qualities that we will see later.
 
-The builder in our example expects a directory with keys "a" and "b" as a configuration. 
-Here we create two different configurations:
+We call input arguments of a builder as a **configuration** of builder.
+Configuration has to be always composed only from to be JSON seriazable types
+(numbers, strings, booleans, lists, tuples or dictionaries). So it can be serialized with the result.
 
-```python
-config_1 = { "a": 1, "b": 2 }
-config_2 = { "a": 3, "b": 4 }
-```
+ORCO also always assumes that configuration fully describe the computation. This
+is important idea behind the concept of ORCO. It allows to prevent recomputing
+already computed data and reconstruct the computation when needed.
 
 We have now defined a database for storing computation results,
-a builder that defines a simple `adder` computation 
-and two configurations for `adder` that we want to compute.
+a builder that defines a simple `add` computation
+and two configurations for `add` that we want to compute.
 
-To invoke a computation we need to create an **entry**. 
-Entry is created by calling a builder. Calling a builder is a very lightweight operation that just creates a reference
+To invoke a computation we need to create an **job**.
+Job is created by calling a builder. Calling a builder is a very lightweight operation that just creates a reference
 to a computation without invoking a builder's function.
-To really invoke a computation we need to call ``runtime.compute(entry)``.
-After the computation is over, the entry will contain a result in the attribute ``value``.
+To really invoke a computation we need to call ``runtime.compute(job)``.
+After the computation is over, we can read job's ``value``.
 
 ```python
 # Compute the result of `add` with the input `config_1`
-result = runtime.compute(adder(config_1))
-print(result.value)  # prints: 3
+job = add(1, 2)
+runtime.compute(job)
+print(job.value)  # prints: 3
+
+# Comment: runtime.compute returns the first given argument, so the example
+# can be written also as:
+#
+# job = runtime.compute(adder(1, 2))
+# print(job.value)  # prints: 3
+#
+# We use both variants in this text.
 ```
 
-A builder establish a persistent cache for each builder that is stored in the database.
-If you give a configuration to the builder,
-it will either return an already computed result stored in the database or invoke
-the builder's function if the result was not computed for the specified input yet.
+Each builder establish a persistent cache for each builder that is stored in the
+database. Because this was the first time we asked for this specific
+computation, the build function was invoked with the given configuration and its
+return value was stored into the database. When we run the same computation
+again, the result will be provided directly from the database.
 
-Because this was the first time we asked for this specific computation, the build function was invoked
-with the given configuration and its return value was stored into the database.
-When we run the same computation again, the result will be provided directly from the database.
 ```python
-result = runtime.compute(adder(config_1))  # build_fn is not called again here
+runtime.compute(add(1, 2))  # Builder's function is not called now, it just load the result from DB
 ```
 
 So far we have computed only one configuration, usually you want to compute many of them
 ```python
-result = runtime.compute_many([adder({"a": 1, "b": 2}),
-                               adder({"a": 2, "b": 3}),
-                               adder({"a": 4, "b": 5})])
-print([r.value for r in result])  # prints: [3, 5, 9]]
+jobs = runtime.compute_many([add(1, 2),
+                             add(2, 3),
+                             add(4, 5)])
+print([r.value for r in jobs])  # prints: [3, 5, 9]]
 ```
 
 Computing more instances at once allows to paralelize the computation and reduce an overhead of starting a computation.
@@ -96,26 +110,29 @@ The whole code example is listed here:
 ```python
 import orco
 
-# Register builder
+
+# Build function for our configurations
 @orco.builder()
-def adder(config):
-    return config["a"] + config["b"]
+def add(a, b):
+    return a + b
 
 
-# Create a runtime environment for ORCO
-# All data will be stored in file on provided path
-# If the file does not exists, it will be created
-runtime = orco.Runtime("./mydb")
+# Create a runtime environment for ORCO.
+# All data will be stored in file on provided path.
+# If file does not exists, it is created
+runtime = orco.Runtime("sqlite:///my.db")
 
+# Invoke computations, builder.ref(...) creates a "reference into a builder",
+# basically a pair (builder, config)
+# When reference is provided, compute returns instance of Entry that
+# contains attribute 'value' with the result of build function.
+job = runtime.compute(add(1, 2))
+print(job.value)  # prints: 3
 
-# When a task is provided, compute returns instance of Entry that
-# contains attribute 'value' with the result of the build function
-result = runtime.compute(adder({"a": 1, "b": 2}))
-print(result.value)  # prints: 3
-
-result = runtime.compute_many([adder({"a": 1, "b": 2}),
-                               adder({"a": 2, "b": 3}),
-                               adder({"a": 4, "b": 5})])
+# Invoke more compututations at once
+result = runtime.compute_many([add(1, 2),
+                               add(2, 3),
+                               add(4, 5)])
 print([r.value for r in result])  # prints: [3, 5, 9]
 ```
 
@@ -127,8 +144,7 @@ ORCO allows you to define dependencies between computations. When a computation
 completed and the result of `B` will be passed as an additional input to `A`.
 
 In the example, assume that we have an expensive simulation. For the sake of
-simplicity, we will parametrize it by one parameter. Configurations for it will
-look like `{"p": <PARAMETER-OF-SIMULATION>}`.
+simplicity, we will parametrize it by one parameter `p`.
 
 We define builder of simulations as follows:
 
@@ -138,17 +154,15 @@ import time
 import random
 
 @orco.builder()
-def simulation(config, inputs):
+def simulation(p):
     # Fake a computation
-    result = random.randint(0, config["p"])
+    result = random.randint(0, p)
     time.sleep(1)
     return result
 ```
 
 Now we define an "experiment" that includes a range of simulations that has to
-be performed together with some post-processing. Configurations for experiments
-will be as follows `{"from": <P-START>, "upto": <P-END>}` where `<P-START>`
-and `<P-END>` defines a range in which we want to run simulations.
+be performed together with some post-processing.
 
 Because we want share simulations between experiments, experiment itself will
 not perform the computation, but establish an dependency on "simulation" builder.
@@ -159,8 +173,8 @@ not perform the computation, but establish an dependency on "simulation" builder
 # Run experiment, sum resulting values as demonstration of a postprocessing
 # of simulation
 @orco.builder()
-def experiment(config):
-    sims = [simulation({"p": p}) for p in range(config["from"], config["upto"])]
+def experiment(start, end):
+    sims = [simulation(p) for p in range(start, end)]
     yield
     return sum([s.value for s in sims])
 ```
@@ -170,21 +184,25 @@ When dependencies are used, there are two phases:
 * Inputs gathering (before ``yield``)
 * Computation (after ``yeild``)
 
-You call other builders in the first phase. They are gathered as dependencies for the computation.
-This phase should be quick without any heavy computation. This phase is possibly invoked more than once.
+We can call other builders in the first phase. They are gathered as dependencies
+for the computation. This phase should be quick without any heavy computation.
+This phase is possibly invoked more than once.
 
-The second phase is computation phase where the main part of the computation should
-happen. It may freely used entries created in the first phase. It is not allowed to create new entries by calling 
-builders (an exception is thrown in such case).
- 
+The second phase is computation phase where the main part of the computation
+should happen. ORCO guarantees that all jobs created in the first phase is
+successfully finished. Hence we may freely access its .value attribute.
+On the other hand, it is
+not allowed to create new jobs by calling builders (an exception is thrown in
+such case). All dependencies has to be created in the first phase.
+
 Now if we run:
 
 ```python
 
-runtime = orco.Runtime("my.db")
+runtime = orco.Runtime("sqlite:///my.db")
 
 # Run experiment with with simulation between [0, 10).
-runtime.compute(experiment({"from": 0, "upto": 10}))
+runtime.compute(experiment(0, 10))
 ```
 
 The output will be as follows:
@@ -192,20 +210,23 @@ The output will be as follows:
 ```
 Scheduled jobs   |     # | Expected comp. time (per entry)
 -----------------+-------+--------------------------------
-exeperiments     |     1 | N/A
-simulations      |    10 | N/A
+experiment       |     1 | N/A
+simulation       |    10 | N/A
 -----------------+-------+--------------------------------
 100%|██████████████████████████████████| 11/11 [00:03<00:00,  3.63it/s]
 ```
 
-We see, that system performs one computation from builder "experiment" and ten from "simulation".
-Simulations are automatically scheduled as result of experiment dependency.
-Since our DB is empty, we have no prior information about previous run, the expected computation is not available (third column in the output).
+We see, that system performs one computation from builder "experiment" and ten
+from "simulation". Simulations are automatically scheduled as a result of
+experiment dependency. Since our DB is empty, we have no prior information about
+computation time, the expected computation makespan is not available (third
+column in the output).
 
+Lets us now run the following:
 
 ```python
 # Run experiment with with simulation between [7, 15).
-runtime.compute(experiment({"from": 7, "upto": 15}))
+runtime.compute(experiment(7, 15))
 ```
 
 The output will be following:
@@ -213,14 +234,16 @@ The output will be following:
 ```
 Scheduled jobs   |     # | Expected comp. time (per entry)
 -----------------+-------+--------------------------------
-exeperiments     |     1 |      1ms +- 0ms
-simulations      |     5 |     1.0s +- 1ms
+experiment       |     1 |      1ms +- 0ms
+simulation       |     5 |     1.0s +- 1ms
 -----------------+-------+--------------------------------
 100%|███████████████████████████████████| 6/6 [00:02<00:00,  2.95it/s]
 ```
 
-ORCO schedules five simulations, because simulations for parameters 7, 8, and 9 are already computed. We need to only compute five simulations in range 10-14.
-Now we also see expected computation time for entries because we already have some results in the DB.
+ORCO schedules five simulations, because simulations for parameters 7, 8, and 9
+are already computed. We need to only compute five simulations in range 10-14.
+Now we also see expected computation times for jobs because we already have some
+results in the DB.
 
 ## ORCO browser
 

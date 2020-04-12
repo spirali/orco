@@ -9,15 +9,17 @@ as follows:
 import orco
 
 @orco.builder()
-def adder(config):
-    return config["a"] + config["b"]
+def add(a, b):
+    return a + b
 
 
 orco.run_cli()  # Start CLI interface
 ```
 
 In case you want to create your own `Runtime`, you can pass it to `run_cli`, otherwise,
-a default `Runtime` is created for you with the db specified by `--db` parameter (or in-memory if none is specified).
+a default `Runtime` is created for you with the db specified by `--db` parameter 
+or via environment ``ORCO_DB``. To make following commands shorter we expect that
+environment variable is set as follows: ``ORCO_DB=sqlite:///my.db``.
 
 Let us assume that the script above is saved as `adder_cli.py`, then we can
 start computations by executing:
