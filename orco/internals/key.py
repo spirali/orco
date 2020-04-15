@@ -17,7 +17,7 @@ def _make_key_helper(obj, stream):
                 raise Exception(
                     "Invalid key in config: '{}', type: {}".format(repr(key), type(key))
                 )
-            if key.startswith("_"):
+            if key.startswith("__"):
                 continue
             stream.append(repr(key))
             stream.append(":")

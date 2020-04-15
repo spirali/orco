@@ -28,12 +28,12 @@ def test_make_key_basics():
 
 
 def test_make_key_ignored_keys():
-    assert make_key("z", {"x": 10, "_not_here": 20}) == make_key("z", {"x": 10})
-    assert make_key("z", {"x": 10, "_not_here": 20}) == make_key(
-        "z", {"x": 10, "_no_here": 30}
+    assert make_key("z", {"x": 10, "__not_here": 20}) == make_key("z", {"x": 10})
+    assert make_key("z", {"x": 10, "__not_here": 20}) == make_key(
+        "z", {"x": 10, "__no_here": 30}
     )
-    assert make_key("z", {"x": 10, "_not_here": 20}) == make_key(
-        "z", {"x": 10, "_no_here2": 40}
+    assert make_key("z", {"x": 10, "__not_here": 20}) == make_key(
+        "z", {"x": 10, "__no_here2": 40}
     )
 
 
