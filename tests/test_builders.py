@@ -62,12 +62,12 @@ def test_builder_init(env):
     assert baz.__name__ == "baz"
 
     with pytest.raises(ValueError, match=".*Provide at leas one of fn and name.*"):
-        Builder(None)
+        Builder(None, is_frozen=True)
     with pytest.raises(ValueError, match=".*is not a valid name for Builder.*"):
         Builder(lambda cfg: None)
 
     runtime = env.test_runtime()
-    runtime.register_builder(Builder(None, "b1"))
+    runtime.register_builder(Builder(None, "b1", is_frozen=True))
 
     assert "b1" in runtime._builders
     assert "foo" in runtime._builders
@@ -83,27 +83,31 @@ def test_reopen_builder(env):
         runtime.register_builder(Builder(adder, "col1"))
 
 
-def test_fixed_builder(env):
+def test_frozen_builder(env):
+    @builder(is_frozen=True)
+    def b0(x):
+        pass
+
     runtime = env.test_runtime()
 
-    fix1 = runtime.register_builder(Builder(None, "fix1"))
-
     def b1(v):
-        f = fix1(x=v)
+        f = b0(x=v)
         yield
         return f.value * 10
 
     col2 = runtime.register_builder(Builder(b1, "col2"))
 
-    runtime.insert(fix1(x="a"), 11)
+    runtime.insert(b0(x="a"), 11)
 
     assert runtime.compute(col2("a")).value == 110
-    assert runtime.compute(fix1(x="a")).value == 11
+    assert runtime.compute(b0(x="a")).value == 11
 
-    with pytest.raises(Exception, match=".* fixed builder.*"):
+    with pytest.raises(Exception, match=".*Frozen builder.*"):
         assert runtime.compute(col2("b"))
-    with pytest.raises(Exception, match=".* fixed builder.*"):
+    with pytest.raises(Exception, match=".*Frozen builder.*"):
         assert runtime.compute(col2("b"))
+    with pytest.raises(Exception, match=".*Frozen builder.*"):
+        assert runtime.compute(b0("b"))
 
 
 def test_builder_upgrade(env):

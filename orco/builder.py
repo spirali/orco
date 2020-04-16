@@ -77,9 +77,12 @@ class Builder:
     function (name, doc, etc.).
     """
 
-    def __init__(self, fn, name: str = None, job_setup=None):
+    def __init__(self, fn, name: str = None, job_setup=None, is_frozen=False):
         if not callable(fn) and fn is not None:
             raise TypeError("Fn must be callable or None, {!r} provided".format(fn))
+
+        if fn is None and not is_frozen:
+            raise Exception("When fn is None but builder is not frozen")
 
         # Cloudwrapper
         if fn is not None and not isinstance(fn, CloudWrapper):
@@ -102,6 +105,7 @@ class Builder:
                 )
             )
         self.name = name
+        self.is_frozen = is_frozen
 
         # Signature inference
         if self.fn is not None:
@@ -142,8 +146,8 @@ class Builder:
         (or nothing for ordinary functions).
         Does not set the context etc.
         """
-        if self.fn is None:
-            raise Exception("Fixed builder {!r} can't be run".format(self))
+        if self.is_frozen:
+            raise Exception("Frozen builder {!r} can't be run".format(self))
 
         args, kwargs = self._create_args_from_config(config)
         return self.run_with_args(
@@ -160,8 +164,8 @@ class Builder:
 
         If given, runs after_deps() after the dependency phase. Does not set the context etc.
         """
-        if self.fn is None:
-            raise Exception("Fixed builder {!r} can't be run".format(self))
+        if self.is_frozen:
+            raise Exception("Frozen builder {!r} can't be run".format(self))
 
         if inspect.isgeneratorfunction(self.fn):
             g = self.fn(*args, **kwargs)

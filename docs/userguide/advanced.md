@@ -232,30 +232,46 @@ the computation for configurations that are not yet computed, you can use the
 The method `try_read` works similarly, but return `None` is not in the database.
 
 
-## Fixed builders
+## Frozen builders
 
-Builders do not need to have an associated build function. Such builders are called *fixed*
-and are created by passing `None` for the builder function.
-You can insert values into them method using the `insert` function, which receives a configuration
+When we want store a fixed collection of data that cannot be recreated, ORCO offsers
+frozen builders.
+
+```python
+@builder(is_frozen=True)
+def my_builder(x):
+    pass  # Body is not important
+``` 
+
+Function of frozen builder is never called. We only utilize
+function's parameters to define shape of configurations.
+
+All results for the builder already in the database is available, but
+when a result is not presented in the database is requested, then error is thrown.
+
+```python
+# Assume now an empty database
+
+runtime.compute(my_builder(10))
+# Throws an error, because my_builder(10) is not in DB, and 
+# new value cannot be computed because my_builder is frozen.
+```
+
+New values can be inserted explicitly via `insert` function, which receives a configuration
 and its result value:
 
 ```python
-
-my_builder = runtime.register_builder(Builder(None, "my_builder"))
-
 # Insert two values
-runtime.insert(my_builder({"something": 1}), 123)
-runtime.insert(my_builder("abc"), "xyz")
-
+runtime.insert(my_builder(10), 123)
+runtime.insert(my_builder(20), "xyz")
 ```
 
-When a reference into a fixed builder occurs in a computation, the value for
-the given configuration has to be present in the database, otherwise the computation is
-cancelled (because the runtime doesn't know how to produce a result value from a configuration
-without the build function).
+Note 1: Values can be inserted also for non-frozen builders, but usually you want to run
+`compute` rather than `insert` for this.
 
-> Values can be inserted also for builders with a build function, but usually you want to run
-> `compute` rather than `insert` for this.
+Note 2: A frozen state of a builder is a property of runtime, it is not stored in the database. Therefore
+another process may normally create jobs into a builder that is frozen for other process.
+Also for "unfreezing" a builder, just remove ``is_frozen=True`` flag and rerun the program. 
 
 ## Exporting results
 

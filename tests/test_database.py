@@ -46,7 +46,7 @@ def test_xdb_announce_basic(env):
 def test_xdb_set_result(env):
     r = env.test_runtime()
 
-    c = r.register_builder(Builder(None, "col1"))
+    c = r.register_builder(Builder(lambda x: x, "col1"))
     e = c(x=10)
     announce(r, [e])
 

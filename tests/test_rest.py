@@ -6,8 +6,8 @@ from orco import Runtime, Builder, builder, JobFailedException, consts
 
 def test_rest_builders(env):
     rt = env.test_runtime()
-    c = rt.register_builder(Builder(None, "hello"))
-    rt.register_builder(Builder(None, "hello2"))
+    c = rt.register_builder(Builder(None, "hello", is_frozen=True))
+    rt.register_builder(Builder(None, "hello2", is_frozen=True))
 
     with rt.serve(testing=True).test_client() as client:
         r = client.get("rest/builders").get_json()
