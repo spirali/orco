@@ -9,7 +9,6 @@ In this guide we show additional functionality offered by ORCO.
   - [Upgrading builders](#upgrading-builders)
   - [Retrieving jobs without computation](#retrieving-jobs-without-computation)
   - [Fixed builders](#fixed-builders)
-  - [Exporting results](#exporting-results)
   - [Configuration equivalence](#configuration-equivalence)
   - [Capturing output](#capturing-output)
   - [JobSetup](#jobsetup)
@@ -241,7 +240,7 @@ frozen builders.
 @builder(is_frozen=True)
 def my_builder(x):
     pass  # Body is not important
-``` 
+```
 
 Function of frozen builder is never called. We only utilize
 function's parameters to define shape of configurations.
@@ -253,7 +252,7 @@ when a result is not presented in the database is requested, then error is throw
 # Assume now an empty database
 
 runtime.compute(my_builder(10))
-# Throws an error, because my_builder(10) is not in DB, and 
+# Throws an error, because my_builder(10) is not in DB, and
 # new value cannot be computed because my_builder is frozen.
 ```
 
@@ -271,18 +270,8 @@ Note 1: Values can be inserted also for non-frozen builders, but usually you wan
 
 Note 2: A frozen state of a builder is a property of runtime, it is not stored in the database. Therefore
 another process may normally create jobs into a builder that is frozen for other process.
-Also for "unfreezing" a builder, just remove ``is_frozen=True`` flag and rerun the program. 
+Also for "unfreezing" a builder, just remove ``is_frozen=True`` flag and rerun the program.
 
-## Exporting results
-
-A builder can be easily exported into a Pandas `DataFrame`:
-
-```python
-from orco.ext.pandas import export_builder_to_pandas
-
-# Exporting builder with name "builder1"
-df = export_builder_to_pandas(runtime, "builder1")
-```
 
 ## Configuration equivalence
 
@@ -303,11 +292,28 @@ with some exceptions:
 
 ## Capturing output
 
-TODO
+All standard output or error output is automatically captured and saved together as one of job
+attached data.
+
+```python
+@builder()
+def my_builder(x):
+    print("Hello", x)
+
+runtime.compute(my_builder(10))
+```
+
+The example above do not print any output when executed. It can be found in ORCO Browser:
+
+<img src="imgs/stdout.png"/>
+
+Redirecting output also to the terminal where the computation is runnig can be done through ``JobSetup``, that is described in the next section.
+
 
 ## JobSetup
 
 TODO
+
 
 ## Configuration generators
 

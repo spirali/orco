@@ -79,3 +79,5 @@ Only the new samples will be computed (the first 20 ones are already stored in t
 results = runtime.compute([sampler({**config, "sample": i})
                            for i in range(30)])
 ```
+
+Continue to [Extensions](extensions.md)

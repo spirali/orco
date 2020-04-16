@@ -32,3 +32,4 @@ pip3 install orco
 * [CLI interface](cli.md)
 * [Advanced usage](advanced.md)
 * [Best practices](best-practices.md)
+* [Extensions](extensions.md)
