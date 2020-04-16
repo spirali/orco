@@ -24,6 +24,8 @@ def _validate_name(name):
         raise Exception("Name has to be a string, not {}".format(type(name)))
     if not name:
         raise Exception("Name has to be a non-empty string")
+    if name[0] == "!":
+        raise Exception("Name cannot start with '!'")
 
 
 def attach_object(name, obj):

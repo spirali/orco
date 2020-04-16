@@ -5,6 +5,22 @@ import pytest
 from orco import builder, attach_object, attach_file, attach_directory, attach_text
 
 
+def test_blob_validate_name(env):
+    @builder()
+    def bb(x):
+        with pytest.raises(Exception, match="has to be a string"):
+            attach_object(123, 1)
+        with pytest.raises(Exception, match="non-empty"):
+            attach_object("", 2)
+        with pytest.raises(Exception, match="cannot start with"):
+            attach_object("!hello", 3)
+        return "Ok"
+
+    runtime = env.test_runtime()
+    a = runtime.compute(bb(x=20))
+    assert a.value == "Ok"
+
+
 def test_blob_attach_object(env):
     @builder()
     def bb(x):

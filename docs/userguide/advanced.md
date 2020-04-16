@@ -17,7 +17,105 @@ In this guide we show additional functionality offered by ORCO.
 
 ## Attaching data
 
-TODO
+### Attaching basics
+
+Job may have attached arbitrary data called "blobs". Therefore a job may have
+more results than just a single result returned by the builder function.
+
+Each blob has a name, MIME type, and content (raw bytes). ORCO provides
+helping methods for directly storing Python objects, text and some others.
+
+Blobs are attached to a currently running job via ``orco.attach_`` functions.
+Calling these functions outside of job throws an exception.
+
+```python
+import orco
+
+@orco.builder()
+def my_builder(x):
+
+    # Attach any picklable object
+    attach_object("my_object", x + 2)
+
+    # Attach object as text, mime type is set as text/plain
+    attach_text("my_text", "This is a text")
+
+    # Attach raw binary data
+    attach_blob("my_data", b"raw data")
+
+    # Attach raw binary data, set mime type
+    attach_blob("my_data2", b"raw data", mime="application/my-app")
+```
+
+When a job is finished data can be accessed via following method:
+
+
+```python
+job = runtime.compute(my_builder(10))
+
+# Retreive blob and deserialize it by pickle
+obj = job.get_object("my_object")
+
+# Retraive blob and decode it as UTF-8 string
+text = job.get_text("my_text")
+
+
+# Retraive blob as it is; a pair (bytes, mime_type) is returned
+data, mime = job.get_blob("my_data")
+```
+
+Blob is attached immediately as the ``attach_*`` method is called and it stays
+there even the computation is not successfully finished. Hence it may be used
+also for storing debugging information for failing jobs. Also already attached
+blobs of running jobs is observable in ORCO Browser.
+
+
+### File-system helpers
+
+There are also helping methods for interaction with file system: ``attach_file``
+attach a content of a file and ``attach_directory`` packs directory into a tar
+file and attach it as a blob.
+
+There are also jobs' methods for working with filesystem: ``.get_blob_as_file``
+that stores a blob contant into a file and ``.extract_tar`` that extracts a
+given blob as tar file.
+
+```python
+@orco.builder()
+def my_builder(x):
+
+    # Create a blob from a file
+    attach_file("myfile.txt", x + 2)
+
+    # Create a blob from directory packed as a tar
+    attach_text("path/to/a/directory")
+```
+
+### Blob names
+
+The user may used any non-empty string that does not start with "!". Default
+value, error messages and some other data attached to a job is stored also as a
+blob. They only use a reserved names.
+
+* None (the only non-string name allowed) is name of default value.
+* "!message" is error message when jobs fails
+* "!output" is the standard output (see [Capturing output](#capturing-output))
+
+
+### Caching
+
+Job's methods returning blobs never cache the resulting value. This means that
+every time you retreive an attached blob, it is always freshly loaded from the
+database.
+
+```python
+result1 = job.get_object("my_object")
+result2 = job.get_object("my_object")
+```
+
+`result1` and `result2` should be equivalent but they are not necessarily the
+same object.
+
 
 ## Removing jobs
 
@@ -303,11 +401,13 @@ def my_builder(x):
 runtime.compute(my_builder(10))
 ```
 
-The example above do not print any output when executed. It can be found in ORCO Browser:
+The example above do not print any output when executed. It can be found in ORCO
+Browser:
 
 <img src="imgs/stdout.png"/>
 
-Redirecting output also to the terminal where the computation is runnig can be done through ``JobSetup``, that is described in the next section.
+Redirecting output to the terminal where the computation is runnig can be done
+through ``JobSetup``, that is described in the next section.
 
 
 ## JobSetup
