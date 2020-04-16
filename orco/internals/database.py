@@ -27,6 +27,8 @@ class Database:
     def __init__(self, url):
         engine = sa.create_engine(url)
         if "sqlite" in engine.dialect.name:
+            if url == "sqlite://":
+                raise Exception("In memory database is not supported.")
             sa.event.listen(engine, "connect", _set_sqlite_pragma)
             self.is_sqlite = True
         else:
