@@ -74,7 +74,7 @@ orco.builder()
 def sampler(param1, param2, sample):
     return doSomethingNondeterministic(param1, param2)
 
-results = runtime.compute_many(
+results = orco.compute_many(
     [sampler(10, 12, sample=i) for i in range(20)])
 ```
 
@@ -84,7 +84,7 @@ already stored in the database).
 
 ```python
 # only the 10 new samples will be computed
-results = runtime.compute_many(
+results = orco.compute_many(
     [sampler(10, 12, sample=i) for i in range(30)])
 ```
 

@@ -66,6 +66,10 @@ def get_global_runtime() -> Runtime:
     return _global_runtime
 
 
+def has_global_runtime():
+    return _global_runtime is not None
+
+
 def serve(port=8550, debug=False, nonblocking=False):
     return get_global_runtime().serve(port, debug, nonblocking)
 

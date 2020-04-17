@@ -51,7 +51,7 @@ When a job is finished data can be accessed via following method:
 
 
 ```python
-job = runtime.compute(my_builder(10))
+job = orco.compute(my_builder(10))
 
 # Retreive blob and deserialize it by pickle
 obj = job.get_object("my_object")
@@ -144,11 +144,11 @@ def tails_count_in_sample(sample_size):
     return [t.value for t in sample].count(2)
 ```
 
-Let us assume that we do the following computation:
+Let us assume that we do the following computations:
 
 ```python
-a = runtime.compute(heads_count_in_sample(10))
-b = runtime.compute(tails_count_in_sample(10))
+a = orco.compute(heads_count_in_sample(10))
+b = orco.compute(tails_count_in_sample(10))
 ```
 
 Obviously the ``a.value + b.value`` should be 10.
@@ -156,17 +156,17 @@ Obviously the ``a.value + b.value`` should be 10.
 But assume that we have a method ``naive_remove(job)`` that just removes stored result job from the database. Let us consider the following scenario:
 
 ```python
-# ! this is only a demonstration of a problem, naive remove is not implemented in ORCO !
-runtime.naive_remove(sample_of_coin_tosses(10))
-runtime.naive_remove(heads_count_in_sample(10))
+# ! this is only a demonstration of a problem, naive_remove is not implemented in ORCO !
+naive_remove(sample_of_coin_tosses(10))
+naive_remove(heads_count_in_sample(10))
 ```
 
 After that only the result for number of tails remains.
 If we now call again the the code above:
 
 ```python
-a = runtime.compute(heads_count_in_sample(10))
-b = runtime.compute(tails_count_in_sample(10))
+a = orco.compute(heads_count_in_sample(10))
+b = orco.compute(tails_count_in_sample(10))
 ```
 
 The first line causes a computation and it induces also
@@ -197,11 +197,11 @@ def step2(x):
     ...
 
 # This computes step2(10) together with step1(10) as its dependancy
-runtime.compute(step2(10))
+orco.compute(step2(10))
 
 # This drops step1(10) and all its consumers,
 # that is step2(10) in this case
-runtime.drop(step1(10))
+orco.drop(step1(10))
 ```
 
 Another option is *archive*, that sets a job and **all** its recursive
@@ -218,14 +218,14 @@ The restoring operation is not yet implemented.
 
 ```python
 # This computes step2(10) together with step1(10) as its dependancy
-runtime.compute(step2(10))
+orco.compute(step2(10))
 
 # This set to archived state step1(10) and all its dependants,
 # that is step2(10) in this case
-runtime.archive(step1(10))
+orco.archive(step1(10))
 
 # Computes new step2(10), the archived job is ignored
-runtime.compute(step2(10))
+orco.compute(step2(10))
 ```
 
 Sometimes we want to free a data from the database but still use jobs that
@@ -238,17 +238,17 @@ need recomputation of freed job, you have to archive or drop it.
 
 ```python
 # This computes step2(10) together with step1(10) as its dependancy
-runtime.compute(step2(10))
+orco.compute(step2(10))
 
 
 # Sets step1(10) into "freed" state and removes. Job step2(10) remains intact
-runtime.free(step1(10))
+orco.free(step1(10))
 
 # This does not trigger a computation, it just load step2(10) from DB.
-runtime.compute(step2(10))
+orco.compute(step2(10))
 
 # This throws an error because the computation needs recomputing a freed object
-runtime.compute(step1(10))
+orco.compute(step1(10))
 ```
 
 ### Bulk removing
@@ -256,9 +256,9 @@ runtime.compute(step1(10))
 All methods have "_many" variant for dropping/archiving/freeing more jobs at once
 
 ```python
-runtime.free_many([step1(20), step2(30)])
-runtime.archive_many([step1(30), step2(40)])
-runtime.drop_many([step1(50), step2(60)])
+orco.free_many([step1(20), step2(30)])
+orco.archive_many([step1(30), step2(40)])
+orco.drop_many([step1(50), step2(60)])
 ```
 
 ## States of jobs
@@ -271,24 +271,27 @@ Each job is in one of the following state:
 - *Running* - The job is currently executed.
 - *Finished* - Job is finished and its result are available
 - *Failed* - An error occured during job's computation
-- *Freed* - Job's data was freed by calling `.free()` method. It cannot be used for computation any more while it also blocks recreaction of the task (details in section about freeing objects).
-- *Archived/Achived free* - Job was archived by calling ``.archive()``. It was removed from the set of active jobs. Its data are preserved but it cannot be used only for new computations.
+- *Freed* - Job's data was freed by calling `orco.free()` method. It cannot be used for computation any more while it also blocks recreaction of the task (details in section about freeing objects).
+- *Archived/Achived free* - Job was archived by calling ``orco.archive()``. It was removed from the set of active jobs. Its data are preserved but it cannot be used only for new computations.
 
 For each builder and configuration, there is at most one job that is in *active* state (Announced, Running, Finished, Freed).
 This is invariant that helps to avoid recomputing already computed data, prevent simultanous computation of the same computation from different processes, and helps with consistency of results in case of data removal.
 And there may be unlimited number of jobs in non-active states.
 
-Most methods like ``.compute()`` or ``.read()`` looks only for jobs in active states and ignore others. There are two exceptions: If you want to get all jobs under a given configuration, there is a method ``.read_jobs()``, e.g.:
+Most methods like ``orco.compute()`` or ``orco.read()`` looks only for jobs in
+active states and ignore others. There are two exceptions: If you want to get
+all jobs under a given configuration, there is a method ``orco.read_jobs()``,
+e.g.:
 
 ```python
 
 @my_builder(x):
     ...
 
-runtime.read_jobs(my_builder(10))
+orco.read_jobs(my_builder(10))
 ```
 
-The second exception is ``.drop(..)`` that removes jobs in all states.
+The second exception is ``orco.drop(..)`` that removes jobs in all states.
 
 ## Upgrading builders
 
@@ -313,7 +316,7 @@ def uprage_config(config):
     config.setdefault("version", 1)
     return config
 
-runtime.upgrade_builder(my_builder, upgrade_config)
+orco.upgrade_builder(my_builder, upgrade_config)
 ```
 
 Note that the upgrade is atomic, i.e. if an exception happens during the upgrade, the changes made so far
@@ -324,9 +327,11 @@ will be rolled back and nothing will be upgraded.
 
 If you want to query the database for already computed jobs, without starting
 the computation for configurations that are not yet computed, you can use the
-`read` method on a `Runtime`. If a job exists in the finished stated, then it attaches job to the database entry. If there is not such job, an exception is thrown.
+`orco.read` (or `read` method on a `Runtime`). If a job exists in the finished
+stated, then it attaches job to the database entry. If there is not such job, an
+exception is thrown.
 
-The method `try_read` works similarly, but return `None` is not in the database.
+The method `orco.try_read` works similarly, but return `None` is not in the database.
 
 
 ## Frozen builders
@@ -349,7 +354,7 @@ when a result is not presented in the database is requested, then error is throw
 ```python
 # Assume now an empty database
 
-runtime.compute(my_builder(10))
+orco.compute(my_builder(10))
 # Throws an error, because my_builder(10) is not in DB, and
 # new value cannot be computed because my_builder is frozen.
 ```
@@ -359,12 +364,12 @@ and its result value:
 
 ```python
 # Insert two values
-runtime.insert(my_builder(10), 123)
-runtime.insert(my_builder(20), "xyz")
+orco.insert(my_builder(10), 123)
+orco.insert(my_builder(20), "xyz")
 ```
 
 Note 1: Values can be inserted also for non-frozen builders, but usually you want to run
-`compute` rather than `insert` for this.
+`compute` rather than `insert` for this case.
 
 Note 2: A frozen state of a builder is a property of runtime, it is not stored in the database. Therefore
 another process may normally create jobs into a builder that is frozen for other process.
@@ -398,7 +403,7 @@ attached data.
 def my_builder(x):
     print("Hello", x)
 
-runtime.compute(my_builder(10))
+orco.compute(my_builder(10))
 ```
 
 The example above do not print any output when executed. It can be found in ORCO

@@ -17,7 +17,7 @@ orco.run_cli()  # Start CLI interface
 ```
 
 In case you want to create your own `Runtime`, you can pass it to `run_cli`, otherwise,
-a default `Runtime` is created for you with the db specified by `--db` parameter 
+a default `Runtime` is created for you with the db specified by `--db` parameter
 or via environment ``ORCO_DB``. To make following commands shorter we expect that
 environment variable is set as follows: ``ORCO_DB=sqlite:///my.db``.
 

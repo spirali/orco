@@ -6,6 +6,7 @@ import json5
 
 from .cfggen import build_config
 from .runtime import Runtime
+from .globals import has_global_runtime, get_global_runtime
 
 
 def _command_serve(runtime, args):
@@ -117,10 +118,14 @@ def run_cli(runtime=None, db_path=None):
             else:
                 db_path = os.environ.get("ORCO_DB")
             if db_path is None:
-                raise Exception(
-                    "No database is defined, use parameter '--db' or env variable 'ORCO_DB'"
-                )
-            runtime = Runtime(db_path)
+                if has_global_runtime():
+                    runtime = get_global_runtime()
+                else:
+                    raise Exception(
+                        "No database is defined, use parameter '--db' or env variable 'ORCO_DB'"
+                    )
+            else:
+                runtime = Runtime(db_path)
         else:
             if args.db is not None:
                 print(

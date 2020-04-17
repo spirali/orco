@@ -15,18 +15,21 @@ As a database backend, you can use all databases supported by
 [SqlAlchemy](https://docs.sqlalchemy.org). For this text we will use SQLite, as
 it does not need any configuration.
 
+In this chapter, we will also use one global Runtime, but ORCO is ready to having
+more non-global runtimes at once on one or more databases.
+
 
 ```python
 import orco
 
-# Create a new runtime
+# Create a new global runtime
 # If the database file does not exist, it will be created
-runtime = orco.Runtime("sqlite:///my.db")
+orco.start_runtime("sqlite:///my.db")
 
 # Use can use "sqlite:////" prefix for abolute path
 
 # For using Postgress, you can use the following:
-# runtime = Runtime("postgresql://<USERNAME>:<PASSWORD>@<HOSTNAME>/<DATABASE>")
+# orco.start_runtime("postgresql://<USERNAME>:<PASSWORD>@<HOSTNAME>/<DATABASE>")
 ```
 
 Now we can start defining your computations. Computations in ORCO are defined as
@@ -43,7 +46,8 @@ import orco
 def add(a, b):
     return a + b
 
-runtime = orco.Runtime("sqlite:///my.db")
+orco.start_runtime("sqlite:///my.db")
+# Note: It is ok to define builders before or after `start_runtime`
 ```
 
 The builder is basically a wrapper around a function which result will be automatically persisted.
@@ -64,19 +68,19 @@ and two configurations for `add` that we want to compute.
 To invoke a computation we need to create an **job**.
 Job is created by calling a builder. Calling a builder is a very lightweight operation that just creates a reference
 to a computation without invoking a builder's function.
-To really invoke a computation we need to call ``runtime.compute(job)``.
+To really invoke a computation we need to call ``orco.compute(job)``.
 After the computation is over, we can read job's ``value``.
 
 ```python
 # Compute the result of `add` with the input `config_1`
 job = add(1, 2)
-runtime.compute(job)
+orco.compute(job)
 print(job.value)  # prints: 3
 
-# Comment: runtime.compute returns the first given argument, so the example
+# Comment: orco.compute returns the first given argument, so the example
 # can be written also as:
 #
-# job = runtime.compute(adder(1, 2))
+# job = orco.compute(adder(1, 2))
 # print(job.value)  # prints: 3
 #
 # We use both variants in this text.
@@ -89,14 +93,14 @@ return value was stored into the database. When we run the same computation
 again, the result will be provided directly from the database.
 
 ```python
-runtime.compute(add(1, 2))  # Builder's function is not called now, it just load the result from DB
+orco.compute(add(1, 2))  # Builder's function is not called now, it just load the result from DB
 ```
 
 So far we have computed only one configuration, usually you want to compute many of them
 ```python
-jobs = runtime.compute_many([add(1, 2),
-                             add(2, 3),
-                             add(4, 5)])
+jobs = orco.compute_many([add(1, 2),
+                          add(2, 3),
+                          add(4, 5)])
 print([r.value for r in jobs])  # prints: [3, 5, 9]]
 ```
 
@@ -120,19 +124,19 @@ def add(a, b):
 # Create a runtime environment for ORCO.
 # All data will be stored in file on provided path.
 # If file does not exists, it is created
-runtime = orco.Runtime("sqlite:///my.db")
+orco.start_runtime("sqlite:///my.db")
 
 # Invoke computations, builder.ref(...) creates a "reference into a builder",
 # basically a pair (builder, config)
 # When reference is provided, compute returns instance of Entry that
 # contains attribute 'value' with the result of build function.
-job = runtime.compute(add(1, 2))
+job = orco.compute(add(1, 2))
 print(job.value)  # prints: 3
 
 # Invoke more compututations at once
-result = runtime.compute_many([add(1, 2),
-                               add(2, 3),
-                               add(4, 5)])
+result = orco.compute_many([add(1, 2),
+                            add(2, 3),
+                            add(4, 5)])
 print([r.value for r in result])  # prints: [3, 5, 9]
 ```
 
@@ -199,10 +203,10 @@ Now if we run:
 
 ```python
 
-runtime = orco.Runtime("sqlite:///my.db")
+orco.start_runtime("sqlite:///my.db")
 
 # Run experiment with with simulation between [0, 10).
-runtime.compute(experiment(0, 10))
+orco.compute(experiment(0, 10))
 ```
 
 The output will be as follows:
@@ -226,7 +230,7 @@ Lets us now run the following:
 
 ```python
 # Run experiment with with simulation between [7, 15).
-runtime.compute(experiment(7, 15))
+orco.compute(experiment(7, 15))
 ```
 
 The output will be following:
@@ -251,7 +255,7 @@ ORCO contains a web browser of computations and their results stored in the data
 It can be started by running:
 
 ```python
-runtime.serve()
+orco.serve()
 ```
 
 `serve` starts a local HTTP server (by default on port 8550) that allows inspecting
