@@ -261,7 +261,7 @@ orco.serve()
 `serve` starts a local HTTP server (by default on port 8550) that allows inspecting
 stored data in the database and observing jobs running in executors. It is completely safe to run computation(s) simultaneously with the server.
 
-![Screenshot of ORCO browser](./imgs/browser-builder.png)
+![Screenshot of ORCO browser](./imgs/browser-collection.png)
 
 (The `serve` method is blocking. If you want to start the browser and run computations in the same script,
 you can call `serve(nonblocking=True)` before calling `compute` on the `Runtime`.)
