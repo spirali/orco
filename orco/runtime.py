@@ -122,6 +122,7 @@ class Runtime:
         return builder.make_proxy()
 
     def serve(self, port=8550, debug=False, testing=False, nonblocking=False):
+        print("Running ORCO browser on port {}".format(port))
         from .internals.browser import init_service
 
         app = init_service(self)

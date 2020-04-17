@@ -11,7 +11,6 @@ from .runtime import Runtime
 
 
 def _command_serve(runtime, args):
-    print("Running ORCO browser on port {}".format(args.port))
     runtime.serve(port=args.port)
 
 
