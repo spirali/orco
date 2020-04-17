@@ -4,8 +4,6 @@ import sys
 
 import json5
 
-
-from .builder import Builder
 from .cfggen import build_config
 from .runtime import Runtime
 

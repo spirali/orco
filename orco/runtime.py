@@ -1,23 +1,16 @@
-import collections
-import inspect
 import logging
 import pickle
 import threading
 import time
 
-from orco.internals.context import _CONTEXT
 from .builder import Builder, BuilderProxy
 from .internals.database import Database, JobState
 from .internals.executor import Executor
 from .internals.key import make_key
 from .internals.plan import Plan
 from .internals.runner import JobRunner
-
-# from .internals.tasktools import collect_tasks, resolve_tasks
-from .internals.utils import format_time
 from .internals.utils import make_repr
 from .job import Job
-from .report import Report
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,5 @@
 import collections
-import functools
 import inspect
-import pickle
 
 from .internals.context import _CONTEXT
 from .internals.key import make_key

@@ -13,7 +13,6 @@ from .context import _CONTEXT
 from .database import Database
 from .database import JobState
 from .utils import make_repr
-from ..consts import MIME_TEXT
 
 JobContext = collections.namedtuple("JobContext", ["db", "job_id"])
 
