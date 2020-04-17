@@ -601,14 +601,15 @@ class Database:
 
     def archive_jobs_by_key(self, keys, archive_inputs):
         c = self.jobs.c
+        states = [JobState.FINISHED, JobState.FREED, JobState.ANNOUNCED, JobState.RUNNING]
         with self.conn.begin():
             base_query = sa.select([c.id]).where(
                 sa.and_(
-                    c.key.in_(keys), c.state.in_([JobState.FINISHED, JobState.FREED])
+                    c.key.in_(keys), c.state.in_(states)
                 )
             )
             job_ids = self._closure(
-                base_query, archive_inputs, [JobState.FINISHED, JobState.FREED]
+                base_query, archive_inputs, states
             )
             self.conn.execute(
                 self.announcements.delete().where(
@@ -625,10 +626,14 @@ class Database:
                         [
                             (
                                 c.state == JobState.FINISHED,
-                                sa.literal(JobState.A_FINISHED, state_enum),
-                            )
+                                sa.literal(JobState.A_FINISHED, state_enum)
+                            ),
+                            (
+                                c.state == JobState.FREED,
+                                sa.literal(JobState.A_FREED, state_enum),
+                            ),
                         ],
-                        else_=sa.literal(JobState.A_FREED, state_enum),
+                        else_=sa.literal(JobState.ERROR, state_enum),
                     )
                 )
             )
