@@ -35,16 +35,16 @@ import orco
 def my_builder(x):
 
     # Attach any picklable object
-    attach_object("my_object", x + 2)
+    orco.attach_object("my_object", x + 2)
 
     # Attach object as text, mime type is set as text/plain
-    attach_text("my_text", "This is a text")
+    orco.attach_text("my_text", "This is a text")
 
     # Attach raw binary data
-    attach_blob("my_data", b"raw data")
+    orco.attach_blob("my_data", b"raw data")
 
     # Attach raw binary data, set mime type
-    attach_blob("my_data2", b"raw data", mime="application/my-app")
+    orco.attach_blob("my_data2", b"raw data", mime="application/my-app")
 ```
 
 When a job is finished data can be accessed via following method:
@@ -85,19 +85,19 @@ given blob as tar file.
 def my_builder(x):
 
     # Create a blob from a file
-    attach_file("myfile.txt", x + 2)
+    orco.attach_file("myfile.txt", x + 2)
 
     # Create a blob from directory packed as a tar
-    attach_text("path/to/a/directory")
+    orco.attach_directory("path/to/a/directory")
 ```
 
 ### Blob names
 
 The user may used any non-empty string that does not start with "!". Default
 value, error messages and some other data attached to a job is stored also as a
-blob. They only use a reserved names.
+blob. They use a special names and never clashes with the user names.
 
-* None (the only non-string name allowed) is name of default value.
+* None (the only non-string name allowed) is the name of the default value.
 * "!message" is error message when jobs fails
 * "!output" is the standard output (see [Capturing output](#capturing-output))
 
@@ -115,6 +115,17 @@ result2 = job.get_object("my_object")
 
 `result1` and `result2` should be equivalent but they are not necessarily the
 same object.
+
+
+### Returning values vs attaching blobs
+
+There are not strict rules when to return values and when to attach blobs. If
+the function by definition returns one obvious value (for example a computation
+of an average of a set), then returning a value is more natural. On the other
+hand, when a function is complex, produces various outputs than it is usully
+better to attach results as blobs. Also if a function returns more objects with
+nontrival sizes and potential consumers may read only part of inputs, it is
+better to use attaching blobs than returning a list of them.
 
 
 ## Removing jobs
@@ -151,9 +162,11 @@ a = orco.compute(heads_count_in_sample(10))
 b = orco.compute(tails_count_in_sample(10))
 ```
 
-Obviously the ``a.value + b.value`` should be 10.
+Obviously the ``a.value + b.value`` should be 10 (``sample_of_coin_tosses(10)``
+is generated only once and reused in both computations)
 
-But assume that we have a method ``naive_remove(job)`` that just removes stored result job from the database. Let us consider the following scenario:
+But assume that we have a method ``naive_remove(job)`` that just removes stored
+result job from the database. Let us consider the following scenario:
 
 ```python
 # ! this is only a demonstration of a problem, naive_remove is not implemented in ORCO !

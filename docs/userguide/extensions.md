@@ -2,7 +2,7 @@
 
 This chapter describes extensions to some external libraries.
 These libraries are not installed with ORCO and extension
-will throw an error if you used them without particular library. 
+will throw an error if you used them without particular library.
 
   - [Matplotlib](#matplotlib)
   - [Pandas](#pandas)
@@ -10,7 +10,22 @@ will throw an error if you used them without particular library.
 
 ## Matplotlib
 
-TODO
+Matplotlib extension allows to directly export charts as blobs.
+
+```python
+import orco
+from orco.ext.pyplot import attach_figure
+import matplotlib.pyplot as plt
+
+@orco.builder()
+def make_chart(name, values):
+
+  plt.plot(values)
+  plt.ylabel(name)
+
+  # Instead of: plt.show()
+  attach_plot("chart")
+```
 
 ## Pandas
 
