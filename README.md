@@ -33,3 +33,8 @@ of your experiments.
 ## License
 
 [MIT](LICENSE)
+
+
+## Example
+
+<img src="docs/imgs/intro.png"/>
