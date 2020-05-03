@@ -28,9 +28,10 @@ of your experiments.
 * [User guide](https://spirali.github.io/orco.pages/userguide/userguide)
 * [API reference](https://spirali.github.io/orco.pages/api/)
 
+
 ## Example
 
-### Defining computation
+### Defining & running a computation
 
 ```python
 import orco
@@ -77,9 +78,6 @@ def summary(configurations):
     attach_figure("chart", tight_layout=True)
 ```
 
-
-### Running computation
-
 ```python
 # DB as file
 orco.start_runtime("sqlite:///my.db")
@@ -104,10 +102,10 @@ orco.compute(summary([
 
 ```
 
-
 ### Browser
 
 <img src='docs/imgs/browser2.png'/>
+
 
 ## License
 
