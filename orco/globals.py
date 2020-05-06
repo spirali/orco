@@ -70,8 +70,8 @@ def has_global_runtime():
     return _global_runtime is not None
 
 
-def serve(port=8550, debug=False, nonblocking=False):
-    return get_global_runtime().serve(port, debug, nonblocking)
+def serve(port=8550, debug=False, daemon=False, host="127.0.0.1"):
+    return get_global_runtime().serve(port, debug=debug, daemon=daemon, host=host)
 
 
 def read(job, *, reattach=False):

@@ -264,6 +264,6 @@ stored data in the database and observing jobs running in executors. It is compl
 ![Screenshot of ORCO browser](./imgs/browser-collection.png)
 
 (The `serve` method is blocking. If you want to start the browser and run computations in the same script,
-you can call `serve(nonblocking=True)` before calling `compute` on the `Runtime`.)
+you can call `serve(daemon=True)` before calling `compute` on the `Runtime`.)
 
 Continue to [CLI interface](cli.md)

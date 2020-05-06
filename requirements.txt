@@ -5,3 +5,4 @@ flask_restful
 flask_cors
 pandas
 tqdm
+waitress

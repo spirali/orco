@@ -114,8 +114,7 @@ class Runtime:
         self._builders[name] = builder
         return builder.make_proxy()
 
-    def serve(self, port=8550, debug=False, testing=False, nonblocking=False):
-        print("Running ORCO browser on port {}".format(port))
+    def serve(self, port=8550, *, debug=False, testing=False, daemon=False, host="127.0.0.1"):
         from .internals.browser import init_service
 
         app = init_service(self)
@@ -125,9 +124,13 @@ class Runtime:
         else:
 
             def run_app():
-                app.run(port=port, debug=debug, use_reloader=False)
+                if debug:
+                    app.run(port=port, debug=debug, use_reloader=False)
+                else:
+                    from waitress import serve
+                    serve(app, host=host, port=port)
 
-            if nonblocking:
+            if daemon:
                 t = threading.Thread(target=run_app)
                 t.daemon = True
                 t.start()
