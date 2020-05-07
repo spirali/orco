@@ -5,7 +5,7 @@ import {FaHourglassEnd, FaCheck, FaTimes, FaTrashAlt, FaFolderMinus, FaFolder} f
 import {formatSize, formatTime} from './utils';
 import {ErrorContainer} from './Error';
 import {JobDetail} from "./JobDetail";
-import {Button, ButtonGroup} from "reactstrap";
+import {Button, ButtonGroup, ButtonToolbar} from "reactstrap";
 
 interface Props {
     match: any,
@@ -186,16 +186,22 @@ class Builder extends React.Component<Props, State> {
         return (
             <div>
                 <h1>Builder '{this.name}'</h1>
+                <ButtonToolbar>
                 <ButtonGroup>
                     <Button outline onClick={() => this.setFilter(null)} active={this.state.state_filter === null}>All states</Button>
+                </ButtonGroup>
+                <ButtonGroup>
                     <Button outline onClick={() => this.setFilter("f")} active={this.state.state_filter === "f"}>{state_icon('f')} Finished</Button>
-                    <Button outline onClick={() => this.setFilter("e")} active={this.state.state_filter === "e"}>{state_icon('e')} Failed</Button>
                     <Button outline onClick={() => this.setFilter("r")} active={this.state.state_filter === "r"}>{state_icon('r')} Running</Button>
                     <Button outline onClick={() => this.setFilter("a")} active={this.state.state_filter === "a"}>{state_icon('a')} Announced</Button>
-                    <Button outline onClick={() => this.setFilter("F")} active={this.state.state_filter === "F"}>{state_icon('F')} Archived</Button>
                     <Button outline onClick={() => this.setFilter("d")} active={this.state.state_filter === "d"}>{state_icon('d')} Freed</Button>
+                </ButtonGroup>
+                <ButtonGroup>
+                    <Button outline onClick={() => this.setFilter("e")} active={this.state.state_filter === "e"}>{state_icon('e')} Failed</Button>
+                    <Button outline onClick={() => this.setFilter("F")} active={this.state.state_filter === "F"}>{state_icon('F')} Archived</Button>
                     <Button outline onClick={() => this.setFilter("D")} active={this.state.state_filter === "D"}>{state_icon('D')} Freed archived</Button>
                 </ButtonGroup>
+                </ButtonToolbar>
                 <ReactTable
                     data={data}
                     loading={this.state.loading}
