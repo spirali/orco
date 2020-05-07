@@ -5,6 +5,7 @@ import tempfile
 import threading
 import time
 import traceback
+import sys
 from concurrent.futures.process import ProcessPoolExecutor
 
 import capturer
@@ -69,6 +70,7 @@ class PoolJobRunner(JobRunner):
         self.pool = self._create_pool()
 
     def stop(self):
+        self.pool.shutdown()
         self.pool = None
 
     def submit(self, runtime, plan_node):
@@ -82,7 +84,8 @@ class LocalProcessRunner(PoolJobRunner):
         self.n_processes = n_processes or os.cpu_count() or 1
 
     def _create_pool(self):
-        return ProcessPoolExecutor(max_workers=self.n_processes)
+        pool = ProcessPoolExecutor(max_workers=self.n_processes)
+        return pool
 
     def get_resources(self):
         return "{} cpus".format(self.n_processes)
@@ -132,6 +135,11 @@ def _run_job_timed(db, job_id, builder, config, keys_to_job_ids, start_time, cpt
 
 
 def _run_job(db_path, builder_fn, job_id):
+    # Workaround of the clash between jupyter & capturer
+    sys.stdout = sys.__stdout__
+    sys.stderr = sys.__stderr__
+
+
     start_time = time.time()
     cpt = None
     global _per_process_db
