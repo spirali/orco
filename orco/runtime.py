@@ -108,9 +108,6 @@ class Runtime:
     def register_builder(self, builder: Builder):
         assert isinstance(builder, Builder)
         name = builder.name
-        if name in self._builders:
-            raise Exception("Builder '{}' is already registered".format(name))
-        # self.db.ensure_builder(name)
         self._builders[name] = builder
         return builder.make_proxy()
 

@@ -16,8 +16,6 @@ def builder(*, name=None, job_setup=None, is_frozen=False):
 
 
 def _register_builder(b):
-    if b.name in _global_builders:
-        raise Exception("Builder {!r} is already globally registered.".format(b.name))
     _global_builders[b.name] = b
     if _global_runtime is not None:
         _global_runtime.register_builder(b)
