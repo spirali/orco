@@ -103,13 +103,16 @@ class Executor:
             )
         return runner.submit(self.runtime, plan_node)
 
-    def run(self, plan):
+    def run(self, plan, verbose):
         nodes_by_id = {pn.job_id: pn for pn in plan.nodes}
         consumers, waiting_deps, ready = self._init(plan)
         waiting = [self._submit_job(pn) for pn in ready]
         del ready
 
-        progressbar = tqdm.tqdm(total=len(plan.nodes))
+        if verbose:
+            progressbar = tqdm.tqdm(total=len(plan.nodes))
+        else:
+            progressbar = None
         unprocessed = []
         try:
             while waiting:
@@ -120,7 +123,8 @@ class Executor:
                 )
                 waiting = wait_result.not_done
                 for f in wait_result.done:
-                    progressbar.update()
+                    if progressbar:
+                        progressbar.update()
                     result = f.result()
                     if isinstance(result, JobFailure):
                         pn = nodes_by_id[result.job_id]
@@ -145,6 +149,7 @@ class Executor:
                             assert w == 0
                             waiting.add(self._submit_job(c))
         finally:
-            progressbar.close()
+            if progressbar:
+                progressbar.close()
             for f in waiting:
                 f.cancel()

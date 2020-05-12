@@ -201,12 +201,14 @@ class Runtime:
         assert isinstance(builder_name, str)
         self.db.drop_builder(builder_name, drop_inputs)
 
-    def compute(self, job, *, reattach=False, continue_on_error=False):
-        self._compute((job,), reattach, continue_on_error)
+    def compute(self, job, *, reattach=False, continue_on_error=False, verbose=True):
+        self._compute((job,), reattach, continue_on_error, verbose)
         return job
 
-    def compute_many(self, jobs, *, reattach=False, continue_on_error=False):
-        self._compute(jobs, reattach, continue_on_error)
+    def compute_many(
+        self, jobs, *, reattach=False, continue_on_error=False, verbose=True
+    ):
+        self._compute(jobs, reattach, continue_on_error, verbose)
         return jobs
 
     def has_builder(self, builder_name):
@@ -239,7 +241,7 @@ class Runtime:
         if self.stopped:
             raise Exception("Runtime was already stopped")
 
-    def _run_computation(self, plan):
+    def _run_computation(self, plan, verbose):
         executor = self.executor
         plan.create(self)
         if plan.is_finished():
@@ -255,8 +257,9 @@ class Runtime:
                 print(
                     "Some computation was temporarily skipped as they depends on jobs computed by another executor"
                 )
-            plan.print_report(self)
-            executor.run(plan)
+            if verbose:
+                plan.print_report(self)
+            executor.run(plan, verbose)
             if plan.is_finished():
                 return "finished"
             else:
@@ -266,7 +269,7 @@ class Runtime:
             plan.fill_job_ids(self, False)
             raise
 
-    def _compute(self, jobs, reattach, continue_on_error):
+    def _compute(self, jobs, reattach, continue_on_error, verbose):
         for job in jobs:
             _check_unattached_job(job, reattach)
 
@@ -276,7 +279,7 @@ class Runtime:
         plan = Plan(jobs, continue_on_error)
 
         while True:
-            status = self._run_computation(plan)
+            status = self._run_computation(plan, verbose)
             if status == "finished":
                 break
             elif status == "next":

@@ -122,15 +122,15 @@ def drop_builder(builder_name, *, drop_inputs=False):
     return get_global_runtime().drop_builder(builder_name, drop_inputs=drop_inputs)
 
 
-def compute(job, *, reattach=False, continue_on_error=False):
+def compute(job, *, reattach=False, continue_on_error=False, verbose=True):
     return get_global_runtime().compute(
-        job, reattach=reattach, continue_on_error=continue_on_error
+        job, reattach=reattach, continue_on_error=continue_on_error, verbose=verbose
     )
 
 
-def compute_many(jobs, *, reattach=False, continue_on_error=False):
+def compute_many(jobs, *, reattach=False, continue_on_error=False, verbose=True):
     return get_global_runtime().compute_many(
-        jobs, reattach=reattach, continue_on_error=continue_on_error
+        jobs, reattach=reattach, continue_on_error=continue_on_error, verbose=verbose
     )
 
 
