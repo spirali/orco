@@ -31,12 +31,12 @@ def test_archive(env):
     assert runtime.get_state(bb(1)) == JobState.FINISHED
     runtime.archive(bb(1))
 
-    assert runtime.get_state(bb(1)) == JobState.NONE
+    assert runtime.get_state(bb(1)) == JobState.DETACHED
     jobs = runtime.read_jobs(bb(1))
     assert len(jobs) == 1
     assert jobs[0].state == JobState.A_FINISHED
 
-    assert runtime.get_state(cc(1)) == JobState.NONE
+    assert runtime.get_state(cc(1)) == JobState.DETACHED
     jobs = runtime.read_jobs(cc(1))
     assert len(jobs) == 1
     assert jobs[0].state == JobState.A_FINISHED
@@ -54,14 +54,14 @@ def test_archive(env):
     assert len(jobs) == 2
     assert all(j.state == JobState.A_FINISHED for j in jobs)
 
-    assert runtime.get_state(cc(1)) == JobState.NONE
+    assert runtime.get_state(cc(1)) == JobState.DETACHED
     jobs = runtime.read_jobs(cc(1))
     assert len(jobs) == 2
     assert all(j.state == JobState.A_FINISHED for j in jobs)
 
     assert runtime.get_state(cc(2)) == JobState.FINISHED
     runtime.archive(aa(2))
-    assert runtime.get_state(cc(2)) == JobState.NONE
+    assert runtime.get_state(cc(2)) == JobState.DETACHED
 
     runtime.compute(cc(3))
     assert runtime.get_state(aa(3)) == JobState.FINISHED
@@ -71,7 +71,7 @@ def test_archive(env):
     runtime.compute(cc(3))
     assert runtime.get_state(aa(3)) == JobState.FINISHED
     runtime.archive(cc(3), archive_inputs=True)
-    assert runtime.get_state(aa(3)) == JobState.NONE
+    assert runtime.get_state(aa(3)) == JobState.DETACHED
 
     runtime.compute(cc(3))
     runtime.free(bb(3))

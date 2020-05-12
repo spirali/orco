@@ -11,6 +11,9 @@ from orco import Builder, builder, JobState
 def adder(a, b):
     return a + b
 
+def adder_v2(a, b):
+    return a + b + 1
+
 
 def test_builder_args(env):
     @builder()
@@ -75,12 +78,12 @@ def test_builder_init(env):
     assert "baz" in runtime._builders
 
 
-def test_reopen_builder(env):
+def test_recreate_builder(env):
     runtime = env.test_runtime()
     runtime.register_builder(Builder(adder, "col1"))
-
-    with pytest.raises(Exception):
-        runtime.register_builder(Builder(adder, "col1"))
+    col1 = runtime.register_builder(Builder(adder_v2, "col1"))
+    r = runtime.compute(col1(10, 20))
+    assert r.value == 31
 
 
 def test_frozen_builder(env):
@@ -287,19 +290,19 @@ def test_builder_stored_deps(env):
     assert runtime.get_state(col1(2)) == JobState.FINISHED
 
     runtime.drop(col1(6))
-    assert runtime.get_state(col3(10)) == JobState.NONE
-    assert runtime.get_state(c2_2) == JobState.NONE
-    assert runtime.get_state(c2_3) == JobState.NONE
+    assert runtime.get_state(col3(10)) == JobState.DETACHED
+    assert runtime.get_state(c2_2) == JobState.DETACHED
+    assert runtime.get_state(c2_3) == JobState.DETACHED
     assert runtime.get_state(col1(0)) == JobState.FINISHED
-    assert runtime.get_state(col1(6)) == JobState.NONE
+    assert runtime.get_state(col1(6)) == JobState.DETACHED
     assert runtime.get_state(col1(2)) == JobState.FINISHED
 
     runtime.drop(col1(0))
-    assert runtime.get_state(col3(10)) == JobState.NONE
-    assert runtime.get_state(c2_2) == JobState.NONE
-    assert runtime.get_state(c2_3) == JobState.NONE
-    assert runtime.get_state(col1(0)) == JobState.NONE
-    assert runtime.get_state(col1(6)) == JobState.NONE
+    assert runtime.get_state(col3(10)) == JobState.DETACHED
+    assert runtime.get_state(c2_2) == JobState.DETACHED
+    assert runtime.get_state(c2_3) == JobState.DETACHED
+    assert runtime.get_state(col1(0)) == JobState.DETACHED
+    assert runtime.get_state(col1(6)) == JobState.DETACHED
     assert runtime.get_state(col1(2)) == JobState.FINISHED
 
     assert runtime.compute(col3(10)).value == 380
@@ -312,12 +315,12 @@ def test_builder_stored_deps(env):
 
     runtime.drop(col1(2))
 
-    assert runtime.get_state(col3(10)) == JobState.NONE
-    assert runtime.get_state(c2_2) == JobState.NONE
+    assert runtime.get_state(col3(10)) == JobState.DETACHED
+    assert runtime.get_state(c2_2) == JobState.DETACHED
     assert runtime.get_state(c2_3) == JobState.FINISHED
     assert runtime.get_state(col1(0)) == JobState.FINISHED
     assert runtime.get_state(col1(6)) == JobState.FINISHED
-    assert runtime.get_state(col1(2)) == JobState.NONE
+    assert runtime.get_state(col1(2)) == JobState.DETACHED
 
     runtime.drop(col1(2))
 
@@ -336,21 +339,21 @@ def test_builder_drop(env):
 
     runtime.compute(col2(1))
     runtime.drop_builder("col1")
-    assert runtime.get_state(col1(1)) == JobState.NONE
-    assert runtime.get_state(col2(1)) == JobState.NONE
-    assert runtime.get_state(col2(2)) == JobState.NONE
+    assert runtime.get_state(col1(1)) == JobState.DETACHED
+    assert runtime.get_state(col2(1)) == JobState.DETACHED
+    assert runtime.get_state(col2(2)) == JobState.DETACHED
 
     runtime.compute(col2(1))
     runtime.drop_builder("col2")
     assert runtime.get_state(col1(1)) == JobState.FINISHED
-    assert runtime.get_state(col2(1)) == JobState.NONE
-    assert runtime.get_state(col2(2)) == JobState.NONE
+    assert runtime.get_state(col2(1)) == JobState.DETACHED
+    assert runtime.get_state(col2(2)) == JobState.DETACHED
 
     runtime.compute(col2(1))
     runtime.drop_builder("col2", drop_inputs=True)
-    assert runtime.get_state(col1(1)) == JobState.NONE
-    assert runtime.get_state(col2(1)) == JobState.NONE
-    assert runtime.get_state(col2(2)) == JobState.NONE
+    assert runtime.get_state(col1(1)) == JobState.DETACHED
+    assert runtime.get_state(col2(1)) == JobState.DETACHED
+    assert runtime.get_state(col2(2)) == JobState.DETACHED
 
 
 def test_builder_remove_inputs(env):
@@ -375,10 +378,10 @@ def test_builder_remove_inputs(env):
     runtime.compute(col4(1))
     runtime.compute(col3(1))
     runtime.drop(col2(1), drop_inputs=True)
-    assert runtime.get_state(col1(1)) == JobState.NONE
-    assert runtime.get_state(col2(1)) == JobState.NONE
-    assert runtime.get_state(col3(1)) == JobState.NONE
-    assert runtime.get_state(col4(1)) == JobState.NONE
+    assert runtime.get_state(col1(1)) == JobState.DETACHED
+    assert runtime.get_state(col2(1)) == JobState.DETACHED
+    assert runtime.get_state(col3(1)) == JobState.DETACHED
+    assert runtime.get_state(col4(1)) == JobState.DETACHED
 
 
 def test_builder_computed(env):

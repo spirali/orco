@@ -36,7 +36,7 @@ def test_xdb_announce_basic(env):
 
     r.db.fix_crashed_jobs()
 
-    assert r.db.get_active_state(make_key(c.name, {"x": "test1"})) == JobState.NONE
+    assert r.db.get_active_state(make_key(c.name, {"x": "test1"})) == JobState.DETACHED
     assert announce(r, [c(x="test2")])
     assert not announce(r, [c(x="test2"), c(x="test3")])
     assert not announce(r, [c(x="test2")])

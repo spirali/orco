@@ -14,6 +14,9 @@ class NaivePool:
         f.set_result(fn(*args, **kwargs))
         return f
 
+    def shutdown(self):
+        pass
+
 
 class NaiveRunner(PoolJobRunner):
     def __init__(self):
