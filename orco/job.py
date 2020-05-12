@@ -27,7 +27,8 @@ ACTIVE_STATES = (
 )
 
 JobMetadata = collections.namedtuple(
-    "EntryMetadata", ["created_date", "computation_time", "finished_date", "job_setup"])
+    "EntryMetadata", ["created_date", "computation_time", "finished_date", "job_setup"]
+)
 
 
 STATE_COLORS = {
@@ -153,10 +154,16 @@ class Job:
 
     def __repr__(self):
         args = ["{}={}".format(k, repr(v)) for k, v in self.config.items()]
-        return "{name}({args})/{state}".format(name=self.builder_name, state=self.state.name.lower(), args=", ".join(args))
+        return "{name}({args})/{state}".format(
+            name=self.builder_name, state=self.state.name.lower(), args=", ".join(args)
+        )
 
     def _repr_html_(self):
         args = ["{}={}".format(k, repr(v)) for k, v in self.config.items()]
         color = STATE_COLORS.get(self.state, "black")
         return "<tt><strong>{name}</strong>({args})/<text style='color: {color}'>{state}</text></tt>".format(
-            name=self.builder_name, state=self.state.name.lower(), args=", ".join(args), color=color)
+            name=self.builder_name,
+            state=self.state.name.lower(),
+            args=", ".join(args),
+            color=color,
+        )

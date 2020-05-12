@@ -139,7 +139,6 @@ def _run_job(db_path, builder_fn, job_id):
     sys.stdout = sys.__stdout__
     sys.stderr = sys.__stderr__
 
-
     start_time = time.time()
     cpt = None
     global _per_process_db

@@ -111,7 +111,9 @@ class Runtime:
         self._builders[name] = builder
         return builder.make_proxy()
 
-    def serve(self, port=8550, *, debug=False, testing=False, daemon=False, host="127.0.0.1"):
+    def serve(
+        self, port=8550, *, debug=False, testing=False, daemon=False, host="127.0.0.1"
+    ):
         from .internals.browser import init_service
 
         app = init_service(self)
@@ -125,6 +127,7 @@ class Runtime:
                     app.run(port=port, debug=debug, use_reloader=False)
                 else:
                     from waitress import serve
+
                     serve(app, host=host, port=port)
 
             if daemon:

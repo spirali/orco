@@ -16,3 +16,8 @@ class JobSetup:
         self.timeout = timeout
         self.setup = setup
         self.relay = relay
+
+    def __repr__(self):
+        return "<JobSetup runner={} timeout={} relay={}>".format(
+            self.runner_name, self.timeout, self.relay
+        )
