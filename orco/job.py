@@ -9,7 +9,7 @@ from orco.consts import MIME_PICKLE, MIME_TEXT
 
 
 class JobState(enum.Enum):
-    NONE = "n"
+    DETACHED = ""
     ANNOUNCED = "a"
     RUNNING = "r"
     FINISHED = "f"
@@ -27,8 +27,14 @@ ACTIVE_STATES = (
 )
 
 JobMetadata = collections.namedtuple(
-    "EntryMetadata", ["created_date", "computation_time", "finished_date", "job_setup"]
-)
+    "EntryMetadata", ["created_date", "computation_time", "finished_date", "job_setup"])
+
+
+STATE_COLORS = {
+    JobState.DETACHED: "gray",
+    JobState.FINISHED: "green",
+    JobState.ERROR: "red",
+}
 
 
 class _NoValue:
@@ -57,7 +63,7 @@ class Job:
         self.key = key
         self.config = config
 
-        self.state = None
+        self.state = JobState.DETACHED
         self._job_id = None
         self._db = None
         self._value = _NO_VALUE
@@ -84,7 +90,7 @@ class Job:
     def detach(self):
         self._job_id = None
         self._db = None
-        self.state = None
+        self.state = JobState.DETACHED
 
     def set_job_id(self, job_id, db, state):
         assert self._job_id is None
@@ -146,4 +152,11 @@ class Job:
             raise Exception("Job is not attached")
 
     def __repr__(self):
-        return "<Job {}/{}>".format(self.builder_name, self.config)
+        args = ["{}={}".format(k, repr(v)) for k, v in self.config.items()]
+        return "{name}({args})/{state}".format(name=self.builder_name, state=self.state.name.lower(), args=", ".join(args))
+
+    def _repr_html_(self):
+        args = ["{}={}".format(k, repr(v)) for k, v in self.config.items()]
+        color = STATE_COLORS.get(self.state, "black")
+        return "<tt><strong>{name}</strong>({args})/<text style='color: {color}'>{state}</text></tt>".format(
+            name=self.builder_name, state=self.state.name.lower(), args=", ".join(args), color=color)

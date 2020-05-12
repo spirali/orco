@@ -63,6 +63,9 @@ class BuilderProxy:
             on_job(job)
         return job
 
+    def __repr__(self):
+        return "<BuilderProxy '{}'>".format(self.name)
+
 
 class Builder:
     """

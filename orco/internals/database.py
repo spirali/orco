@@ -125,7 +125,7 @@ class Database:
             )
         ).fetchone()
         if r is None:
-            return JobState.NONE
+            return JobState.DETACHED
         else:
             return r[0]
 
@@ -146,7 +146,7 @@ class Database:
             )
         ).fetchone()
         if r is None:
-            return None, JobState.NONE
+            return None, JobState.DETACHED
         else:
             return r
 
