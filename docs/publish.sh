@@ -6,6 +6,7 @@ mkdir build
 mkdir build/api
 
 cp -r userguide build
+cp userguide/index.html build
 cp -r nedoc/html/* build/api
 
 cd build
