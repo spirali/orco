@@ -6,3 +6,4 @@ flask_cors
 pandas
 tqdm
 waitress
+capturer
