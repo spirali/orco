@@ -15,7 +15,7 @@ with open('requirements.txt') as reqs:
     requirements = [line.strip().split("==")[0] for line in reqs.readlines()]
 
 setup(name='orco',
-      version="0.5.0",
+      version="0.6.0",
       description='Organized Computing',
       author='Stanislav Bohm',
       url='http://github.com/spirali/orco',
