@@ -60,6 +60,7 @@ class JobRunner:
 
 
 class PoolJobRunner(JobRunner):
+
     def __init__(self):
         self.pool = None
 

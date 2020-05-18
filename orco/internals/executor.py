@@ -71,11 +71,37 @@ class Executor:
         for runner in self.runners.values():
             runner.start()
 
-    def _init(self, plan):
+    def run(self, plan, verbose):
+        ExecutorRun(self, plan, verbose).run()
+
+
+class ExecutorRun:
+
+    def __init__(self, executor, plan, verbose):
+        self.executor = executor
+        self.unprocessed = []
+        self.unprocessed_exclusives = []
+        self.exclusive_mode = False
+        self.waiting = set()
+        self.plan = plan
+        self.verbose = verbose
+
+    def start(self, plan_node):
+        runner_name = plan_node.job_setup.runner_name
+        runner = self.executor.runners.get(runner_name)
+        if runner is None:
+            raise Exception(
+                "Task '{}/{}' asked for unknown runner '{}'".format(
+                    plan_node.builder_name, plan_node.config, runner_name
+                )
+            )
+        self.waiting.add(runner.submit(self.executor.runtime, plan_node))
+
+    def init(self):
         consumers = {}
         waiting_deps = {}
         ready = []
-        for plan_node in plan.nodes:
+        for plan_node in self.plan.nodes:
             if not plan_node.inputs:
                 ready.append(plan_node)
             else:
@@ -86,42 +112,58 @@ class Executor:
                         consumers[inp] = c
                     c.append(plan_node)
             waiting_deps[plan_node] = len(plan_node.inputs)
-        return consumers, waiting_deps, ready
+        for plan_node in ready:
+            self.on_ready(plan_node)
+        return consumers, waiting_deps
 
-    def _submit_job(self, plan_node):
-        job_setup = plan_node.job_setup
-        if job_setup is None:
-            runner_name = "local"
+    def on_ready(self, plan_node):
+        #self.start(plan_node)
+        #return
+
+        exclusive = plan_node.job_setup.exclusive
+        if not exclusive:
+            if not self.exclusive_mode:
+                self.start(plan_node)
+            else:
+                self.unprocessed.append(plan_node)
         else:
-            runner_name = job_setup.runner_name
-        runner = self.runners.get(runner_name)
-        if runner is None:
-            raise Exception(
-                "Task '{}/{}' asked for unknown runner '{}'".format(
-                    plan_node.builder_name, plan_node.config, runner_name
-                )
-            )
-        return runner.submit(self.runtime, plan_node)
+            self.unprocessed_exclusives.append(plan_node)
 
-    def run(self, plan, verbose):
+    def check_waiting(self):
+        if self.waiting:
+            return True
+
+        if self.unprocessed_exclusives:
+            self.exclusive_mode = True
+            self.start(self.unprocessed_exclusives.pop())
+            return True
+
+        if self.unprocessed:
+            self.exclusive_mode = False
+            for plan_node in self.unprocessed:
+                self.start(plan_node)
+            del self.unprocessed[:]
+            return True
+        return False
+
+    def run(self):
+        plan = self.plan
         nodes_by_id = {pn.job_id: pn for pn in plan.nodes}
-        consumers, waiting_deps, ready = self._init(plan)
-        waiting = [self._submit_job(pn) for pn in ready]
-        del ready
+        consumers, waiting_deps = self.init()
 
-        if verbose:
+        if self.verbose:
             progressbar = tqdm.tqdm(total=len(plan.nodes))
         else:
             progressbar = None
-        unprocessed = []
+
         try:
-            while waiting:
+            while self.check_waiting():
                 wait_result = wait(
-                    waiting,
+                    self.waiting,
                     return_when=FIRST_COMPLETED,
-                    timeout=1 if unprocessed else None,
+                    timeout=None,
                 )
-                waiting = wait_result.not_done
+                self.waiting = wait_result.not_done
                 for f in wait_result.done:
                     if progressbar:
                         progressbar.update()
@@ -147,9 +189,9 @@ class Executor:
                         w = waiting_deps[c]
                         if w <= 0:
                             assert w == 0
-                            waiting.add(self._submit_job(c))
+                            self.on_ready(c)
         finally:
             if progressbar:
                 progressbar.close()
-            for f in waiting:
+            for f in self.waiting:
                 f.cancel()
