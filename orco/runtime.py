@@ -237,6 +237,9 @@ class Runtime:
             keys.add(new_key)
         self.db.upgrade_builder(to_update)
 
+    def drop_unfinished_jobs(self):
+        self.db.drop_unfinished_jobs()
+
     def _check_stopped(self):
         if self.stopped:
             raise Exception("Runtime was already stopped")

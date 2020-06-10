@@ -42,5 +42,7 @@ def test_global_runtime(env):
             orco.read(b2(10))
 
         orco.drop_many([b1(10)])
+
+        orco.drop_unfinished_jobs()
     finally:
         orco.stop_global_runtime()

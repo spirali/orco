@@ -153,7 +153,7 @@ class Database:
     def _remove_jobs(self, cond):
         self.conn.execute(sa.delete(self.jobs).where(cond))
 
-    def fix_crashed_jobs(self):
+    def drop_unfinished_jobs(self):
         js = self.jobs
         with self.conn.begin():
             cond = sa.or_(

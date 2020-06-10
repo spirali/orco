@@ -137,3 +137,7 @@ def compute_many(jobs, *, reattach=False, continue_on_error=False, verbose=True)
 
 def upgrade_builder(builder, upgrade_fn):
     return get_global_runtime().upgrade_builder(builder, upgrade_fn)
+
+
+def drop_unfinished_jobs():
+    return get_global_runtime().drop_unfinished_jobs()
