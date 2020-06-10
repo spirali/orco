@@ -37,12 +37,11 @@ def test_global_runtime(env):
             orco.read(b1(100))
 
         orco.drop(b2(10))
+        orco.drop_unfinished_jobs()
 
         with pytest.raises(Exception, match="No finished job"):
             orco.read(b2(10))
 
         orco.drop_many([b1(10)])
-
-        orco.drop_unfinished_jobs()
     finally:
         orco.stop_global_runtime()

@@ -123,15 +123,15 @@ def drop_builder(builder_name, *, drop_inputs=False):
     return get_global_runtime().drop_builder(builder_name, drop_inputs=drop_inputs)
 
 
-def compute(job, *, reattach=False, continue_on_error=False, verbose=True):
+def compute(job, *, reattach=False, continue_on_error=False, verbose=True, wait_for_others=None):
     return get_global_runtime().compute(
-        job, reattach=reattach, continue_on_error=continue_on_error, verbose=verbose
+        job, reattach=reattach, continue_on_error=continue_on_error, verbose=verbose, wait_for_others=wait_for_others
     )
 
 
-def compute_many(jobs, *, reattach=False, continue_on_error=False, verbose=True):
+def compute_many(jobs, *, reattach=False, continue_on_error=False, verbose=True, wait_for_others=None):
     return get_global_runtime().compute_many(
-        jobs, reattach=reattach, continue_on_error=continue_on_error, verbose=verbose
+        jobs, reattach=reattach, continue_on_error=continue_on_error, verbose=verbose, wait_for_others=wait_for_others
     )
 
 

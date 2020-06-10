@@ -201,14 +201,14 @@ class Runtime:
         assert isinstance(builder_name, str)
         self.db.drop_builder(builder_name, drop_inputs)
 
-    def compute(self, job, *, reattach=False, continue_on_error=False, verbose=True):
-        self._compute((job,), reattach, continue_on_error, verbose)
+    def compute(self, job, *, reattach=False, continue_on_error=False, verbose=True, wait_for_others=None):
+        self._compute((job,), reattach, continue_on_error, verbose, wait_for_others)
         return job
 
     def compute_many(
-        self, jobs, *, reattach=False, continue_on_error=False, verbose=True
+        self, jobs, *, reattach=False, continue_on_error=False, verbose=True, wait_for_others=None
     ):
-        self._compute(jobs, reattach, continue_on_error, verbose)
+        self._compute(jobs, reattach, continue_on_error, verbose, wait_for_others)
         return jobs
 
     def has_builder(self, builder_name):
@@ -250,7 +250,6 @@ class Runtime:
         if plan.is_finished():
             return "finished"
         if plan.need_wait():
-            print("Waiting for computation on another executor ...")
             return "wait"
         logger.debug("Announcing jobs %s at executor %s", len(plan.nodes), executor.id)
         if not self.db.announce_jobs(plan):
@@ -272,7 +271,7 @@ class Runtime:
             plan.fill_job_ids(self, False)
             raise
 
-    def _compute(self, jobs, reattach, continue_on_error, verbose):
+    def _compute(self, jobs, reattach, continue_on_error, verbose, wait_for_others):
         for job in jobs:
             _check_unattached_job(job, reattach)
 
@@ -288,8 +287,28 @@ class Runtime:
             elif status == "next":
                 continue
             elif status == "wait":
-                time.sleep(1)
-                continue
+                if wait_for_others is None:
+                    raise Exception("""The computation depends on jobs claimed by another executor
+and there are no other tasks to compute:
+It may happen in two cases:
+
+1) A concurrent executor is running
+2) A past executor crashed hard and does not cleanup its announced jobs
+
+In case of (1), if you want to wait for concurrent executor, call .compute(..., wait_for_others=TIMEOUT)
+where TIMEOUT is the number of seconds how long should orco wait.
+In case of (2), you have to call orco.drop_unfinished_jobs()
+(or runtime.drop_unfinished_jobs() for non-global runtime).
+But be sure that no other executor is actually running as it removes all running and announced jobs from DB.""")
+                elif wait_for_others <= 0:
+                    raise Exception("""The computation depends on jobs claimed by another executor
+and there are no other tasks to compute and wait_for_others timeouted""")
+                else:
+                    print("Waiting for computation on another executor ...")
+                    time.sleep(2)
+                    wait_for_others -= 2
+                    continue
+
             else:
                 assert 0
         plan.fill_job_ids(self, not continue_on_error)
