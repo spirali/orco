@@ -49,6 +49,7 @@ def start_runtime(db_url, *, n_processes=None):
     if _global_runtime is not None:
         _global_runtime.stop()
     _global_runtime = Runtime(db_url, n_processes=n_processes)
+    return _global_runtime
 
 
 def stop_global_runtime():
